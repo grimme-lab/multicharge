@@ -1,0 +1,17 @@
+name = "multicharge"
+version = "0.1.0"
+license = "Apache-2.0"
+author = ["Sebastian Ehlert"]
+maintainer = ["@awvwgk"]
+copyright = "Copyright 2021 Sebastian Ehlert"
+
+[build]
+link = ["lapack", "blas"]
+
+[dependencies]
+[dependencies.mctc-lib]
+git = "https://github.com/grimme-lab/mctc-lib.git"
+
+[dev-dependencies]
+[dev-dependencies.mstore]
+git = "https://github.com/grimme-lab/mstore.git"

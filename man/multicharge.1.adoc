@@ -1,0 +1,27 @@
+= multicharge(1)
+
+== Name
+multicharge - Atomic partial charge and multipole model
+
+
+== Synopsis
+*multicharge* [_options_] _input_
+
+
+== Description
+Electronegativity equilibration model for charges and multipoles.
+
+
+== Options
+
+*-i, --input* _format_::
+Hint for the format of the input file
+
+*--grad*::
+Evaluate molecular gradient and virial
+
+*--version*::
+Print program version and exit
+
+*--help*::
+Show this help message
