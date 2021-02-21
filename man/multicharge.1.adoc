@@ -1,7 +1,7 @@
 = multicharge(1)
 
 == Name
-multicharge - Atomic partial charge and multipole model
+multicharge - Atomic partial charge model.
 
 
 == Synopsis
@@ -9,7 +9,7 @@ multicharge - Atomic partial charge and multipole model
 
 
 == Description
-Electronegativity equilibration model for charges and multipoles.
+Electronegativity equilibration model for atomic partial charges.
 
 
 == Options

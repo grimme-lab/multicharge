@@ -20,36 +20,62 @@ module multicharge_cutoff
 
    public :: get_lattice_points
 
+   interface get_lattice_points
+      module procedure :: get_lattice_points_cutoff
+      module procedure :: get_lattice_points_rep_3d
+   end interface get_lattice_points
+
 
 contains
 
 
-subroutine get_lattice_points(periodic, lat, rthr, trans)
+subroutine get_lattice_points_rep_3d(lat, rep, origin, trans)
+   real(wp), intent(in) :: lat(:, :)
+   integer, intent(in) :: rep(:)
+   logical, intent(in) :: origin
+   real(wp), allocatable, intent(out) :: trans(:, :)
+   integer :: itr, ix, iy, iz, jx, jy, jz
+
+   itr = 0
+   if (origin) then
+      allocate(trans(3, product(2*rep+1)))
+      do concurrent(ix = 0:rep(1), iy = 0:rep(2), iz = 0:rep(3))
+         do concurrent(jx = 1:merge(-1, 1, ix > 0):-2, &
+               & jy = 1:merge(-1, 1, iy > 0):-2, jz = 1:merge(-1, 1, iz > 0):-2)
+            itr = itr + 1
+            trans(:, itr) = lat(:, 1)*ix*jx + lat(:, 2)*iy*jy + lat(:, 3)*iz*jz
+         end do
+      end do
+   else
+      allocate(trans(3, product(2*rep+1)-1))
+      do concurrent(ix = 0:rep(1), iy = 0:rep(2), iz = 0:rep(3), &
+            ix > 0 .or. iy > 0 .or. iz > 0)
+         do concurrent(jx = 1:merge(-1, 1, ix > 0):-2, &
+               & jy = 1:merge(-1, 1, iy > 0):-2, jz = 1:merge(-1, 1, iz > 0):-2)
+            itr = itr + 1
+            trans(:, itr) = lat(:, 1)*ix*jx + lat(:, 2)*iy*jy + lat(:, 3)*iz*jz
+         end do
+      end do
+   end if
+end subroutine get_lattice_points_rep_3d
+
+
+subroutine get_lattice_points_cutoff(periodic, lat, rthr, trans)
    logical, intent(in) :: periodic(:)
    real(wp), intent(in) :: rthr
    real(wp), intent(in) :: lat(:, :)
    real(wp), allocatable, intent(out) :: trans(:, :)
    integer :: rep(3)
-   integer :: itr, ix, iy, iz
 
    if (.not.any(periodic)) then
       allocate(trans(3, 1))
       trans(:, :) = 0.0_wp
    else
       call get_translations(lat, rthr, rep)
-      allocate(trans(3, product(2*rep+1)))
-      itr = 0
-      do ix = -rep(1), rep(1)
-         do iy = -rep(2), rep(2)
-            do iz = -rep(3), rep(3)
-               itr = itr + 1
-               trans(:, itr) = lat(:, 1)*ix + lat(:, 2)*iy + lat(:, 3)*iz
-            end do
-         end do
-      end do
+      call get_lattice_points(lat, rep, .true., trans)
    end if
 
-end subroutine get_lattice_points
+end subroutine get_lattice_points_cutoff
 
 
 !> generate a supercell based on a realspace cutoff, this subroutine
@@ -83,12 +109,9 @@ contains
    pure subroutine crossproduct(a, b, c)
       real(wp), intent(in)  :: a(3), b(3)
       real(wp), intent(out) :: c(3)
-      real(wp) :: x, y, z
-
-      x=a(2)*b(3)-b(2)*a(3)
-      y=a(3)*b(1)-b(3)*a(1)
-      z=a(1)*b(2)-b(1)*a(2)
-      c=(/x, y, z/)
+      c(1)=a(2)*b(3)-b(2)*a(3)
+      c(2)=a(3)*b(1)-b(3)*a(1)
+      c(3)=a(1)*b(2)-b(1)*a(2)
    end subroutine crossproduct
 
 end subroutine get_translations

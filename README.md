@@ -1,6 +1,6 @@
-# Atomic Charge and Multipole Model
+# Atomic Partial Charge Model
 
-Electronegativity equilibration model for charges and multipoles.
+Electronegativity equilibration model for atomic partial charges.
 
 
 ## Installation

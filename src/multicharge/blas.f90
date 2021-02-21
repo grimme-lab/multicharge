@@ -526,7 +526,7 @@ subroutine mchrg_sgemm323(amat, bmat, cmat, transa, transb, alpha, beta)
    real(sp), intent(in), optional :: alpha
    real(sp), intent(in), optional :: beta
    real(sp), pointer :: aptr(:, :), cptr(:, :)
-   character(len=1) :: tra, trb
+   character(len=1) :: tra
    if (present(transa)) then
       tra = transa
    else
@@ -562,6 +562,7 @@ subroutine mchrg_sgemm233(amat, bmat, cmat, transa, transb, alpha, beta)
    else
       bptr(1:size(bmat, 1)*size(bmat, 2), 1:size(bmat, 3)) => bmat
    end if
+   cptr(1:size(cmat, 1), 1:size(cmat, 2)*size(cmat, 3)) => cmat
    call gemm(amat, bptr, cptr, transa, trb, alpha, beta)
 end subroutine mchrg_sgemm233
 

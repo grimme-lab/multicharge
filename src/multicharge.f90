@@ -14,6 +14,7 @@
 ! limitations under the License.
 
 module multicharge
+   use multicharge_cutoff, only : get_lattice_points
    use multicharge_data, only : get_covalent_rad
    use multicharge_model, only : mchrg_model_type
    use multicharge_ncoord, only : get_coordination_number

@@ -31,6 +31,8 @@ mstore_dep = mstore_prj.get_variable('mstore_dep')
 tests = [
   'model',
   'ncoord',
+  'pbc',
+  'wignerseitz',
 ]
 
 test_srcs = files(

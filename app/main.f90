@@ -19,7 +19,8 @@ program main
    use mctc_io, only : structure_type, read_structure, filetype, get_filetype
    use multicharge, only : mchrg_model_type, new_eeq2019_model, &
       & write_ascii_model, write_ascii_properties, write_ascii_results, &
-      & get_coordination_number, get_covalent_rad, get_multicharge_version
+      & get_coordination_number, get_covalent_rad, get_lattice_points, &
+      & get_multicharge_version
    implicit none
    character(len=*), parameter :: prog_name = "multicharge"
 
@@ -29,8 +30,8 @@ program main
    type(structure_type) :: mol
    type(mchrg_model_type) :: model
    logical :: grad
-   real(wp), parameter :: cn_max = 8.0_wp, trans(3, 1) = 0.0_wp, cutoff = 25.0_wp
-   real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), rcov(:)
+   real(wp), parameter :: cn_max = 8.0_wp, cutoff = 25.0_wp
+   real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), rcov(:), trans(:, :)
    real(wp), allocatable :: energy(:), gradient(:, :), sigma(:, :)
    real(wp), allocatable :: qvec(:), dqdr(:, :, :), dqdL(:, :, :)
 
@@ -52,6 +53,7 @@ program main
    end if
 
    call new_eeq2019_model(mol, model)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
    call write_ascii_model(output_unit, mol, model)
 

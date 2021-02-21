@@ -269,7 +269,7 @@ subroutine mchrg_ssytrs3(amat, bmat, ipiv, uplo, info)
    integer, intent(out), optional :: info
    real(sp), pointer :: bptr(:, :)
    bptr(1:size(bmat, 1), 1:size(bmat, 2)*size(bmat, 3)) => bmat
-   call sytrs(amat, bptr, ipiv, uplo)
+   call sytrs(amat, bptr, ipiv, uplo, info)
 end subroutine mchrg_ssytrs3
 
 

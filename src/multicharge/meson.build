@@ -20,10 +20,12 @@ srcs += files(
   'blas.f90',
   'cutoff.f90',
   'data.f90',
+  'ewald.f90',
   'lapack.f90',
   'model.f90',
   'ncoord.f90',
   'output.f90',
   'param.f90',
   'version.f90',
+  'wignerseitz.f90',
 )
