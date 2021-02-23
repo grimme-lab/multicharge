@@ -1,5 +1,9 @@
 # Atomic Partial Charge Model
 
+[![Apache-2.0](https://img.shields.io/github/license/grimme-lab/multicharge)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/grimme-lab/multicharge)](https://github.com/grimme-lab/multicharge/releases/latest)
+[![CI](https://github.com/grimme-lab/multicharge/workflows/CI/badge.svg)](https://github.com/grimme-lab/multicharge/actions)
+
 Electronegativity equilibration model for atomic partial charges.
 
 

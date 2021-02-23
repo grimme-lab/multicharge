@@ -93,7 +93,7 @@ subroutine ncoord_erf(mol, trans, cutoff, rcov, cn)
    cn(:) = 0.0_wp
    cutoff2 = cutoff**2
 
-   !$omp parallel do default(none) reduction(+:cn) &
+   !$omp parallel do default(none) schedule(runtime) reduction(+:cn) &
    !$omp shared(mol, trans, cutoff2, rcov) &
    !$omp private(jat, itr, izp, jzp, r2, rij, r1, rc, countf)
    do iat = 1, mol%nat
@@ -154,8 +154,8 @@ subroutine ncoord_derf(mol, trans, cutoff, rcov, cn, dcndr, dcndL)
    dcndL(:, :, :) = 0.0_wp
    cutoff2 = cutoff**2
 
-   !$omp parallel do default(none) reduction(+:cn, dcndr, dcndL) &
-   !$omp shared(mol, trans, cutoff2, rcov) &
+   !$omp parallel do default(none) schedule(runtime) &
+   !$omp reduction(+:cn, dcndr, dcndL) shared(mol, trans, cutoff2, rcov) &
    !$omp private(jat, itr, izp, jzp, r2, rij, r1, rc, countf, countd, sigma)
    do iat = 1, mol%nat
       izp = mol%id(iat)
@@ -198,7 +198,7 @@ end subroutine ncoord_derf
 
 
 !> Error function counting function for coordination number contributions.
-pure function erf_count(k, r, r0) result(count)
+elemental function erf_count(k, r, r0) result(count)
 
    !> Steepness of the counting function.
    real(wp), intent(in) :: k
@@ -217,7 +217,7 @@ end function erf_count
 
 
 !> Derivative of the counting function w.r.t. the distance.
-pure function derf_count(k, r, r0) result(count)
+elemental function derf_count(k, r, r0) result(count)
 
    !> Steepness of the counting function.
    real(wp), intent(in) :: k

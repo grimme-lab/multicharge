@@ -100,6 +100,10 @@ subroutine gen_test(error, mol, qref, eref)
          call test_failed(error, "Partial charges do not match")
          print'(a)', "Charges:"
          print'(3es21.14)', qvec
+         print'("---")'
+         print'(3es21.14)', qref
+         print'("---")'
+         print'(3es21.14)', qvec - qref
       end if
    end if
    if (allocated(error)) return
@@ -109,6 +113,10 @@ subroutine gen_test(error, mol, qref, eref)
          call test_failed(error, "Energies do not match")
          print'(a)', "Energy:"
          print'(3es21.14)', energy
+         print'("---")'
+         print'(3es21.14)', eref
+         print'("---")'
+         print'(3es21.14)', energy - eref
       end if
    end if
 

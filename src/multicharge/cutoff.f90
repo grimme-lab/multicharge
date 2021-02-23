@@ -39,21 +39,37 @@ subroutine get_lattice_points_rep_3d(lat, rep, origin, trans)
    itr = 0
    if (origin) then
       allocate(trans(3, product(2*rep+1)))
-      do concurrent(ix = 0:rep(1), iy = 0:rep(2), iz = 0:rep(3))
-         do concurrent(jx = 1:merge(-1, 1, ix > 0):-2, &
-               & jy = 1:merge(-1, 1, iy > 0):-2, jz = 1:merge(-1, 1, iz > 0):-2)
-            itr = itr + 1
-            trans(:, itr) = lat(:, 1)*ix*jx + lat(:, 2)*iy*jy + lat(:, 3)*iz*jz
+      do ix = 0, rep(1)
+         do iy = 0, rep(2)
+            do iz = 0, rep(3)
+               do jx = 1, merge(-1, 1, ix > 0), -2
+                  do jy = 1, merge(-1, 1, iy > 0), -2
+                     do jz = 1, merge(-1, 1, iz > 0), -2
+                        itr = itr + 1
+                        trans(:, itr) = lat(:, 1)*ix*jx &
+                           & + lat(:, 2)*iy*jy + lat(:, 3)*iz*jz
+                     end do
+                  end do
+               end do
+            end do
          end do
       end do
    else
       allocate(trans(3, product(2*rep+1)-1))
-      do concurrent(ix = 0:rep(1), iy = 0:rep(2), iz = 0:rep(3), &
-            ix > 0 .or. iy > 0 .or. iz > 0)
-         do concurrent(jx = 1:merge(-1, 1, ix > 0):-2, &
-               & jy = 1:merge(-1, 1, iy > 0):-2, jz = 1:merge(-1, 1, iz > 0):-2)
-            itr = itr + 1
-            trans(:, itr) = lat(:, 1)*ix*jx + lat(:, 2)*iy*jy + lat(:, 3)*iz*jz
+      do ix = 0, rep(1)
+         do iy = 0, rep(2)
+            do iz = 0, rep(3)
+               if (ix == 0 .and. iy == 0 .and. iz == 0) cycle
+               do jx = 1, merge(-1, 1, ix > 0), -2
+                  do jy = 1, merge(-1, 1, iy > 0), -2
+                     do jz = 1, merge(-1, 1, iz > 0), -2
+                        itr = itr + 1
+                        trans(:, itr) = lat(:, 1)*ix*jx &
+                           & + lat(:, 2)*iy*jy + lat(:, 3)*iz*jz
+                     end do
+                  end do
+               end do
+            end do
          end do
       end do
    end if

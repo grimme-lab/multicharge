@@ -29,6 +29,7 @@ module test_ncoord
 
    real(wp), parameter :: thr = 100*epsilon(1.0_wp)
    real(wp), parameter :: thr2 = sqrt(epsilon(1.0_wp))
+   real(wp), parameter :: thr3 = sqrt(10*epsilon(1.0_wp))
 
 
 contains
@@ -180,7 +181,7 @@ subroutine test_numsigma(error, mol)
 
    call get_coordination_number(mol, lattr, cutoff, rcov, cn, dcndr, dcndL)
 
-   if (any(abs(dcndL - numdL) > thr2)) then
+   if (any(abs(dcndL - numdL) > thr3)) then
       call test_failed(error, "Derivative of coordination number does not match")
    end if
 
