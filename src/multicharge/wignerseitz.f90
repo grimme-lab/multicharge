@@ -47,21 +47,28 @@ subroutine new_wignerseitz_cell(self, mol)
    !> Molecular structure data
    type(structure_type), intent(in) :: mol
 
-   integer :: iat, jat
+   integer :: iat, jat, ntr, nimg
+   integer, allocatable :: tridx(:)
    real(wp) :: vec(3)
+   real(wp), allocatable :: trans(:, :)
 
-   call get_lattice_points(mol%periodic, mol%lattice, thr, self%trans)
-   allocate(self%nimg(mol%nat, mol%nat))
-   allocate(self%tridx(size(self%trans, 2), mol%nat, mol%nat))
+   call get_lattice_points(mol%periodic, mol%lattice, thr, trans)
+   ntr = size(trans, 2)
+   allocate(self%nimg(mol%nat, mol%nat), self%tridx(ntr, mol%nat, mol%nat), &
+      & tridx(ntr))
 
    !$omp parallel do default(none) schedule(runtime) collapse(2) &
-   !$omp shared(mol, self) private(iat, jat, vec)
+   !$omp shared(mol, trans, self) private(iat, jat, vec, nimg, tridx)
    do iat = 1, mol%nat
       do jat = 1, mol%nat
          vec(:) = mol%xyz(:, iat) - mol%xyz(:, jat)
-         call get_pairs(self%nimg(jat, iat), self%trans, vec, self%tridx(:, jat, iat))
+         call get_pairs(nimg, trans, vec, tridx)
+         self%nimg(jat, iat) = nimg
+         self%tridx(:, jat, iat) = tridx
       end do
    end do
+
+   call move_alloc(trans, self%trans)
    
 end subroutine new_wignerseitz_cell
 
@@ -72,8 +79,8 @@ subroutine get_pairs(iws, trans, rij, list)
    real(wp), intent(in) :: trans(:, :)
    integer, intent(out) :: list(:)
 
-   logical :: mask(size(trans, 2))
-   real(wp) :: dist(size(trans, 2)), vec(3), r2
+   logical :: mask(size(list))
+   real(wp) :: dist(size(list)), vec(3), r2
    integer :: itr, img, pos
 
    iws = 0

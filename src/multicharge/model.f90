@@ -74,6 +74,8 @@ subroutine get_vrhs(self, mol, cn, xvec, dxdcn)
    real(wp) :: tmp
 
    if (present(dxdcn)) then
+      !$omp parallel do default(none) schedule(runtime) &
+      !$omp shared(mol, self, cn, xvec, dxdcn) private(iat, izp, tmp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
          tmp = self%kcn(izp) / sqrt(cn(iat) + reg)
@@ -82,6 +84,8 @@ subroutine get_vrhs(self, mol, cn, xvec, dxdcn)
       end do
       dxdcn(mol%nat+1) = 0.0_wp
    else
+      !$omp parallel do default(none) schedule(runtime) &
+      !$omp shared(mol, self, cn, xvec) private(iat, izp, tmp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
          tmp = self%kcn(izp) / sqrt(cn(iat) + reg)
@@ -124,6 +128,9 @@ subroutine get_amat_0d(self, mol, amat)
 
    amat(:, :) = 0.0_wp
 
+   !$omp parallel do default(none) schedule(runtime) &
+   !$omp reduction(+:amat) shared(mol, self) &
+   !$omp private(iat, izp, jat, jzp, gam, vec, r2, tmp)
    do iat = 1, mol%nat
       izp = mol%id(iat)
       do jat = 1, iat-1
@@ -162,6 +169,9 @@ subroutine get_amat_3d(self, mol, wsc, alpha, amat)
    call get_dir_trans(mol%lattice, dtrans)
    call get_rec_trans(mol%lattice, rtrans)
 
+   !$omp parallel do default(none) schedule(runtime) &
+   !$omp reduction(+:amat) shared(mol, self, wsc, dtrans, rtrans, alpha, vol) &
+   !$omp private(iat, izp, jat, jzp, gam, wsw, vec, dtmp, rtmp)
    do iat = 1, mol%nat
       izp = mol%id(iat)
       do jat = 1, iat-1
@@ -256,6 +266,9 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
    dadr(:, :, :) = 0.0_wp
    dadL(:, :, :) = 0.0_wp
 
+   !$omp parallel do default(none) schedule(runtime) &
+   !$omp reduction(+:atrace, dadr, dadL) shared(mol, self, qvec) &
+   !$omp private(iat, izp, jat, jzp, gam, r2, vec, dG, dS, dtmp, arg)
    do iat = 1, mol%nat
       izp = mol%id(iat)
       do jat = 1, iat-1
@@ -301,6 +314,11 @@ subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
    call get_dir_trans(mol%lattice, dtrans)
    call get_rec_trans(mol%lattice, rtrans)
 
+   !$omp parallel do default(none) schedule(runtime) &
+   !$omp reduction(+:atrace, dadr, dadL) &
+   !$omp shared(mol, self, wsc, alpha, vol, dtrans, rtrans, qvec) &
+   !$omp private(iat, izp, jat, jzp, img, gam, wsw, vec, dG, dS, &
+   !$omp& dGr, dSr, dGd, dSd)
    do iat = 1, mol%nat
       izp = mol%id(iat)
       do jat = 1, iat-1

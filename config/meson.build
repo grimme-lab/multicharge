@@ -81,13 +81,13 @@ if lapack_vendor == 'mkl'
 elif lapack_vendor == 'openblas'
   openblas_dep = dependency('openblas', required: false)
   if not openblas_dep.found()
-    openblas_dep += fc.find_library('openblas_dep')
+    openblas_dep = fc.find_library('openblas_dep')
   endif
   lib_deps += openblas_dep
   if not fc.links('external dsytrs; call dsytrs(); end', dependencies: openblas_dep)
     lapack_dep = dependency('lapack', required: false)
     if not lapack_dep.found()
-      lapack_dep += fc.find_library('lapack')
+      lapack_dep = fc.find_library('lapack')
     endif
     lib_deps += lapack_dep
   endif
@@ -95,16 +95,14 @@ elif lapack_vendor == 'openblas'
 else
   lapack_dep = dependency('lapack', required: false)
   if not lapack_dep.found()
-    lapack_dep += fc.find_library('lapack')
+    lapack_dep = fc.find_library('lapack')
   endif
   lib_deps += lapack_dep
-  if not fc.links('external dsymv; call dsymv(); end', dependencies: lapack_dep)
-    blas_dep = dependency('blas', required: false)
-    if not blas_dep.found()
-      lapack_dep += fc.find_library('blas')
-    endif
-    lib_deps += blas_dep
+  blas_dep = dependency('blas', required: false)
+  if not blas_dep.found()
+    blas_dep = fc.find_library('blas')
   endif
+  lib_deps += blas_dep
 endif
 
 # Create the tool chain library as subproject
