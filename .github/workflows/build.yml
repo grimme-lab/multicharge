@@ -152,7 +152,7 @@ jobs:
       run: pip3 install ${{ env.PIP_PACKAGES }}
 
     - name: Configure meson build
-      run: meson setup ${{ env.BUILD_DIR }}
+      run: meson setup ${{ env.BUILD_DIR }} -Dfortran_link_args=-qopenmp
 
     - name: Build library (meson)
       run: meson compile -C ${{ env.BUILD_DIR }}
