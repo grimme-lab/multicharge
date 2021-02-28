@@ -5,7 +5,7 @@ on: [push, pull_request]
 env:
   BUILD_DIR: _build_meson
   PIP_PACKAGES: >-
-    meson
+    meson=0.55
     ninja
     gcovr
 
