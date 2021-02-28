@@ -125,6 +125,9 @@ jobs:
     env:
       FC: ifort
       OMP_NUM_THREADS: 2,1
+      APT_PACKAGES: >-
+        intel-oneapi-compiler-fortran
+        intel-oneapi-mkl-devel
 
     steps:
     - name: Checkout code
@@ -144,7 +147,7 @@ jobs:
 
     - name: Install Intel oneAPI compiler
       run: |
-        sudo apt-get install intel-oneapi-compiler-fortran
+        sudo apt-get install ${{ env.APT_PACKAGES }}
         source /opt/intel/oneapi/setvars.sh
         printenv >> $GITHUB_ENV
 
