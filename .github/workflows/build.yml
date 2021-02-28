@@ -3,7 +3,11 @@ name: CI
 on: [push, pull_request]
 
 env:
-  BUILD_DIR: _build
+  BUILD_DIR: _build_meson
+  PIP_PACKAGES: >-
+    meson
+    ninja
+    gcovr
 
 jobs:
   gcc-build:
@@ -16,7 +20,6 @@ jobs:
     env:
       FC: gfortran
       GCC_V: 9
-      OMP_NUM_THREADS: 2,1
 
     steps:
     - name: Checkout code
@@ -40,26 +43,32 @@ jobs:
         --slave /usr/bin/gfortran gfortran /usr/bin/gfortran-${GCC_V} \
         --slave /usr/bin/gcov gcov /usr/bin/gcov-${GCC_V}
 
-    - name: Install meson
-      run: pip3 install meson==0.55.3 ninja
+    - name: Install meson/cmake
+      run: pip3 install ${{ env.PIP_PACKAGES }}
 
-    - name: Configure build
+    - name: Configure meson build
       run: >-
         meson setup ${{ env.BUILD_DIR }}
         --buildtype=debug
-        --warnlevel=0
+        --prefix=$PWD/_dist
+        --libdir=lib
         -Db_coverage=true
-        -Dlapack=netlib
 
-    - name: Build library
+    - name: Build project (meson)
       run: meson compile -C ${{ env.BUILD_DIR }}
 
-    - name: Run unit tests
+    - name: Run unit tests (meson)
       run: meson test -C ${{ env.BUILD_DIR }} --print-errorlogs --no-rebuild
 
+    - name: Install project (meson)
+      run: meson install -C ${{ env.BUILD_DIR }} --no-rebuild
+
+    - name: Create coverage report (meson)
+      run: ninja -C ${{ env.BUILD_DIR }} coverage
+
     - name: Upload coverage report
-      if: contains(matrix.os, 'ubuntu')
-      run: bash <(curl -s https://codecov.io/bash)
+      uses: codecov/codecov-action@v1
+
 
   # Test native MinGW Windows build
   mingw-build:
@@ -86,24 +95,23 @@ jobs:
         install: >-
           git
           mingw-w64-${{ matrix.arch }}-gcc-fortran
-          mingw-w64-${{ matrix.arch }}-openblas
-          mingw-w64-${{ matrix.arch }}-lapack
           mingw-w64-${{ matrix.arch }}-meson
           mingw-w64-${{ matrix.arch }}-ninja
 
-    - name: Configure build
-      run: meson setup ${{ env.BUILD_DIR }} -Dla_backend=netlib --warnlevel=0
+    - name: Configure meson build
+      run: meson setup ${{ env.BUILD_DIR }}
       env:
         FC: gfortran
         CC: gcc
 
-    - name: Build project
+    - name: Build project (meson)
       run: meson compile -C ${{ env.BUILD_DIR }}
 
-    - name: Run unit tests
+    - name: Run unit tests (meson)
       run: meson test -C ${{ env.BUILD_DIR }} --print-errorlogs --no-rebuild
       env:
         OMP_NUM_THREADS: 2,1
+
 
   intel-build:
     runs-on: ${{ matrix.os }}
@@ -111,14 +119,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-20.04]
-        fc: [ifort]
 
     env:
-      FC: ${{ matrix.fc }}
+      FC: ifort
       OMP_NUM_THREADS: 2,1
-      APT_PACKAGES: >-
-        intel-oneapi-compiler-fortran
-        intel-oneapi-mkl-devel
 
     steps:
     - name: Checkout code
@@ -138,18 +142,18 @@ jobs:
 
     - name: Install Intel oneAPI compiler
       run: |
-        sudo apt-get install ${{ env.APT_PACKAGES }}
+        sudo apt-get install intel-oneapi-compiler-fortran
         source /opt/intel/oneapi/setvars.sh
         printenv >> $GITHUB_ENV
 
     - name: Install meson/cmake
-      run: pip3 install meson==0.56.2 ninja
+      run: pip3 install ${{ env.PIP_PACKAGES }}
 
     - name: Configure meson build
-      run: meson setup ${{ env.BUILD_DIR }} -Dfortran_link_args=-qopenmp
+      run: meson setup ${{ env.BUILD_DIR }}
 
-    - name: Build library
+    - name: Build library (meson)
       run: meson compile -C ${{ env.BUILD_DIR }}
 
-    - name: Run unit tests
+    - name: Run unit tests (meson)
       run: meson test -C ${{ env.BUILD_DIR }} --print-errorlogs --no-rebuild
