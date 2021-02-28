@@ -5,7 +5,7 @@ on: [push, pull_request]
 env:
   BUILD_DIR: _build_meson
   PIP_PACKAGES: >-
-    meson=0.55
+    meson==0.55
     ninja
     gcovr
 
@@ -95,6 +95,8 @@ jobs:
         install: >-
           git
           mingw-w64-${{ matrix.arch }}-gcc-fortran
+          mingw-w64-${{ matrix.arch }}-openblas
+          mingw-w64-${{ matrix.arch }}-lapack
           mingw-w64-${{ matrix.arch }}-meson
           mingw-w64-${{ matrix.arch }}-ninja
 
