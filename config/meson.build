@@ -14,14 +14,6 @@
 # limitations under the License.
 
 os = host_machine.system()
-
-if os == 'windows'
-  add_project_link_arguments(
-    '-Wl,--allow-multiple-definition',
-    language: 'fortran',
-  )
-endif
-
 fc = meson.get_compiler('fortran')
 fc_id = fc.get_id()
 
