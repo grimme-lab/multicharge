@@ -3,9 +3,11 @@ name: CI
 on: [push, pull_request]
 
 env:
-  BUILD_DIR: _build_meson
+  M_BUILD_DIR: _build_meson
+  C_BUILD_DIR: _build_meson
   PIP_PACKAGES: >-
     meson==0.55
+    cmake
     ninja
     gcovr
 
@@ -48,26 +50,43 @@ jobs:
 
     - name: Configure meson build
       run: >-
-        meson setup ${{ env.BUILD_DIR }}
+        meson setup ${{ env.M_BUILD_DIR }}
         --buildtype=debug
         --prefix=$PWD/_dist
         --libdir=lib
         -Db_coverage=true
 
     - name: Build project (meson)
-      run: meson compile -C ${{ env.BUILD_DIR }}
+      run: meson compile -C ${{ env.M_BUILD_DIR }}
 
     - name: Run unit tests (meson)
-      run: meson test -C ${{ env.BUILD_DIR }} --print-errorlogs --no-rebuild
+      run: meson test -C ${{ env.M_BUILD_DIR }} --print-errorlogs --no-rebuild
 
     - name: Install project (meson)
-      run: meson install -C ${{ env.BUILD_DIR }} --no-rebuild
+      run: meson install -C ${{ env.M_BUILD_DIR }} --no-rebuild
 
     - name: Create coverage report (meson)
-      run: ninja -C ${{ env.BUILD_DIR }} coverage
+      run: ninja -C ${{ env.M_BUILD_DIR }} coverage
 
     - name: Upload coverage report
       uses: codecov/codecov-action@v1
+
+    - name: Configure CMake build
+      run: >-
+        cmake
+        -B ${{ env.C_BUILD_DIR }}
+        -G Ninja
+        -DCMAKE_INSTALL_PREFIX=$PWD/_cdist
+
+    - name: Build project (CMake)
+      run: cmake --build ${{ env.C_BUILD_DIR }}
+
+    - name: Run unit tests (CTest)
+      run: ctest
+      working-directory: ${{ env.C_BUILD_DIR }}
+
+    - name: Install project (CMake)
+      run: cmake --install ${{ env.C_BUILD_DIR }}
 
 
   # Test native MinGW Windows build
@@ -95,6 +114,7 @@ jobs:
         install: >-
           git
           mingw-w64-${{ matrix.arch }}-gcc-fortran
+          mingw-w64-${{ matrix.arch }}-cmake
           mingw-w64-${{ matrix.arch }}-openblas
           mingw-w64-${{ matrix.arch }}-lapack
           mingw-w64-${{ matrix.arch }}-python
@@ -105,16 +125,28 @@ jobs:
       run: pip3 install meson==0.55.3
 
     - name: Configure meson build
-      run: meson setup ${{ env.BUILD_DIR }}
+      run: meson setup ${{ env.M_BUILD_DIR }}
       env:
         FC: gfortran
         CC: gcc
 
     - name: Build project (meson)
-      run: meson compile -C ${{ env.BUILD_DIR }}
+      run: meson compile -C ${{ env.M_BUILD_DIR }}
 
     - name: Run unit tests (meson)
-      run: meson test -C ${{ env.BUILD_DIR }} --print-errorlogs --no-rebuild
+      run: meson test -C ${{ env.M_BUILD_DIR }} --print-errorlogs --no-rebuild
+      env:
+        OMP_NUM_THREADS: 2,1
+
+    - name: Configure cmake build
+      run: cmake -B ${{ env.C_BUILD_DIR }} -G Ninja
+
+    - name: Build project (CMake)
+      run: cmake --build ${{ env.C_BUILD_DIR }}
+
+    - name: Run unit tests (CTest)
+      run: ctest
+      working-directory: ${{ env.C_BUILD_DIR }}
       env:
         OMP_NUM_THREADS: 2,1
 
@@ -159,10 +191,20 @@ jobs:
       run: pip3 install ${{ env.PIP_PACKAGES }}
 
     - name: Configure meson build
-      run: meson setup ${{ env.BUILD_DIR }} -Dfortran_link_args=-qopenmp
+      run: meson setup ${{ env.M_BUILD_DIR }} -Dfortran_link_args=-qopenmp
 
     - name: Build library (meson)
-      run: meson compile -C ${{ env.BUILD_DIR }}
+      run: meson compile -C ${{ env.M_BUILD_DIR }}
 
     - name: Run unit tests (meson)
-      run: meson test -C ${{ env.BUILD_DIR }} --print-errorlogs --no-rebuild
+      run: meson test -C ${{ env.M_BUILD_DIR }} --print-errorlogs --no-rebuild
+
+    - name: Configure cmake build
+      run: cmake -B ${{ env.C_BUILD_DIR }} -G Ninja
+
+    - name: Build library (CMake)
+      run: cmake --build ${{ env.C_BUILD_DIR }}
+
+    - name: Run unit tests (CTest)
+      run: ctest
+      working-directory: ${{ env.C_BUILD_DIR }}
