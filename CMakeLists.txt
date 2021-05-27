@@ -33,7 +33,7 @@ add_subdirectory("subprojects" EXCLUDE_FROM_ALL)
 # General configuration information
 add_subdirectory("config")
 
-if(NOT TARGET "OpenMP::OpenMP_Fortran")
+if(NOT TARGET "OpenMP::OpenMP_Fortran" AND WITH_OpenMP)
   find_package("OpenMP" REQUIRED)
 endif()
 
@@ -63,14 +63,20 @@ target_link_libraries(
   "${PROJECT_NAME}-lib"
   PUBLIC
   "${lib-deps}"
-  "OpenMP::OpenMP_Fortran"
   "LAPACK::LAPACK"
 )
+if(WITH_OpenMP)
+  target_link_libraries(
+    "${PROJECT_NAME}-lib"
+    PUBLIC
+    "OpenMP::OpenMP_Fortran"
+  )
+endif()
 target_include_directories(
   "${PROJECT_NAME}-lib"
   PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
-  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${module-dir}>
 )
 
 # Add example application

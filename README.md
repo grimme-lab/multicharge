@@ -54,7 +54,7 @@ revision = head
 You can retrieve the dependency from the wrap fallback with
 
 ```meson
-multicharge_dep = dependency('multicharge', ['multicharge', 'multicharge_dep'])
+multicharge_dep = dependency('multicharge', fallback: ['multicharge', 'multicharge_dep'])
 ```
 
 and add it as dependency to your targets.
