@@ -64,6 +64,7 @@ target_link_libraries(
   PUBLIC
   "${lib-deps}"
   "LAPACK::LAPACK"
+  "$<$<VERSION_LESS:${CMAKE_VERSION},3.20>:BLAS::BLAS>"
 )
 if(WITH_OpenMP)
   target_link_libraries(
