@@ -138,17 +138,18 @@ jobs:
       env:
         OMP_NUM_THREADS: 2,1
 
-    - name: Configure cmake build
-      run: cmake -B ${{ env.C_BUILD_DIR }} -G Ninja
+    # FIXME: CMake build currently broken due to git error in FetchContent
+    #- name: Configure cmake build
+    #  run: cmake -B ${{ env.C_BUILD_DIR }} -G Ninja
 
-    - name: Build project (CMake)
-      run: cmake --build ${{ env.C_BUILD_DIR }}
+    #- name: Build project (CMake)
+    #  run: cmake --build ${{ env.C_BUILD_DIR }}
 
-    - name: Run unit tests (CTest)
-      run: ctest
-      working-directory: ${{ env.C_BUILD_DIR }}
-      env:
-        OMP_NUM_THREADS: 2,1
+    #- name: Run unit tests (CTest)
+    #  run: ctest
+    #  working-directory: ${{ env.C_BUILD_DIR }}
+    #  env:
+    #    OMP_NUM_THREADS: 2,1
 
 
   intel-build:
