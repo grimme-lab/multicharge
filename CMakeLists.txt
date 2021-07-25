@@ -26,10 +26,6 @@ project(
 # Follow GNU conventions for installing directories
 include(GNUInstallDirs)
 
-# Collect subprojects
-set(lib-deps)
-add_subdirectory("subprojects" EXCLUDE_FROM_ALL)
-
 # General configuration information
 add_subdirectory("config")
 
@@ -38,8 +34,22 @@ if(NOT TARGET "OpenMP::OpenMP_Fortran" AND WITH_OpenMP)
 endif()
 
 if(NOT TARGET "LAPACK::LAPACK")
-  find_package("LAPACK" REQUIRED)
+  find_package("custom-lapack" REQUIRED)
 endif()
+
+# Collect subprojects
+if(NOT TARGET "mctc-lib::mctc-lib")
+  find_package("mctc-lib" REQUIRED)
+endif()
+
+if(NOT TARGET "mstore::mstore")
+  find_package("mstore")
+endif()
+
+set(
+  lib-deps
+  "mctc-lib::mctc-lib"
+)
 
 # Collect source of the project
 set(srcs)
@@ -77,6 +87,7 @@ target_include_directories(
   "${PROJECT_NAME}-lib"
   PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${module-dir}>
 )
 
@@ -105,7 +116,7 @@ install(
 install(
   DIRECTORY
   "${CMAKE_CURRENT_BINARY_DIR}/include/"
-  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${module-dir}"
 )
 # Package license files
 install(
