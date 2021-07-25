@@ -25,6 +25,10 @@ macro(
 
   foreach(method in ITEMS ${methods})
 
+    if(TARGET "${package}::${package}")
+      break()
+    endif()
+
     if("${method}" STREQUAL "cmake")
       message(STATUS "${package}: Find installed package")
       find_package("${package}" CONFIG)
