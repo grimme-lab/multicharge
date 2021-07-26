@@ -13,34 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Unit testing
-set(
-  tests
-  "model"
-  "ncoord"
-  "pbc"
-  "wignerseitz"
-)
-set(
-  test-srcs
-  "main.f90"
-)
-foreach(t IN LISTS tests)
-  string(MAKE_C_IDENTIFIER ${t} t) 
-  list(APPEND test-srcs "test_${t}.f90")
-endforeach()
-
-add_executable(
-  "${PROJECT_NAME}-tester"
-  "${test-srcs}"
-)
-target_link_libraries(
-  "${PROJECT_NAME}-tester"
-  PRIVATE
-  "${PROJECT_NAME}-lib"
-  "mstore::mstore"
-)
-
-foreach(t IN LISTS tests)
-  add_test("${t}" "${PROJECT_NAME}-tester" "${t}")
-endforeach()
+if(NOT BLAS_FOUND)
+  find_package("BLAS")
+  if(NOT TARGET "BLAS::BLAS")
+    add_library("BLAS::BLAS" INTERFACE IMPORTED)
+    target_link_libraries("BLAS::BLAS" INTERFACE "${BLAS_LIBRARIES}")
+  endif()
+endif()
