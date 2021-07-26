@@ -138,7 +138,7 @@ jobs:
       env:
         OMP_NUM_THREADS: 2,1
 
-    # FIXME: CMake build broken due to internal error in FetchContent
+    # FIXME: CMake build currently broken due to git error in FetchContent
     #- name: Configure cmake build
     #  run: cmake -B ${{ env.C_BUILD_DIR }} -G Ninja
 
