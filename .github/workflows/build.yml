@@ -52,7 +52,7 @@ jobs:
 
     defaults:
       run:
-        shell: ${{ matrix.compiler == 'msys' && 'msys {0}' || 'bash' }}
+        shell: ${{ matrix.compiler == 'msys' && 'msys2 {0}' || 'bash' }}
 
     env:
       FC: ${{ matrix.compiler == 'intel' && 'ifort' || 'gfortran' }}
