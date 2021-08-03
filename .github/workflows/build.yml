@@ -3,25 +3,63 @@ name: CI
 on: [push, pull_request]
 
 env:
-  M_BUILD_DIR: _build_meson
-  C_BUILD_DIR: _build_meson
+  BUILD_DIR: _build
   PIP_PACKAGES: >-
     meson==0.55
     cmake
     ninja
     gcovr
+  MACOS_BASEKIT_URL: >-
+    https://registrationcenter-download.intel.com/akdlm/irc_nas/17969/m_BaseKit_p_2021.3.0.3043.dmg
+  MACOS_HPCKIT_URL: >-
+    https://registrationcenter-download.intel.com/akdlm/irc_nas/17890/m_HPCKit_p_2021.3.0.3226_offline.dmg
+  LINUX_INTEL_COMPONENTS: >-
+    intel-oneapi-compiler-fortran
+    intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic
+    intel-oneapi-mkl
+    intel-oneapi-mkl-devel
 
 jobs:
-  gcc-build:
+  build:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        build: [meson, cmake]
+        build-type: [debug]
+        compiler: [gnu]
+        version: [10]
+
+        include:
+        - os: ubuntu-latest
+          build: meson
+          build-type: coverage
+          compiler: gnu
+          version: 10
+
+        - os: windows-latest
+          build: meson
+          build-type: debug
+          compiler: msys
+          version: 10
+
+        - os: ubuntu-latest
+          build: meson
+          build-type: debug
+          compiler: intel
+          version: 2021
+
+    defaults:
+      run:
+        shell: ${{ matrix.compiler == 'msys' && 'msys2 {0}' || 'bash' }}
 
     env:
-      FC: gfortran
-      GCC_V: 9
+      FC: ${{ matrix.compiler == 'intel' && 'ifort' || 'gfortran' }}
+      CC: ${{ matrix.compiler == 'intel' && 'icc' || 'gcc' }}
+      GCC_V: ${{ matrix.version }}
+      OMP_NUM_THREADS: 1,2,1
+      PYTHON_V: 3.8
 
     steps:
     - name: Checkout code
@@ -29,183 +67,181 @@ jobs:
 
     - uses: actions/setup-python@v1
       with:
-        python-version: '3.x'
+        python-version: ${{ env.PYTHON_V }}
 
     - name: Install GCC (OSX)
-      if: contains(matrix.os, 'macos')
+      if: ${{ contains(matrix.os, 'macos') && matrix.compiler == 'gnu' }}
       run: |
-          ln -s /usr/local/bin/gfortran-${GCC_V} /usr/local/bin/gfortran
-          which gfortran-${GCC_V}
-          which gfortran
+        ln -s /usr/local/bin/gfortran-${{ env.GCC_V }} /usr/local/bin/gfortran
+        ln -s /usr/local/bin/gcc-${{ env.GCC_V }} /usr/local/bin/gcc
+        ln -s /usr/local/bin/g++-${{ env.GCC_V }} /usr/local/bin/g++
 
     - name: Install GCC (Linux)
-      if: contains(matrix.os, 'ubuntu')
-      run: |
-        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-${GCC_V} 100 \
-        --slave /usr/bin/gfortran gfortran /usr/bin/gfortran-${GCC_V} \
-        --slave /usr/bin/gcov gcov /usr/bin/gcov-${GCC_V}
-
-    - name: Install meson/cmake
-      run: pip3 install ${{ env.PIP_PACKAGES }}
-
-    - name: Configure meson build
+      if: ${{ contains(matrix.os, 'ubuntu') && matrix.compiler == 'gnu' }}
       run: >-
-        meson setup ${{ env.M_BUILD_DIR }}
-        --buildtype=debug
-        --prefix=$PWD/_dist
-        --libdir=lib
-        -Db_coverage=true
+        sudo update-alternatives
+        --install /usr/bin/gcc gcc /usr/bin/gcc-${{ env.GCC_V }} 100
+        --slave /usr/bin/gfortran gfortran /usr/bin/gfortran-${{ env.GCC_V }}
+        --slave /usr/bin/gcov gcov /usr/bin/gcov-${{ env.GCC_V }}
 
-    - name: Build project (meson)
-      run: meson compile -C ${{ env.M_BUILD_DIR }}
-
-    - name: Run unit tests (meson)
-      run: meson test -C ${{ env.M_BUILD_DIR }} --print-errorlogs --no-rebuild
-
-    - name: Install project (meson)
-      run: meson install -C ${{ env.M_BUILD_DIR }} --no-rebuild
-
-    - name: Create coverage report (meson)
-      run: ninja -C ${{ env.M_BUILD_DIR }} coverage
-
-    - name: Upload coverage report
-      uses: codecov/codecov-action@v1
-
-    - name: Configure CMake build
-      run: >-
-        cmake
-        -B ${{ env.C_BUILD_DIR }}
-        -G Ninja
-        -DCMAKE_INSTALL_PREFIX=$PWD/_cdist
-
-    - name: Build project (CMake)
-      run: cmake --build ${{ env.C_BUILD_DIR }}
-
-    - name: Run unit tests (CTest)
-      run: ctest
-      working-directory: ${{ env.C_BUILD_DIR }}
-
-    - name: Install project (CMake)
-      run: cmake --install ${{ env.C_BUILD_DIR }}
-
-
-  # Test native MinGW Windows build
-  mingw-build:
-    runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include: [
-          { msystem: MINGW64, arch: x86_64 },
-        # { msystem: MINGW32, arch: i686   }
-        ]
-    defaults:
-      run:
-        shell: msys2 {0}
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-
-    - name: Setup MSYS2 toolchain
+    - name: Install GCC (Windows)
+      if: ${{ contains(matrix.os, 'windows') && matrix.compiler == 'msys' }}
       uses: msys2/setup-msys2@v2
       with:
-        msystem: ${{ matrix.msystem }}
+        msystem: MINGW64
         update: false
         install: >-
           git
-          mingw-w64-${{ matrix.arch }}-gcc-fortran
-          mingw-w64-${{ matrix.arch }}-cmake
-          mingw-w64-${{ matrix.arch }}-openblas
-          mingw-w64-${{ matrix.arch }}-lapack
-          mingw-w64-${{ matrix.arch }}-python
-          mingw-w64-${{ matrix.arch }}-python-pip
-          mingw-w64-${{ matrix.arch }}-ninja
+          mingw-w64-x86_64-gcc-fortran
+          mingw-w64-x86_64-openblas
+          mingw-w64-x86_64-lapack
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-python
+          mingw-w64-x86_64-python-pip
+          mingw-w64-x86_64-ninja
 
-    - name: Install meson
-      run: pip3 install meson==0.55.3
-
-    - name: Configure meson build
-      run: meson setup ${{ env.M_BUILD_DIR }}
-      env:
-        FC: gfortran
-        CC: gcc
-
-    - name: Build project (meson)
-      run: meson compile -C ${{ env.M_BUILD_DIR }}
-
-    - name: Run unit tests (meson)
-      run: meson test -C ${{ env.M_BUILD_DIR }} --print-errorlogs --no-rebuild
-      env:
-        OMP_NUM_THREADS: 2,1
-
-    # FIXME: CMake build currently broken due to git error in FetchContent
-    #- name: Configure cmake build
-    #  run: cmake -B ${{ env.C_BUILD_DIR }} -G Ninja
-
-    #- name: Build project (CMake)
-    #  run: cmake --build ${{ env.C_BUILD_DIR }}
-
-    #- name: Run unit tests (CTest)
-    #  run: ctest
-    #  working-directory: ${{ env.C_BUILD_DIR }}
-    #  env:
-    #    OMP_NUM_THREADS: 2,1
-
-
-  intel-build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-20.04]
-
-    env:
-      FC: ifort
-      OMP_NUM_THREADS: 2,1
-      APT_PACKAGES: >-
-        intel-oneapi-compiler-fortran
-        intel-oneapi-mkl-devel
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-
-    - uses: actions/setup-python@v1
-      with:
-        python-version: '3.x'
-
-    - name: Add Intel repository
+    - name: Prepare for cache restore
+      if: ${{ matrix.compiler == 'intel' }}
       run: |
-        wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS-2023.PUB
-        sudo apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS-2023.PUB
-        rm GPG-PUB-KEY-INTEL-SW-PRODUCTS-2023.PUB
+        sudo mkdir -p /opt/intel
+        sudo chown $USER /opt/intel
+
+    - name: Cache Intel install
+      if: ${{ matrix.compiler == 'intel' }}
+      id: cache-install
+      uses: actions/cache@v2
+      with:
+        path: /opt/intel/oneapi
+        key: install-${{ matrix.compiler }}-${{ matrix.version }}-${{ matrix.os }}
+
+    - name: Install Intel (Linux)
+      if: ${{ contains(matrix.os, 'ubuntu') && contains(matrix.compiler, 'intel') && steps.cache-install.outputs.cache-hit != 'true' }}
+      run: |
+        wget https://apt.repos.intel.com/intel-gpg-keys/${{ env.KEY }}
+        sudo apt-key add ${{ env.KEY }}
+        rm ${{ env.KEY }}
         echo "deb https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
         sudo apt-get update
+        sudo apt-get install ${{ env.PKG }}
+      env:
+        KEY: GPG-PUB-KEY-INTEL-SW-PRODUCTS-2023.PUB
+        PKG: ${{ env.LINUX_INTEL_COMPONENTS }}
 
-    - name: Install Intel oneAPI compiler
+    - name: Install Intel BaseKit (OSX)
+      if: ${{ contains(matrix.os, 'macos') && contains(matrix.compiler, 'intel') && steps.cache-install.outputs.cache-hit != 'true' }}
       run: |
-        sudo apt-get install ${{ env.APT_PACKAGES }}
+        curl --output ${{ env.OUT }} --url "$URL" --retry 5 --retry-delay 5
+        hdiutil attach ${{ env.OUT }}
+        if [ -z "$COMPONENTS" ]; then
+          sudo /Volumes/"$(basename "$URL" .dmg)"/bootstrapper.app/Contents/MacOS/bootstrapper -s --action install --eula=accept --continue-with-optional-error=yes --log-dir=.
+          installer_exit_code=$?
+        else
+          sudo /Volumes/"$(basename "$URL" .dmg)"/bootstrapper.app/Contents/MacOS/bootstrapper -s --action install --components="$COMPONENTS" --eula=accept --continue-with-optional-error=yes --log-dir=.
+          installer_exit_code=$?
+        fi
+        hdiutil detach /Volumes/"$(basename "$URL" .dmg)" -quiet
+        exit $installer_exit_code
+      env:
+        OUT: webimage-base.dmg
+        URL: ${{ env.MACOS_BASEKIT_URL }}
+        COMPONENTS: intel.oneapi.mac.mkl.devel
+
+    - name: Install Intel HPCKit (OSX)
+      if: ${{ contains(matrix.os, 'macos') && contains(matrix.compiler, 'intel') && steps.cache-install.outputs.cache-hit != 'true' }}
+      run: |
+        curl --output ${{ env.OUT }} --url "$URL" --retry 5 --retry-delay 5
+        hdiutil attach ${{ env.OUT }}
+        if [ -z "$COMPONENTS" ]; then
+          sudo /Volumes/"$(basename "$URL" .dmg)"/bootstrapper.app/Contents/MacOS/bootstrapper -s --action install --eula=accept --continue-with-optional-error=yes --log-dir=.
+          installer_exit_code=$?
+        else
+          sudo /Volumes/"$(basename "$URL" .dmg)"/bootstrapper.app/Contents/MacOS/bootstrapper -s --action install --components="$COMPONENTS" --eula=accept --continue-with-optional-error=yes --log-dir=.
+          installer_exit_code=$?
+        fi
+        hdiutil detach /Volumes/"$(basename "$URL" .dmg)" -quiet
+        exit $installer_exit_code
+      env:
+        OUT: webimage-hpc.dmg
+        URL: ${{ env.MACOS_HPCKIT_URL }}
+        COMPONENTS: all
+
+    - name: Setup Intel oneAPI environment
+      if: ${{ matrix.compiler == 'intel' }}
+      run: |
         source /opt/intel/oneapi/setvars.sh
         printenv >> $GITHUB_ENV
 
-    - name: Install meson/cmake
+    - name: Install build and test dependencies
+      if: ${{ ! contains(matrix.os, 'windows') }}
       run: pip3 install ${{ env.PIP_PACKAGES }}
 
-    - name: Configure meson build
-      run: meson setup ${{ env.M_BUILD_DIR }} -Dfortran_link_args=-qopenmp
+    - name: Install build and test dependencies
+      if: ${{ contains(matrix.os, 'windows') }}
+      run: pip3 install meson==0.55
 
-    - name: Build library (meson)
-      run: meson compile -C ${{ env.M_BUILD_DIR }}
+    - name: Configure build (meson)
+      if: ${{ matrix.build == 'meson' }}
+      run: >-
+        meson setup ${{ env.BUILD_DIR }}
+        --buildtype=debug
+        --prefix=$PWD/_dist
+        --libdir=lib
+        --warnlevel=0
+        -Db_coverage=${{ env.COVERAGE }}
+        ${{ env.MESON_ARGS }}
+      env:
+        COVERAGE: ${{ matrix.build-type == 'coverage' }}
+        MESON_ARGS: ${{ matrix.compiler == 'intel' && '-Dfortran_link_args=-qopenmp' || '' }}
 
-    - name: Run unit tests (meson)
-      run: meson test -C ${{ env.M_BUILD_DIR }} --print-errorlogs --no-rebuild
+    - name: Configure build (CMake)
+      if: ${{ matrix.build == 'cmake' }}
+      run: >-
+        cmake -B${{ env.BUILD_DIR }}
+        -GNinja
+        -DCMAKE_BUILD_TYPE=Debug
+        -DCMAKE_INSTALL_PREFIX=$PWD/_dist
+        -DCMAKE_INSTALL_LIBDIR=lib
 
-    - name: Configure cmake build
-      run: cmake -B ${{ env.C_BUILD_DIR }} -G Ninja
+    - name: Build library
+      run: ninja -C ${{ env.BUILD_DIR }}
 
-    - name: Build library (CMake)
-      run: cmake --build ${{ env.C_BUILD_DIR }}
+    - name: Run unit tests
+      if: ${{ matrix.build == 'meson' }}
+      run: |
+         meson test -C ${{ env.BUILD_DIR }} --print-errorlogs --no-rebuild --num-processes 2 -t 2
 
-    - name: Run unit tests (CTest)
-      run: ctest
-      working-directory: ${{ env.C_BUILD_DIR }}
+    - name: Run unit tests
+      if: ${{ matrix.build == 'cmake' }}
+      run: |
+         ctest --output-on-failure --parallel 2
+      working-directory: ${{ env.BUILD_DIR }}
+
+    - name: Create coverage report
+      if: ${{ matrix.build == 'meson' && matrix.build-type == 'coverage' }}
+      run:
+         ninja -C ${{ env.BUILD_DIR }} coverage
+
+    - name: Install project
+      run: |
+        ninja -C ${{ env.BUILD_DIR }} install
+        echo "MCHRG_PREFIX=$PWD/_dist" >> $GITHUB_ENV
+
+    - name: Create package
+      if: ${{ matrix.build == 'meson' }}
+      run: |
+        tar cvf ${{ env.OUTPUT }} _dist
+        xz -T0 ${{ env.OUTPUT }}
+        echo "MCHRG_OUTPUT=${{ env.OUTPUT }}.xz" >> $GITHUB_ENV
+      env:
+        OUTPUT: multicharge-${{ matrix.compiler }}-${{ matrix.version }}-${{ matrix.os }}.tar
+
+    - name: Upload package
+      if: ${{ matrix.build == 'meson' && matrix.build-type != 'coverage' }}
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ env.MCHRG_OUTPUT }}
+        path: ${{ env.MCHRG_OUTPUT }}
+
+    - name: Upload coverage report
+      if: ${{ matrix.build == 'meson' && matrix.build-type == 'coverage' }}
+      uses: codecov/codecov-action@v1
