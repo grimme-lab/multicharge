@@ -41,9 +41,8 @@ jobs:
         - os: windows-latest
           build: meson
           build-type: debug
-          compiler: gnu
+          compiler: msys
           version: 10
-          shell: msys {0}
 
         - os: ubuntu-latest
           build: meson
@@ -51,15 +50,9 @@ jobs:
           compiler: intel
           version: 2021
 
-        - os: macos-latest
-          build: meson
-          build-type: debug
-          compiler: intel
-          version: 2021
-
     defaults:
       run:
-        shell: ${{ matrix.shell || 'bash' }}
+        shell: ${{ matrix.compiler == 'msys' && 'msys {0}' || 'bash' }}
 
     env:
       FC: ${{ matrix.compiler == 'intel' && 'ifort' || 'gfortran' }}
@@ -92,7 +85,7 @@ jobs:
         --slave /usr/bin/gcov gcov /usr/bin/gcov-${{ env.GCC_V }}
 
     - name: Install GCC (Windows)
-      if: ${{ contains(matrix.os, 'windows') && matrix.compiler == 'gnu' }}
+      if: ${{ contains(matrix.os, 'windows') && matrix.compiler == 'msys' }}
       uses: msys2/setup-msys2@v2
       with:
         msystem: MINGW64
