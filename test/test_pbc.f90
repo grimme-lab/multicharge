@@ -309,6 +309,7 @@ subroutine test_numdqdr(error, mol)
    if (allocated(error)) return
 
    if (any(abs(dqdr(:, :, :) - numdr(:, :, :)) > thr2)) then
+      print *, norm2(dqdr(:, :, :) - numdr(:, :, :))
       call test_failed(error, "Derivative of charges does not match")
    end if
 
@@ -378,6 +379,7 @@ subroutine test_numdqdL(error, mol)
    if (allocated(error)) return
 
    if (any(abs(dqdL(:, :, :) - numdL(:, :, :)) > thr2)) then
+      print *, norm2(dqdL(:, :, :) - numdL(:, :, :))
       call test_failed(error, "Derivative of charges does not match")
    end if
 

@@ -173,6 +173,7 @@ subroutine test_numgrad(error, mol)
    if (allocated(error)) return
 
    if (any(abs(gradient(:, :) - numgrad(:, :)) > thr2)) then
+      print'(3es21.14)', gradient(:, :) - numgrad(:, :)
       call test_failed(error, "Derivative of energy does not match")
    end if
 
@@ -244,6 +245,7 @@ subroutine test_numsigma(error, mol)
    if (allocated(error)) return
 
    if (any(abs(sigma(:, :) - numsigma(:, :)) > thr2)) then
+      print'(3es21.14)', sigma(:, :) - numsigma(:, :)
       call test_failed(error, "Derivative of energy does not match")
    end if
 
@@ -297,6 +299,7 @@ subroutine test_numdqdr(error, mol)
    if (allocated(error)) return
 
    if (any(abs(dqdr(:, :, :) - numdr(:, :, :)) > thr2)) then
+      print'(3es21.14)', dqdr(:, :, :) - numdr(:, :, :)
       call test_failed(error, "Derivative of charges does not match")
    end if
 
@@ -360,7 +363,8 @@ subroutine test_numdqdL(error, mol)
    call model%solve(mol, cn, dcndr, dcndL, dqdr=dqdr, dqdL=dqdL)
    if (allocated(error)) return
 
-   if (any(abs(dqdL(:, :, :) - numdL(:, :, :)) > thr2)) then
+   if (any(abs(dqdL(:, :, :) - numdL(:, :, :)) > 10*thr2)) then
+      print'(3es21.14)', dqdL(:, :, :) - numdL(:, :, :)
       call test_failed(error, "Derivative of charges does not match")
    end if
 

@@ -14,11 +14,17 @@
 ! limitations under the License.
 
 module multicharge_lapack
-   use mctc_env, only : sp, dp
+   use mctc_env, only : sp, dp, wp
+   use multicharge_blas, only : gemm
    implicit none
    private
 
    public :: sytrf, sytrs, sytri
+   public :: syinv
+
+   interface syinv
+      module procedure :: mchrg_syinv
+   end interface syinv
 
    interface sytrf
       module procedure :: mchrg_ssytrf
@@ -357,6 +363,36 @@ subroutine mchrg_dsytri(amat, ipiv, uplo, info)
       if (stat /= 0) error stop "[multicharge_lapack] dsytri failed"
    end if
 end subroutine mchrg_dsytri
+
+
+subroutine mchrg_syinv(amat)
+   real(wp), intent(inout) :: amat(:, :)
+
+   real(wp), allocatable :: rmat(:, :), r2mat(:, :)
+   real(wp), parameter :: thr = sqrt(epsilon(1.0_wp)) * 10.0_wp
+
+   allocate(rmat(size(amat, 1), size(amat, 2)))
+   allocate(r2mat(size(amat, 1), size(amat, 2)))
+   rmat(:, :) = transpose(amat) / &
+      (maxval(sum(abs(amat), 1))*maxval(sum(abs(amat), 2)))
+
+   do
+      call gemm(rmat, rmat, r2mat)
+      call gemm(r2mat, amat, rmat, beta=2.0_wp, alpha=-1.0_wp)
+      call set_eye(r2mat)
+      call gemm(amat, rmat, r2mat, beta=-1.0_wp)
+      if (all(abs(r2mat) < thr)) exit
+   end do
+   amat(:, :) = rmat
+contains
+   subroutine set_eye(mat)
+      real(wp), intent(out) :: mat(:, :)
+      integer :: i, j
+      do concurrent(i = 1:size(mat, 1), j = 1:size(mat, 2))
+         mat(i, j) = merge(1.0_wp, 0.0_wp, i == j)
+      end do
+   end subroutine set_eye
+end subroutine mchrg_syinv
 
 
 end module multicharge_lapack
