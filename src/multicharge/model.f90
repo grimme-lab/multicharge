@@ -21,7 +21,7 @@ module multicharge_model
    use multicharge_blas, only : gemv, symv, gemm
    use multicharge_cutoff, only : get_lattice_points
    use multicharge_ewald, only : get_alpha
-   use multicharge_lapack, only : sytrf, sytrs, sytri
+   use multicharge_lapack, only : sytrf, sytrs, sytri, syinv
    use multicharge_wignerseitz, only : wignerseitz_cell_type, new_wignerseitz_cell
    implicit none
    private
@@ -465,6 +465,10 @@ subroutine solve(self, mol, cn, dcndr, dcndL, energy, gradient, sigma, qvec, dqd
    vrhs = xvec
    ainv = amat
 
+   if (.true.) then
+      call syinv(ainv)
+      call symv(ainv, xvec, vrhs, uplo='l')
+   else
    call sytrf(ainv, ipiv, info=info, uplo='l')
 
    if (info == 0) then
@@ -481,6 +485,7 @@ subroutine solve(self, mol, cn, dcndr, dcndL, energy, gradient, sigma, qvec, dqd
       else
          call sytrs(ainv, vrhs, ipiv, info=info, uplo='l')
       end if
+   end if
    end if
 
    if (present(qvec)) then
