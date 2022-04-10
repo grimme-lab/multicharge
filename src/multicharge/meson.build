@@ -16,13 +16,19 @@
 subdir('data')
 subdir('param')
 
+if get_option('ilp64')
+  lpbit = '64'
+else
+  lpbit = ''
+endif
+
 srcs += files(
-  'blas.f90',
+  'blas'+lpbit+'.f90',
   'cutoff.f90',
   'data.f90',
   'ewald.f90',
-  'lapack.f90',
-  'model.f90',
+  'lapack'+lpbit+'.f90',
+  'model.F90',
   'ncoord.f90',
   'output.f90',
   'param.f90',

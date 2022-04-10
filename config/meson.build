@@ -49,15 +49,26 @@ if lapack_vendor == 'auto'
   endif
 endif
 
+if get_option('ilp64')
+  add_project_arguments('-DWITH_ILP64', language:'fortran')
+endif
+
 if lapack_vendor == 'mkl'
   mkl_dep = []
+
+  if get_option('ilp64')
+    lpbit = 'i'
+  else
+    lpbit = ''
+  endif
+
   if fc_id == 'intel'
-    mkl_dep += fc.find_library('mkl_intel_lp64')
+    mkl_dep += fc.find_library('mkl_intel_'+lpbit+'lp64')
     if get_option('openmp')
       mkl_dep += fc.find_library('mkl_intel_thread')
     endif
   elif fc_id == 'gcc'
-    mkl_dep += fc.find_library('mkl_gf_lp64')
+    mkl_dep += fc.find_library('mkl_gf_'+lpbit+'lp64')
     if get_option('openmp')
       mkl_dep += fc.find_library('mkl_gnu_thread')
     endif
@@ -75,15 +86,21 @@ elif lapack_vendor == 'mkl-rt'
   lib_deps += mkl_dep
 
 elif lapack_vendor == 'openblas'
-  openblas_dep = dependency('openblas', required: false)
+  if get_option('ilp64')
+    lpbit = '64'
+  else
+    lpbit = ''
+  endif
+
+  openblas_dep = dependency('openblas'+lpbit, required: false)
   if not openblas_dep.found()
-    openblas_dep = fc.find_library('openblas')
+    openblas_dep = fc.find_library('openblas'+lpbit)
   endif
   lib_deps += openblas_dep
   if not fc.links('external dsytrs; call dsytrs(); end', dependencies: openblas_dep)
     lapack_dep = dependency('lapack', required: false)
     if not lapack_dep.found()
-      lapack_dep = fc.find_library('lapack')
+      lapack_dep = fc.find_library('lapack'+lpbit)
     endif
     lib_deps += lapack_dep
   endif
@@ -94,14 +111,20 @@ elif lapack_vendor == 'custom'
   endforeach
 
 else
-  lapack_dep = dependency('lapack', required: false)
+  if get_option('ilp64')
+    lpbit = '64'
+  else
+    lpbit = ''
+  endif
+
+  lapack_dep = dependency('lapack'+lpbit, required: false)
   if not lapack_dep.found()
-    lapack_dep = fc.find_library('lapack')
+    lapack_dep = fc.find_library('lapack'+lpbit)
   endif
   lib_deps += lapack_dep
-  blas_dep = dependency('blas', required: false)
+  blas_dep = dependency('blas'+lpbit, required: false)
   if not blas_dep.found()
-    blas_dep = fc.find_library('blas')
+    blas_dep = fc.find_library('blas'+lpbit)
   endif
   lib_deps += blas_dep
 endif
