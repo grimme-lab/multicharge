@@ -106,9 +106,19 @@ elif lapack_vendor == 'openblas'
   endif
 
 elif lapack_vendor == 'custom'
-  foreach lib: get_option('custom_libraries')
-    lib_deps += fc.find_library(lib)
-  endforeach
+  custom_libs = get_option('custom_libraries')
+  if custom_libs[0].substring(0,2) == '-L'
+    foreach lib: custom_libs
+      if lib not in [custom_libs[0]]
+        message(custom_libs[0].substring(2))
+        lib_deps += fc.find_library(lib, dirs: custom_libs[0].substring(2))
+      endif
+    endforeach
+  else
+    foreach lib: custom_libs
+      lib_deps += fc.find_library(lib)
+    endforeach
+  endif
 
 else
   if get_option('ilp64')
