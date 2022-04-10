@@ -28,7 +28,7 @@ endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/multicharge-utils.cmake")
 
-multicharge_find_package("${_lib}" "${${_pkg}_FIND_METHOD}" "${_url}")
+multicharge_find_package("${_lib}" "${${_pkg}_FIND_METHOD}" "${_url}" "HEAD")
 
 if(DEFINED "_${_pkg}_FIND_METHOD")
   unset("${_pkg}_FIND_METHOD")

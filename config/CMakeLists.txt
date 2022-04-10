@@ -14,9 +14,12 @@
 # limitations under the License.
 
 option(BUILD_SHARED_LIBS "Whether the libraries built should be shared" FALSE)
-
 option(WITH_OpenMP "Enable support for shared memory parallelisation with OpenMP" TRUE)
-if(NOT DEFINED "${PROJECT_NAME}-dependeny-method")
+option(WITH_ILP64 "Enable support for ILP64 BLAS/LAPACK calls" FALSE)
+option(WITH_TESTS "Enable compilation of unit tests" TRUE)
+
+
+if(NOT DEFINED "${PROJECT_NAME}-dependency-method")
   set(
     "${PROJECT_NAME}-dependency-method"
     "subproject" "cmake" "pkgconf" "fetch"
@@ -78,3 +81,5 @@ install(
   "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.pc"
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
 )
+
+include(CheckFortranSourceCompiles)

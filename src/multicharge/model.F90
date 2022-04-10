@@ -14,7 +14,7 @@
 ! limitations under the License.
 
 module multicharge_model
-   use mctc_env, only : error_type, wp
+   use mctc_env, only : error_type, wp, i8
    use mctc_io, only : structure_type
    use mctc_io_constants, only : pi
    use mctc_io_math, only : matdet_3x3, matinv_3x3
@@ -431,10 +431,17 @@ subroutine solve(self, mol, cn, dcndr, dcndL, energy, gradient, sigma, qvec, dqd
    real(wp), intent(inout), contiguous, optional :: gradient(:, :)
    real(wp), intent(inout), contiguous, optional :: sigma(:, :)
 
-   integer :: ic, jc, iat, ndim, info
+   integer :: ic, jc, iat, ndim
    logical :: grad, cpq, dcn
    real(wp) :: alpha
+#ifdef WITH_ILP64
+   integer(i8) :: info
+   integer(i8), allocatable :: ipiv(:)
+#else
+   integer :: info
    integer, allocatable :: ipiv(:)
+#endif
+
    real(wp), allocatable :: xvec(:), vrhs(:), amat(:, :), ainv(:, :)
    real(wp), allocatable :: dxdcn(:), atrace(:, :), dadr(:, :, :), dadL(:, :, :)
    type(wignerseitz_cell_type) :: wsc

@@ -16,12 +16,15 @@
 cmake_minimum_required(VERSION 3.14)
 get_directory_property(is-subproject PARENT_DIRECTORY)
 
+
+# C is required to find MKL automatically
 project(
   "multicharge"
-  LANGUAGES "Fortran"
+  LANGUAGES "Fortran" "C"
   VERSION "0.1.2"
   DESCRIPTION "Molecular structure store for testing"
 )
+
 
 # Follow GNU conventions for installing directories
 include(GNUInstallDirs)
@@ -33,6 +36,11 @@ if(NOT TARGET "OpenMP::OpenMP_Fortran" AND WITH_OpenMP)
   find_package("OpenMP" REQUIRED)
 endif()
 
+if(WITH_ILP64)
+  message(STATUS "Using LAPACK/BLAS ILP64 interface")
+  add_definitions(-DWITH_ILP64)
+endif()
+
 if(NOT TARGET "LAPACK::LAPACK")
   find_package("custom-lapack" REQUIRED)
 endif()
@@ -42,7 +50,7 @@ if(NOT TARGET "mctc-lib::mctc-lib")
   find_package("mctc-lib" REQUIRED)
 endif()
 
-if(NOT TARGET "mstore::mstore")
+if(NOT TARGET "mstore::mstore" AND WITH_TESTS)
   find_package("mstore")
 endif()
 
@@ -126,5 +134,7 @@ install(
 )
 
 # add the testsuite
-enable_testing()
-add_subdirectory("test")
+if(WITH_TESTS)
+  enable_testing()
+  add_subdirectory("test")
+endif()

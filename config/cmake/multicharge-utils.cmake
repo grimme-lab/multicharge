@@ -19,6 +19,7 @@ macro(
   package
   methods
   url
+  tag
 )
   string(TOLOWER "${package}" _pkg_lc)
   string(TOUPPER "${package}" _pkg_uc)
@@ -87,7 +88,7 @@ macro(
       FetchContent_Declare(
         "${_pkg_lc}"
         GIT_REPOSITORY "${url}"
-        GIT_TAG "HEAD"
+        GIT_TAG "${tag}"
       )
       FetchContent_MakeAvailable("${_pkg_lc}")
 

@@ -16,6 +16,7 @@
 set(_lib "mctc-lib")
 set(_pkg "MCTCLIB")
 set(_url "https://github.com/grimme-lab/mctc-lib")
+set(_tag "v0.2.5")
 
 if(NOT DEFINED "${_pkg}_FIND_METHOD")
   if(DEFINED "${PROJECT_NAME}-dependency-method")
@@ -28,7 +29,7 @@ endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/multicharge-utils.cmake")
 
-multicharge_find_package("${_lib}" "${${_pkg}_FIND_METHOD}" "${_url}")
+multicharge_find_package("${_lib}" "${${_pkg}_FIND_METHOD}" "${_url}" "${_tag}")
 
 if(DEFINED "_${_pkg}_FIND_METHOD")
   unset("${_pkg}_FIND_METHOD")

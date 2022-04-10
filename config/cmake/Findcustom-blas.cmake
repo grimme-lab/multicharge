@@ -14,9 +14,27 @@
 # limitations under the License.
 
 if(NOT BLAS_FOUND)
+
+  if (WITH_ILP64)
+    if(CMAKE_VERSION VERSION_LESS "3.13")
+      if(NOT LAPACK_LIBRARIES)
+        message(FATAL_ERROR "Use of WITH_ILP64 with CMAKE_VERSION < 3.13 requires user to set LAPACK_LIBRARIES")
+      endif()
+    elseif(CMAKE_VERSION VERSION_LESS "3.22")
+      if (NOT LAPACK_LIBRARIES)
+        if(NOT ((BLA_VENDOR MATCHES "64ilp") OR (BLA_VENDOR MATCHES "_dyn")))
+          message(FATAL_ERROR
+            "Use of WITH_ILP64 with CMAKE_VERSION < 3.22 requires user to set BLA_VENDOR to a valid ilp64 provider or to set LAPACK_LIBRARIES")
+        endif()
+      endif()
+    endif()
+  endif()
+        
   find_package("BLAS")
+
   if(NOT TARGET "BLAS::BLAS")
     add_library("BLAS::BLAS" INTERFACE IMPORTED)
     target_link_libraries("BLAS::BLAS" INTERFACE "${BLAS_LIBRARIES}")
   endif()
+
 endif()
