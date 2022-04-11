@@ -15,7 +15,7 @@
 
 !> Interface to BLAS library for matrix-vector and matrix-matrix operations
 module multicharge_blas
-   use mctc_env, only : sp, dp, i8
+   use mctc_env, only : sp, dp, ik => IK
    implicit none
    private
 
@@ -78,32 +78,32 @@ module multicharge_blas
    !> m by n matrix.
    interface blas_gemv
       pure subroutine sgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy)
-         import :: sp, i8
-         integer(i8), intent(in) :: lda
+         import :: sp, ik
+         integer(ik), intent(in) :: lda
          real(sp), intent(in) :: a(lda, *)
          real(sp), intent(in) :: x(*)
          real(sp), intent(inout) :: y(*)
          real(sp), intent(in) :: alpha
          real(sp), intent(in) :: beta
          character(len=1), intent(in) :: trans
-         integer(i8), intent(in) :: incx
-         integer(i8), intent(in) :: incy
-         integer(i8), intent(in) :: m
-         integer(i8), intent(in) :: n
+         integer(ik), intent(in) :: incx
+         integer(ik), intent(in) :: incy
+         integer(ik), intent(in) :: m
+         integer(ik), intent(in) :: n
       end subroutine sgemv
       pure subroutine dgemv(trans, m, n, alpha, a, lda, x, incx, beta, y, incy)
-         import :: dp, i8
-         integer(i8), intent(in) :: lda
+         import :: dp, ik
+         integer(ik), intent(in) :: lda
          real(dp), intent(in) :: a(lda, *)
          real(dp), intent(in) :: x(*)
          real(dp), intent(inout) :: y(*)
          real(dp), intent(in) :: alpha
          real(dp), intent(in) :: beta
          character(len=1), intent(in) :: trans
-         integer(i8), intent(in) :: incx
-         integer(i8), intent(in) :: incy
-         integer(i8), intent(in) :: m
-         integer(i8), intent(in) :: n
+         integer(ik), intent(in) :: incx
+         integer(ik), intent(in) :: incy
+         integer(ik), intent(in) :: m
+         integer(ik), intent(in) :: n
       end subroutine dgemv
    end interface blas_gemv
 
@@ -115,30 +115,30 @@ module multicharge_blas
    !> A is an n by n symmetric matrix.
    interface blas_symv
       pure subroutine ssymv(uplo, n, alpha, a, lda, x, incx, beta, y, incy)
-         import :: sp, i8
-         integer(i8), intent(in) :: lda
+         import :: sp, ik
+         integer(ik), intent(in) :: lda
          real(sp), intent(in) :: a(lda, *)
          real(sp), intent(in) :: x(*)
          real(sp), intent(inout) :: y(*)
          character(len=1), intent(in) :: uplo
          real(sp), intent(in) :: alpha
          real(sp), intent(in) :: beta
-         integer(i8), intent(in) :: incx
-         integer(i8), intent(in) :: incy
-         integer(i8), intent(in) :: n
+         integer(ik), intent(in) :: incx
+         integer(ik), intent(in) :: incy
+         integer(ik), intent(in) :: n
       end subroutine ssymv
       pure subroutine dsymv(uplo, n, alpha, a, lda, x, incx, beta, y, incy)
-         import :: dp, i8
-         integer(i8), intent(in) :: lda
+         import :: dp, ik
+         integer(ik), intent(in) :: lda
          real(dp), intent(in) :: a(lda, *)
          real(dp), intent(in) :: x(*)
          real(dp), intent(inout) :: y(*)
          character(len=1), intent(in) :: uplo
          real(dp), intent(in) :: alpha
          real(dp), intent(in) :: beta
-         integer(i8), intent(in) :: incx
-         integer(i8), intent(in) :: incy
-         integer(i8), intent(in) :: n
+         integer(ik), intent(in) :: incx
+         integer(ik), intent(in) :: incy
+         integer(ik), intent(in) :: n
       end subroutine dsymv
    end interface blas_symv
 
@@ -155,10 +155,10 @@ module multicharge_blas
    interface blas_gemm
       pure subroutine sgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, &
             & beta, c, ldc)
-         import :: sp, i8
-         integer(i8), intent(in) :: lda
-         integer(i8), intent(in) :: ldb
-         integer(i8), intent(in) :: ldc
+         import :: sp, ik
+         integer(ik), intent(in) :: lda
+         integer(ik), intent(in) :: ldb
+         integer(ik), intent(in) :: ldc
          real(sp), intent(in) :: a(lda, *)
          real(sp), intent(in) :: b(ldb, *)
          real(sp), intent(inout) :: c(ldc, *)
@@ -166,16 +166,16 @@ module multicharge_blas
          character(len=1), intent(in) :: transb
          real(sp), intent(in) :: alpha
          real(sp), intent(in) :: beta
-         integer(i8), intent(in) :: m
-         integer(i8), intent(in) :: n
-         integer(i8), intent(in) :: k
+         integer(ik), intent(in) :: m
+         integer(ik), intent(in) :: n
+         integer(ik), intent(in) :: k
       end subroutine sgemm
       pure subroutine dgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, &
             & beta, c, ldc)
-         import :: dp, i8
-         integer(i8), intent(in) :: lda
-         integer(i8), intent(in) :: ldb
-         integer(i8), intent(in) :: ldc
+         import :: dp, ik
+         integer(ik), intent(in) :: lda
+         integer(ik), intent(in) :: ldb
+         integer(ik), intent(in) :: ldc
          real(dp), intent(in) :: a(lda, *)
          real(dp), intent(in) :: b(ldb, *)
          real(dp), intent(inout) :: c(ldc, *)
@@ -183,9 +183,9 @@ module multicharge_blas
          character(len=1), intent(in) :: transb
          real(dp), intent(in) :: alpha
          real(dp), intent(in) :: beta
-         integer(i8), intent(in) :: m
-         integer(i8), intent(in) :: n
-         integer(i8), intent(in) :: k
+         integer(ik), intent(in) :: m
+         integer(ik), intent(in) :: n
+         integer(ik), intent(in) :: k
       end subroutine dgemm
    end interface blas_gemm
 
@@ -302,7 +302,7 @@ pure subroutine mchrg_sgemv(amat, xvec, yvec, alpha, beta, trans)
    character(len=1), intent(in), optional :: trans
    real(sp) :: a, b
    character(len=1) :: tra
-   integer(i8) :: incx, incy, m, n, lda
+   integer(ik) :: incx, incy, m, n, lda
    if (present(alpha)) then
       a = alpha
    else
@@ -318,11 +318,11 @@ pure subroutine mchrg_sgemv(amat, xvec, yvec, alpha, beta, trans)
    else
       tra = 'n'
    end if
-   incx = 1_i8
-   incy = 1_i8
+   incx = 1_ik
+   incy = 1_ik
    lda = max(1, size(amat, 1))
-   m = size(amat, 1, kind=i8)
-   n = size(amat, 2, kind=i8)
+   m = size(amat, 1)
+   n = size(amat, 2)
    call blas_gemv(tra, m, n, a, amat, lda, xvec, incx, b, yvec, incy)
 end subroutine mchrg_sgemv
 
@@ -336,7 +336,7 @@ pure subroutine mchrg_dgemv(amat, xvec, yvec, alpha, beta, trans)
    character(len=1), intent(in), optional :: trans
    real(dp) :: a, b
    character(len=1) :: tra
-   integer(i8) :: incx, incy, m, n, lda
+   integer(ik) :: incx, incy, m, n, lda
    if (present(alpha)) then
       a = alpha
    else
@@ -352,11 +352,11 @@ pure subroutine mchrg_dgemv(amat, xvec, yvec, alpha, beta, trans)
    else
       tra = 'n'
    end if
-   incx = 1_i8
-   incy = 1_i8
+   incx = 1_ik
+   incy = 1_ik
    lda = max(1, size(amat, 1))
-   m = size(amat, 1, kind=i8)
-   n = size(amat, 2, kind=i8)
+   m = size(amat, 1)
+   n = size(amat, 2)
    call blas_gemv(tra, m, n, a, amat, lda, xvec, incx, b, yvec, incy)
 end subroutine mchrg_dgemv
 
@@ -370,7 +370,7 @@ pure subroutine mchrg_ssymv(amat, xvec, yvec, uplo, alpha, beta)
    real(sp), intent(in), optional :: beta
    character(len=1) :: ula
    real(sp) :: a, b
-   integer(i8) :: incx, incy, n, lda
+   integer(ik) :: incx, incy, n, lda
    if (present(alpha)) then
       a = alpha
    else
@@ -386,10 +386,10 @@ pure subroutine mchrg_ssymv(amat, xvec, yvec, uplo, alpha, beta)
    else
       ula = 'u'
    end if
-   incx = 1_i8
-   incy = 1_i8
+   incx = 1_ik
+   incy = 1_ik
    lda = max(1, size(amat, 1))
-   n = size(amat, 2, kind=i8)
+   n = size(amat, 2)
    call blas_symv(ula, n, a, amat, lda, xvec, incx, b, yvec, incy)
 end subroutine mchrg_ssymv
 
@@ -403,7 +403,7 @@ pure subroutine mchrg_dsymv(amat, xvec, yvec, uplo, alpha, beta)
    real(dp), intent(in), optional :: beta
    character(len=1) :: ula
    real(dp) :: a, b
-   integer(i8) :: incx, incy, n, lda
+   integer(ik) :: incx, incy, n, lda
    if (present(alpha)) then
       a = alpha
    else
@@ -419,10 +419,10 @@ pure subroutine mchrg_dsymv(amat, xvec, yvec, uplo, alpha, beta)
    else
       ula = 'u'
    end if
-   incx = 1_i8
-   incy = 1_i8
+   incx = 1_ik
+   incy = 1_ik
    lda = max(1, size(amat, 1))
-   n = size(amat, 2, kind=i8)
+   n = size(amat, 2)
    call blas_symv(ula, n, a, amat, lda, xvec, incx, b, yvec, incy)
 end subroutine mchrg_dsymv
 
@@ -437,7 +437,7 @@ pure subroutine mchrg_sgemm(amat, bmat, cmat, transa, transb, alpha, beta)
    real(sp), intent(in), optional :: beta
    character(len=1) :: tra, trb
    real(sp) :: a, b
-   integer(i8) :: m, n, k, lda, ldb, ldc
+   integer(ik) :: m, n, k, lda, ldb, ldc
    if (present(alpha)) then
       a = alpha
    else
@@ -466,8 +466,8 @@ pure subroutine mchrg_sgemm(amat, bmat, cmat, transa, transb, alpha, beta)
    lda = max(1, size(amat, 1))
    ldb = max(1, size(bmat, 1))
    ldc = max(1, size(cmat, 1))
-   m = size(cmat, 1, kind=i8)
-   n = size(cmat, 2, kind=i8)
+   m = size(cmat, 1)
+   n = size(cmat, 2)
    call blas_gemm(tra, trb, m, n, k, a, amat, lda, bmat, ldb, b, cmat, ldc)
 end subroutine mchrg_sgemm
 
@@ -482,7 +482,7 @@ pure subroutine mchrg_dgemm(amat, bmat, cmat, transa, transb, alpha, beta)
    real(dp), intent(in), optional :: beta
    character(len=1) :: tra, trb
    real(dp) :: a, b
-   integer(i8) :: m, n, k, lda, ldb, ldc
+   integer(ik) :: m, n, k, lda, ldb, ldc
    if (present(alpha)) then
       a = alpha
    else
@@ -504,15 +504,15 @@ pure subroutine mchrg_dgemm(amat, bmat, cmat, transa, transb, alpha, beta)
       trb = 'n'
    end if
    if ((tra.eq.'n'.or.tra.eq.'N')) then
-      k = size(amat, 2, kind=i8)
+      k = size(amat, 2)
    else
-      k = size(amat, 1, kind=i8)
+      k = size(amat, 1)
    end if
    lda = max(1, size(amat, 1))
    ldb = max(1, size(bmat, 1))
    ldc = max(1, size(cmat, 1))
-   m = size(cmat, 1, kind=i8)
-   n = size(cmat, 2, kind=i8)
+   m = size(cmat, 1)
+   n = size(cmat, 2)
    call blas_gemm(tra, trb, m, n, k, a, amat, lda, bmat, ldb, b, cmat, ldc)
 end subroutine mchrg_dgemm
 

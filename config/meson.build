@@ -50,10 +50,11 @@ if lapack_vendor == 'auto'
 endif
 
 if get_option('ilp64')
-  add_project_arguments('-DWITH_ILP64', language:'fortran')
+  add_project_arguments('-DIK=i8', language:'fortran')
   mkllp = 'i'
   lp = '64'
 else
+  add_project_arguments('-DIK=i4', language:'fortran')
   mkllp = ''
   lp = ''
 endif

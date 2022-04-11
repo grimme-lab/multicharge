@@ -38,7 +38,9 @@ endif()
 
 if(WITH_ILP64)
   message(STATUS "Using LAPACK/BLAS ILP64 interface")
-  add_definitions(-DWITH_ILP64)
+  add_definitions(-DIK=i8)
+else()
+  add_definitions(-DIK=i4)
 endif()
 
 if(NOT TARGET "LAPACK::LAPACK")

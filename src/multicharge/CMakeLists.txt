@@ -18,17 +18,13 @@ add_subdirectory("param")
 
 set(dir "${CMAKE_CURRENT_SOURCE_DIR}")
 
-if(WITH_ILP64)
-  set(blas_bit "64")
-endif()
-
 list(
   APPEND srcs
-  "${dir}/blas${blas_bit}.f90"
+  "${dir}/blas.F90"
   "${dir}/cutoff.f90"
   "${dir}/data.f90"
   "${dir}/ewald.f90"
-  "${dir}/lapack${blas_bit}.f90"
+  "${dir}/lapack.F90"
   "${dir}/model.F90"
   "${dir}/ncoord.f90"
   "${dir}/output.f90"
