@@ -19,7 +19,7 @@ get_directory_property(is-subproject PARENT_DIRECTORY)
 project(
   "multicharge"
   LANGUAGES "Fortran"
-  VERSION "0.1.2"
+  VERSION "0.2.0"
   DESCRIPTION "Molecular structure store for testing"
 )
 
