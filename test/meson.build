@@ -29,6 +29,7 @@ endif
 mstore_dep = mstore_prj.get_variable('mstore_dep')
 
 tests = [
+  'cm5',
   'model',
   'ncoord',
   'pbc',
