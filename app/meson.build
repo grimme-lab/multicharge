@@ -18,4 +18,5 @@ multicharge_exe = executable(
   sources: files('main.f90'),
   dependencies: multicharge_dep,
   install: install,
+  link_language: 'fortran',
 )
