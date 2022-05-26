@@ -51,23 +51,27 @@ endif
 
 if lapack_vendor == 'mkl'
   mkl_dep = []
+  cc = fc
+  if add_languages('c', required: false, native: false)
+    cc = meson.get_compiler('c')
+  endif
   if fc_id == 'intel'
-    mkl_dep += fc.find_library('mkl_intel_lp64')
+    mkl_dep += cc.find_library('mkl_intel_lp64')
     if get_option('openmp')
-      mkl_dep += fc.find_library('mkl_intel_thread')
+      mkl_dep += cc.find_library('mkl_intel_thread')
     endif
   elif fc_id == 'gcc'
-    mkl_dep += fc.find_library('mkl_gf_lp64')
+    mkl_dep += cc.find_library('mkl_gf_lp64')
     if get_option('openmp')
-      mkl_dep += fc.find_library('mkl_gnu_thread')
+      mkl_dep += cc.find_library('mkl_gnu_thread')
     endif
   else
     error('MKL not supported for this compiler')
   endif
   if not get_option('openmp')
-    mkl_dep += fc.find_library('mkl_tbb_thread')
+    mkl_dep += cc.find_library('mkl_tbb_thread')
   endif
-  mkl_dep += fc.find_library('mkl_core')
+  mkl_dep += cc.find_library('mkl_core')
   lib_deps += mkl_dep
 
 elif lapack_vendor == 'mkl-rt'
