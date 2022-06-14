@@ -13,6 +13,10 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
+#ifndef IK
+#define IK i4
+#endif
+
 module multicharge_model
    use mctc_env, only : error_type, wp, ik => IK
    use mctc_io, only : structure_type
