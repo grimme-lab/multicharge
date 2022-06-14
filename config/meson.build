@@ -50,34 +50,36 @@ if lapack_vendor == 'auto'
 endif
 
 if get_option('ilp64')
+  ilp64 = true
   add_project_arguments('-DIK=i8', language:'fortran')
-  mkllp = 'i'
-  lp = '64'
 else
   add_project_arguments('-DIK=i4', language:'fortran')
-  mkllp = ''
-  lp = ''
+  ilp64 = false
 endif
 
 if lapack_vendor == 'mkl'
   mkl_dep = []
+  cc = fc
+  if add_languages('c', required: false, native: false)
+    cc = meson.get_compiler('c')
+  endif
   if fc_id == 'intel'
-    mkl_dep += fc.find_library('mkl_intel_'+mkllp+'lp64')
+    mkl_dep += ilp64 ? cc.find_library('mkl_intel_ilp64') : cc.find_library('mkl_intel_lp64')
     if get_option('openmp')
-      mkl_dep += fc.find_library('mkl_intel_thread')
+      mkl_dep += cc.find_library('mkl_intel_thread')
     endif
   elif fc_id == 'gcc'
-    mkl_dep += fc.find_library('mkl_gf_'+mkllp+'lp64')
+    mkl_dep += ilp64 ? cc.find_library('mkl_gf_ilp64') : cc.find_library('mkl_gf_lp64')
     if get_option('openmp')
-      mkl_dep += fc.find_library('mkl_gnu_thread')
+      mkl_dep += cc.find_library('mkl_gnu_thread')
     endif
   else
     error('MKL not supported for this compiler')
   endif
   if not get_option('openmp')
-    mkl_dep += fc.find_library('mkl_tbb_thread')
+    mkl_dep += cc.find_library('mkl_tbb_thread')
   endif
-  mkl_dep += fc.find_library('mkl_core')
+  mkl_dep += cc.find_library('mkl_core')
   lib_deps += mkl_dep
 
 elif lapack_vendor == 'mkl-rt'
@@ -85,15 +87,15 @@ elif lapack_vendor == 'mkl-rt'
   lib_deps += mkl_dep
 
 elif lapack_vendor == 'openblas'
-  openblas_dep = dependency('openblas'+lp, required: false)
+  openblas_dep = ilp64 ? dependency('openblas64', required: false) : dependency('openblas', required: false)
   if not openblas_dep.found()
-    openblas_dep = fc.find_library('openblas'+lp)
+    openblas_dep = ilp64 ? fc.find_library('openblas64') : fc.find_library('openblas')
   endif
   lib_deps += openblas_dep
   if not fc.links('external dsytrs; call dsytrs(); end', dependencies: openblas_dep)
-    lapack_dep = dependency('lapack'+lp, required: false)
+    lapack_dep = ilp64 ? dependency('lapack64', required: false) : dependency('lapack', required: false)
     if not lapack_dep.found()
-      lapack_dep = fc.find_library('lapack'+lp)
+      lapack_dep = ilp64 ? fc.find_library('lapack64') : fc.find_library('lapack')
     endif
     lib_deps += lapack_dep
   endif
@@ -121,14 +123,14 @@ elif lapack_vendor == 'custom'
 
 
 else
-  lapack_dep = dependency('lapack'+lp, required: false)
+  lapack_dep = ilp64 ? dependency('lapack64',required: false) : dependency('lapack', required: false)
   if not lapack_dep.found()
-    lapack_dep = fc.find_library('lapack'+lp)
+    lapack_dep = ilp64 ? fc.find_library('lapack64') : fc.find_library('lapack')
   endif
   lib_deps += lapack_dep
-  blas_dep = dependency('blas'+lp, required: false)
+  blas_dep = ilp64 ? dependency('blas64',required: false) : dependency('blas', required: false)
   if not blas_dep.found()
-    blas_dep = fc.find_library('blas'+lp)
+    blas_dep = ilp64 ? fc.find_library('blas64') : fc.find_library('blas')
   endif
   lib_deps += blas_dep
 endif
@@ -138,7 +140,7 @@ mctc_dep = dependency('mctc-lib', required: false)
 if not mctc_dep.found()
   mctc_prj = subproject(
     'mctc-lib',
-    version: '>=0.2',
+    version: '>=0.3.0',
     default_options: [
       'default_library=static',
     ],

@@ -19,7 +19,7 @@ macro(
   package
   methods
   url
-  tag
+  rev
 )
   string(TOLOWER "${package}" _pkg_lc)
   string(TOUPPER "${package}" _pkg_uc)
@@ -75,7 +75,7 @@ macro(
 
         # We need the module directory in the subproject before we finish the configure stage
         if(NOT EXISTS "${${_pkg_uc}_BINARY_DIR}/include")
-          make_directory("${${_pkg_uc}_BINARY_DIR}/include")
+          file(MAKE_DIRECTORY "${${_pkg_uc}_BINARY_DIR}/include")
         endif()
 
         break()
@@ -88,7 +88,7 @@ macro(
       FetchContent_Declare(
         "${_pkg_lc}"
         GIT_REPOSITORY "${url}"
-        GIT_TAG "${tag}"
+        GIT_TAG "${rev}"
       )
       FetchContent_MakeAvailable("${_pkg_lc}")
 
@@ -98,7 +98,7 @@ macro(
       # We need the module directory in the subproject before we finish the configure stage
       FetchContent_GetProperties("${_pkg_lc}" BINARY_DIR "${_pkg_uc}_BINARY_DIR")
       if(NOT EXISTS "${${_pkg_uc}_BINARY_DIR}/include")
-        make_directory("${${_pkg_uc}_BINARY_DIR}/include")
+        file(MAKE_DIRECTORY "${${_pkg_uc}_BINARY_DIR}/include")
       endif()
 
       break()
