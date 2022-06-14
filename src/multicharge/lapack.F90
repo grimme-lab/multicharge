@@ -13,6 +13,10 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
+#ifndef IK
+#define IK i4
+#endif
+
 module multicharge_lapack
    use mctc_env, only : sp, dp, ik => IK
    implicit none
