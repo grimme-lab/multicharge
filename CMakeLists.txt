@@ -20,7 +20,7 @@ get_directory_property(is-subproject PARENT_DIRECTORY)
 # C is required to find MKL automatically
 project(
   "multicharge"
-  LANGUAGES "Fortran" "C"
+  LANGUAGES "Fortran"
   VERSION "0.1.2"
   DESCRIPTION "Molecular structure store for testing"
 )
@@ -38,9 +38,6 @@ endif()
 
 if(WITH_ILP64)
   message(STATUS "Using LAPACK/BLAS ILP64 interface")
-  add_definitions(-DIK=i8)
-else()
-  add_definitions(-DIK=i4)
 endif()
 
 if(NOT TARGET "LAPACK::LAPACK")
@@ -92,6 +89,15 @@ if(WITH_OpenMP)
     PUBLIC
     "OpenMP::OpenMP_Fortran"
   )
+endif()
+if(WITH_ILP64)
+  target_compile_definitions(
+    "${PROJECT_NAME}-lib"
+    PUBLIC -DIK=i8)
+else()
+  target_compile_definitions(
+    "${PROJECT_NAME}-lib"
+    PUBLIC -DIK=i4)
 endif()
 target_include_directories(
   "${PROJECT_NAME}-lib"

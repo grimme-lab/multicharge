@@ -81,5 +81,3 @@ install(
   "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.pc"
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
 )
-
-include(CheckFortranSourceCompiles)
