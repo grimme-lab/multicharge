@@ -69,7 +69,7 @@ if lapack_vendor == 'mkl'
       mkl_dep += cc.find_library('mkl_intel_thread')
     endif
   elif fc_id == 'gcc'
-    mkl_dep += cc.find_library(ilp64 : 'mkl_gf_ilp64' : 'mkl_gf_lp64')
+    mkl_dep += cc.find_library(ilp64 ? 'mkl_gf_ilp64' : 'mkl_gf_lp64')
     if get_option('openmp')
       mkl_dep += cc.find_library('mkl_gnu_thread')
     endif
