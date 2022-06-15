@@ -13,8 +13,12 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
+#ifndef IK
+#define IK i4
+#endif
+
 module multicharge_lapack
-   use mctc_env, only : sp, dp
+   use mctc_env, only : sp, dp, ik => IK
    implicit none
    private
 
@@ -42,75 +46,75 @@ module multicharge_lapack
 
    interface lapack_sytrf
       pure subroutine ssytrf(uplo, n, a, lda, ipiv, work, lwork, info)
-         import :: sp
+         import :: sp, ik
+         integer(ik), intent(in) :: lda
          real(sp), intent(inout) :: a(lda, *)
          character(len=1), intent(in) :: uplo
-         integer, intent(out) :: ipiv(*)
-         integer, intent(out) :: info
-         integer, intent(in) :: n
-         integer, intent(in) :: lda
+         integer(ik), intent(out) :: ipiv(*)
+         integer(ik), intent(out) :: info
+         integer(ik), intent(in) :: n
          real(sp), intent(inout) :: work(*)
-         integer, intent(in) :: lwork
+         integer(ik), intent(in) :: lwork
       end subroutine ssytrf
       pure subroutine dsytrf(uplo, n, a, lda, ipiv, work, lwork, info)
-         import :: dp
+         import :: dp, ik
+         integer(ik), intent(in) :: lda
          real(dp), intent(inout) :: a(lda, *)
          character(len=1), intent(in) :: uplo
-         integer, intent(out) :: ipiv(*)
-         integer, intent(out) :: info
-         integer, intent(in) :: n
-         integer, intent(in) :: lda
+         integer(ik), intent(out) :: ipiv(*)
+         integer(ik), intent(out) :: info
+         integer(ik), intent(in) :: n
          real(dp), intent(inout) :: work(*)
-         integer, intent(in) :: lwork
+         integer(ik), intent(in) :: lwork
       end subroutine dsytrf
    end interface lapack_sytrf
 
    interface lapack_sytrs
       pure subroutine ssytrs(uplo, n, nrhs, a, lda, ipiv, b, ldb, info)
-         import :: sp
+         import :: sp, ik
+         integer(ik), intent(in) :: lda
+         integer(ik), intent(in) :: ldb
          real(sp), intent(in) :: a(lda, *)
          real(sp), intent(inout) :: b(ldb, *)
-         integer, intent(in) :: ipiv(*)
+         integer(ik), intent(in) :: ipiv(*)
          character(len=1), intent(in) :: uplo
-         integer, intent(out) :: info
-         integer, intent(in) :: n
-         integer, intent(in) :: nrhs
-         integer, intent(in) :: lda
-         integer, intent(in) :: ldb
+         integer(ik), intent(out) :: info
+         integer(ik), intent(in) :: n
+         integer(ik), intent(in) :: nrhs
       end subroutine ssytrs
       pure subroutine dsytrs(uplo, n, nrhs, a, lda, ipiv, b, ldb, info)
-         import :: dp
+         import :: dp, ik
+         integer(ik), intent(in) :: lda
+         integer(ik), intent(in) :: ldb
          real(dp), intent(in) :: a(lda, *)
          real(dp), intent(inout) :: b(ldb, *)
-         integer, intent(in) :: ipiv(*)
+         integer(ik), intent(in) :: ipiv(*)
          character(len=1), intent(in) :: uplo
-         integer, intent(out) :: info
-         integer, intent(in) :: n
-         integer, intent(in) :: nrhs
-         integer, intent(in) :: lda
-         integer, intent(in) :: ldb
+         integer(ik), intent(out) :: info
+         integer(ik), intent(in) :: n
+         integer(ik), intent(in) :: nrhs
       end subroutine dsytrs
    end interface lapack_sytrs
 
    interface lapack_sytri
       pure subroutine ssytri(uplo, n, a, lda, ipiv, work, info)
-         import :: sp
+         import :: sp, ik
+         integer(ik), intent(in) :: lda
          real(sp), intent(inout) :: a(lda, *)
-         integer, intent(in) :: ipiv(*)
+         integer(ik), intent(in) :: ipiv(*)
          character(len=1), intent(in) :: uplo
-         integer, intent(out) :: info
-         integer, intent(in) :: n
-         integer, intent(in) :: lda
+         integer(ik), intent(out) :: info
+         integer(ik), intent(in) :: n
          real(sp), intent(in) :: work(*)
       end subroutine ssytri
       pure subroutine dsytri(uplo, n, a, lda, ipiv, work, info)
-         import :: dp
+         import :: dp, ik
+         integer(ik), intent(in) :: lda
          real(dp), intent(inout) :: a(lda, *)
-         integer, intent(in) :: ipiv(*)
+         integer(ik), intent(in) :: ipiv(*)
          character(len=1), intent(in) :: uplo
-         integer, intent(out) :: info
-         integer, intent(in) :: n
-         integer, intent(in) :: lda
+         integer(ik), intent(out) :: info
+         integer(ik), intent(in) :: n
          real(dp), intent(in) :: work(*)
       end subroutine dsytri
    end interface lapack_sytri
@@ -121,11 +125,11 @@ contains
 
 subroutine mchrg_ssytrf(amat, ipiv, uplo, info)
    real(sp), intent(inout) :: amat(:, :)
-   integer, intent(out) :: ipiv(:)
+   integer(ik), intent(out) :: ipiv(:)
    character(len=1), intent(in), optional :: uplo
-   integer, intent(out), optional :: info
+   integer(ik), intent(out), optional :: info
    character(len=1) :: ula
-   integer :: stat, n, lda, lwork, stat_alloc, stat_dealloc
+   integer(ik) :: stat, n, lda, lwork, stat_alloc, stat_dealloc
    real(sp), allocatable :: work(:)
    real(sp) :: test(1)
    if (present(uplo)) then
@@ -135,8 +139,8 @@ subroutine mchrg_ssytrf(amat, ipiv, uplo, info)
    end if
    lda = max(1, size(amat, 1))
    n = size(amat, 2)
-   stat_alloc = 0
-   lwork = -1
+   stat_alloc = 0_ik
+   lwork = -1_ik
    call lapack_sytrf(ula, n, amat, lda, ipiv, test, lwork, stat)
    if (stat == 0) then
       lwork = nint(test(1))
@@ -146,7 +150,7 @@ subroutine mchrg_ssytrf(amat, ipiv, uplo, info)
       if (stat_alloc==0) then
          call lapack_sytrf(ula, n, amat, lda, ipiv, work, lwork, stat)
       else
-         stat = -1000
+         stat = -1000_ik
       end if
       deallocate(work, stat=stat_dealloc)
    end if
@@ -160,11 +164,11 @@ end subroutine mchrg_ssytrf
 
 subroutine mchrg_dsytrf(amat, ipiv, uplo, info)
    real(dp), intent(inout) :: amat(:, :)
-   integer, intent(out) :: ipiv(:)
+   integer(ik), intent(out) :: ipiv(:)
    character(len=1), intent(in), optional :: uplo
-   integer, intent(out), optional :: info
+   integer(ik), intent(out), optional :: info
    character(len=1) :: ula
-   integer :: stat, n, lda, lwork, stat_alloc, stat_dealloc
+   integer(ik) :: stat, n, lda, lwork, stat_alloc, stat_dealloc
    real(dp), allocatable :: work(:)
    real(dp) :: test(1)
    if (present(uplo)) then
@@ -174,8 +178,8 @@ subroutine mchrg_dsytrf(amat, ipiv, uplo, info)
    end if
    lda = max(1, size(amat, 1))
    n = size(amat, 2)
-   stat_alloc = 0
-   lwork = -1
+   stat_alloc = 0_ik
+   lwork = -1_ik
    call lapack_sytrf(ula, n, amat, lda, ipiv, test, lwork, stat)
    if (stat == 0) then
       lwork = nint(test(1))
@@ -185,7 +189,7 @@ subroutine mchrg_dsytrf(amat, ipiv, uplo, info)
       if (stat_alloc==0) then
          call lapack_sytrf(ula, n, amat, lda, ipiv, work, lwork, stat)
       else
-         stat = -1000
+         stat = -1000_ik
       end if
       deallocate(work, stat=stat_dealloc)
    end if
@@ -200,11 +204,11 @@ end subroutine mchrg_dsytrf
 subroutine mchrg_ssytrs(amat, bmat, ipiv, uplo, info)
    real(sp), intent(in) :: amat(:, :)
    real(sp), intent(inout) :: bmat(:, :)
-   integer, intent(in) :: ipiv(:)
+   integer(ik), intent(in) :: ipiv(:)
    character(len=1), intent(in), optional :: uplo
-   integer, intent(out), optional :: info
+   integer(ik), intent(out), optional :: info
    character(len=1) :: ula
-   integer :: stat, n, nrhs, lda, ldb
+   integer(ik) :: stat, n, nrhs, lda, ldb
    if (present(uplo)) then
       ula = uplo
    else
@@ -226,11 +230,11 @@ end subroutine mchrg_ssytrs
 subroutine mchrg_dsytrs(amat, bmat, ipiv, uplo, info)
    real(dp), intent(in) :: amat(:, :)
    real(dp), intent(inout) :: bmat(:, :)
-   integer, intent(in) :: ipiv(:)
+   integer(ik), intent(in) :: ipiv(:)
    character(len=1), intent(in), optional :: uplo
-   integer, intent(out), optional :: info
+   integer(ik), intent(out), optional :: info
    character(len=1) :: ula
-   integer :: stat, n, nrhs, lda, ldb
+   integer(ik) :: stat, n, nrhs, lda, ldb
    if (present(uplo)) then
       ula = uplo
    else
@@ -252,9 +256,9 @@ end subroutine mchrg_dsytrs
 subroutine mchrg_ssytrs1(amat, bvec, ipiv, uplo, info)
    real(sp), intent(in) :: amat(:, :)
    real(sp), intent(inout), target :: bvec(:)
-   integer, intent(in) :: ipiv(:)
+   integer(ik), intent(in) :: ipiv(:)
    character(len=1), intent(in), optional :: uplo
-   integer, intent(out), optional :: info
+   integer(ik), intent(out), optional :: info
    real(sp), pointer :: bptr(:, :)
    bptr(1:size(bvec), 1:1) => bvec
    call sytrs(amat, bptr, ipiv, uplo, info)
@@ -264,9 +268,9 @@ end subroutine mchrg_ssytrs1
 subroutine mchrg_ssytrs3(amat, bmat, ipiv, uplo, info)
    real(sp), intent(in) :: amat(:, :)
    real(sp), intent(inout), contiguous, target :: bmat(:, :, :)
-   integer, intent(in) :: ipiv(:)
+   integer(ik), intent(in) :: ipiv(:)
    character(len=1), intent(in), optional :: uplo
-   integer, intent(out), optional :: info
+   integer(ik), intent(out), optional :: info
    real(sp), pointer :: bptr(:, :)
    bptr(1:size(bmat, 1), 1:size(bmat, 2)*size(bmat, 3)) => bmat
    call sytrs(amat, bptr, ipiv, uplo, info)
@@ -276,9 +280,9 @@ end subroutine mchrg_ssytrs3
 subroutine mchrg_dsytrs1(amat, bvec, ipiv, uplo, info)
    real(dp), intent(in) :: amat(:, :)
    real(dp), intent(inout), target :: bvec(:)
-   integer, intent(in) :: ipiv(:)
+   integer(ik), intent(in) :: ipiv(:)
    character(len=1), intent(in), optional :: uplo
-   integer, intent(out), optional :: info
+   integer(ik), intent(out), optional :: info
    real(dp), pointer :: bptr(:, :)
    bptr(1:size(bvec), 1:1) => bvec
    call sytrs(amat, bptr, ipiv, uplo, info)
@@ -288,9 +292,9 @@ end subroutine mchrg_dsytrs1
 subroutine mchrg_dsytrs3(amat, bmat, ipiv, uplo, info)
    real(dp), intent(in) :: amat(:, :)
    real(dp), intent(inout), contiguous, target :: bmat(:, :, :)
-   integer, intent(in) :: ipiv(:)
+   integer(ik), intent(in) :: ipiv(:)
    character(len=1), intent(in), optional :: uplo
-   integer, intent(out), optional :: info
+   integer(ik), intent(out), optional :: info
    real(dp), pointer :: bptr(:, :)
    bptr(1:size(bmat, 1), 1:size(bmat, 2)*size(bmat, 3)) => bmat
    call sytrs(amat, bptr, ipiv, uplo, info)
@@ -299,11 +303,11 @@ end subroutine mchrg_dsytrs3
 
 subroutine mchrg_ssytri(amat, ipiv, uplo, info)
    real(sp), intent(inout) :: amat(:, :)
-   integer, intent(in) :: ipiv(:)
+   integer(ik), intent(in) :: ipiv(:)
    character(len=1), intent(in), optional :: uplo
-   integer, intent(out), optional :: info
+   integer(ik), intent(out), optional :: info
    character(len=1) :: ula
-   integer :: stat, n, lda, stat_alloc, stat_dealloc
+   integer(ik) :: stat, n, lda, stat_alloc, stat_dealloc
    real(sp), allocatable :: work(:)
    if (present(uplo)) then
       ula = uplo
@@ -312,12 +316,12 @@ subroutine mchrg_ssytri(amat, ipiv, uplo, info)
    end if
    lda = max(1, size(amat, 1))
    n = size(amat, 2)
-   stat_alloc = 0
+   stat_alloc = 0_ik
    allocate(work(n), stat=stat_alloc)
    if (stat_alloc==0) then
       call lapack_sytri(ula, n, amat, lda, ipiv, work, stat)
    else
-      stat = -1000
+      stat = -1000_ik
    end if
    deallocate(work, stat=stat_dealloc)
    if (present(info)) then
@@ -330,11 +334,11 @@ end subroutine mchrg_ssytri
 
 subroutine mchrg_dsytri(amat, ipiv, uplo, info)
    real(dp), intent(inout) :: amat(:, :)
-   integer, intent(in) :: ipiv(:)
+   integer(ik), intent(in) :: ipiv(:)
    character(len=1), intent(in), optional :: uplo
-   integer, intent(out), optional :: info
+   integer(ik), intent(out), optional :: info
    character(len=1) :: ula
-   integer :: stat, n, lda, stat_alloc, stat_dealloc
+   integer(ik) :: stat, n, lda, stat_alloc, stat_dealloc
    real(dp), allocatable :: work(:)
    if (present(uplo)) then
       ula = uplo
@@ -343,12 +347,12 @@ subroutine mchrg_dsytri(amat, ipiv, uplo, info)
    end if
    lda = max(1, size(amat, 1))
    n = size(amat, 2)
-   stat_alloc = 0
+   stat_alloc = 0_ik
    allocate(work(n), stat=stat_alloc)
    if (stat_alloc==0) then
       call lapack_sytri(ula, n, amat, lda, ipiv, work, stat)
    else
-      stat = -1000
+      stat = -1000_ik
    end if
    deallocate(work, stat=stat_dealloc)
    if (present(info)) then

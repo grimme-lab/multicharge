@@ -33,6 +33,10 @@ if(NOT TARGET "OpenMP::OpenMP_Fortran" AND WITH_OpenMP)
   find_package("OpenMP" REQUIRED)
 endif()
 
+if(WITH_ILP64)
+  message(STATUS "Using LAPACK/BLAS ILP64 interface")
+endif()
+
 if(NOT TARGET "LAPACK::LAPACK")
   find_package("custom-lapack" REQUIRED)
 endif()
@@ -42,7 +46,7 @@ if(NOT TARGET "mctc-lib::mctc-lib")
   find_package("mctc-lib" REQUIRED)
 endif()
 
-if(NOT TARGET "mstore::mstore")
+if(NOT TARGET "mstore::mstore" AND WITH_TESTS)
   find_package("mstore")
 endif()
 
@@ -81,6 +85,17 @@ if(WITH_OpenMP)
     "${PROJECT_NAME}-lib"
     PUBLIC
     "OpenMP::OpenMP_Fortran"
+  )
+endif()
+if(WITH_ILP64)
+  target_compile_definitions(
+    "${PROJECT_NAME}-lib"
+    PUBLIC -DIK=i8
+  )
+else()
+  target_compile_definitions(
+    "${PROJECT_NAME}-lib"
+    PUBLIC -DIK=i4
   )
 endif()
 target_include_directories(
@@ -126,5 +141,7 @@ install(
 )
 
 # add the testsuite
-enable_testing()
-add_subdirectory("test")
+if(WITH_TESTS)
+  enable_testing()
+  add_subdirectory("test")
+endif()

@@ -13,8 +13,12 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
+#ifndef IK
+#define IK i4
+#endif
+
 module multicharge_model
-   use mctc_env, only : error_type, wp
+   use mctc_env, only : error_type, wp, ik => IK
    use mctc_io, only : structure_type
    use mctc_io_constants, only : pi
    use mctc_io_math, only : matdet_3x3, matinv_3x3
@@ -431,10 +435,12 @@ subroutine solve(self, mol, cn, dcndr, dcndL, energy, gradient, sigma, qvec, dqd
    real(wp), intent(inout), contiguous, optional :: gradient(:, :)
    real(wp), intent(inout), contiguous, optional :: sigma(:, :)
 
-   integer :: ic, jc, iat, ndim, info
+   integer :: ic, jc, iat, ndim
    logical :: grad, cpq, dcn
    real(wp) :: alpha
-   integer, allocatable :: ipiv(:)
+   integer(ik) :: info
+   integer(ik), allocatable :: ipiv(:)
+
    real(wp), allocatable :: xvec(:), vrhs(:), amat(:, :), ainv(:, :)
    real(wp), allocatable :: dxdcn(:), atrace(:, :), dadr(:, :, :), dadL(:, :, :)
    type(wignerseitz_cell_type) :: wsc

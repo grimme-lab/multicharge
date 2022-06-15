@@ -13,6 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+if ((BLA_VENDOR MATCHES ^Intel) OR (DEFINED ENV{MKLROOT}))
+  enable_language("C")
+endif()
+
+if(WITH_ILP64)
+  set(BLA_SIZEOF_INTEGER 8)
+endif()
+
 if(NOT BLAS_FOUND)
   find_package("BLAS")
   if(NOT TARGET "BLAS::BLAS")
