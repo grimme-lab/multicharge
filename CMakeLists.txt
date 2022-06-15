@@ -16,15 +16,12 @@
 cmake_minimum_required(VERSION 3.14)
 get_directory_property(is-subproject PARENT_DIRECTORY)
 
-
-# C is required to find MKL automatically
 project(
   "multicharge"
   LANGUAGES "Fortran"
   VERSION "0.2.0"
   DESCRIPTION "Molecular structure store for testing"
 )
-
 
 # Follow GNU conventions for installing directories
 include(GNUInstallDirs)
@@ -93,11 +90,13 @@ endif()
 if(WITH_ILP64)
   target_compile_definitions(
     "${PROJECT_NAME}-lib"
-    PUBLIC -DIK=i8)
+    PUBLIC -DIK=i8
+  )
 else()
   target_compile_definitions(
     "${PROJECT_NAME}-lib"
-    PUBLIC -DIK=i4)
+    PUBLIC -DIK=i4
+  )
 endif()
 target_include_directories(
   "${PROJECT_NAME}-lib"
