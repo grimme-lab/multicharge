@@ -1,0 +1,4 @@
+[wrap-git]
+directory = lapack-interface
+url = https://github.com/grimme-lab/lapack-interface
+revision = v0.1.0

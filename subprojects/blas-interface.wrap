@@ -1,0 +1,4 @@
+[wrap-git]
+directory = blas-interface
+url = https://github.com/grimme-lab/blas-interface
+revision = v1.0.0

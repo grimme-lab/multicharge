@@ -33,26 +33,28 @@ if(NOT TARGET "OpenMP::OpenMP_Fortran" AND WITH_OpenMP)
   find_package("OpenMP" REQUIRED)
 endif()
 
-if(WITH_ILP64)
-  message(STATUS "Using LAPACK/BLAS ILP64 interface")
-endif()
-
-if(NOT TARGET "LAPACK::LAPACK")
-  find_package("custom-lapack" REQUIRED)
-endif()
-
 # Collect subprojects
 if(NOT TARGET "mctc-lib::mctc-lib")
   find_package("mctc-lib" REQUIRED)
 endif()
 
 if(NOT TARGET "mstore::mstore" AND WITH_TESTS)
-  find_package("mstore")
+  find_package("mstore" REQUIRED)
+endif()
+
+if(NOT TARGET "lapack-interface::lapack-interface")
+  find_package("lapack-interface")
+endif()
+
+if(NOT TARGET "blas-interface::blas-interface")
+  find_package("blas-interface")
 endif()
 
 set(
   lib-deps
   "mctc-lib::mctc-lib"
+  "lapack-interface::lapack-interface"
+  "blas-interface::blas-interface"
 )
 
 # Collect source of the project
@@ -77,27 +79,8 @@ target_link_libraries(
   "${PROJECT_NAME}-lib"
   PUBLIC
   "${lib-deps}"
-  "LAPACK::LAPACK"
-  "$<$<VERSION_LESS:${CMAKE_VERSION},3.20>:BLAS::BLAS>"
+  "$<$<BOOL:${WITH_OpenMP}>:OpenMP::OpenMP_Fortran>"
 )
-if(WITH_OpenMP)
-  target_link_libraries(
-    "${PROJECT_NAME}-lib"
-    PUBLIC
-    "OpenMP::OpenMP_Fortran"
-  )
-endif()
-if(WITH_ILP64)
-  target_compile_definitions(
-    "${PROJECT_NAME}-lib"
-    PUBLIC -DIK=i8
-  )
-else()
-  target_compile_definitions(
-    "${PROJECT_NAME}-lib"
-    PUBLIC -DIK=i4
-  )
-endif()
 target_include_directories(
   "${PROJECT_NAME}-lib"
   PUBLIC

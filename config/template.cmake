@@ -19,4 +19,12 @@ if(NOT TARGET "@PROJECT_NAME@::@PROJECT_NAME@")
   if(NOT TARGET "mctc-lib::mctc-lib")
     find_dependency("mctc-lib")
   endif()
+
+  if(NOT TARGET "lapack-interface::lapack-interface")
+    find_dependency("lapack-interface")
+  endif()
+
+  if(NOT TARGET "blas-interface::blas-interface")
+    find_dependency("blas-interface")
+  endif()
 endif()
