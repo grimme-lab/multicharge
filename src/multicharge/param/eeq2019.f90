@@ -53,7 +53,7 @@ module multicharge_param_eeq2019
 
 
    !> Maximum atomic number allowed in EEQ calculations
-   integer, parameter :: max_elem = 86
+   integer, parameter :: max_elem = 103
 
 
    !> Element-specific electronegativity for the electronegativity equilibration charges.
@@ -75,7 +75,11 @@ module multicharge_param_eeq2019
       & 0.56999999_wp, 0.87936784_wp, 1.02761808_wp, 0.93297476_wp, 1.10172128_wp, &
       & 0.97350071_wp, 1.16695666_wp, 1.23997927_wp, 1.18464453_wp, 1.14191734_wp, &
       & 1.12334192_wp, 1.01485321_wp, 1.12950808_wp, 1.30804834_wp, 1.33689961_wp, &
-      & 1.27465977_wp]
+      & 1.27465977_wp, 1.06598299_wp, 0.68184178_wp, 1.25994649_wp, 0.40030316_wp, &
+      & 0.29458157_wp, 0.75460678_wp, 0.42330605_wp, 0.53613714_wp, 0.58870880_wp, &
+      & 0.50349105_wp, 0.02647510_wp, 0.45350118_wp, 0.63133032_wp, 0.45995218_wp, & 
+      & 1.01557723_wp, 1.17163176_wp, 0.23501195_wp] 
+
 
    !> Element-specific chemical hardnesses for the electronegativity equilibration charges.
    real(wp), parameter :: eeq_eta(max_elem) = [&
@@ -96,7 +100,10 @@ module multicharge_param_eeq2019
       & 0.11000000_wp,-0.02786741_wp, 0.01057858_wp,-0.03892226_wp,-0.04574364_wp, &
       &-0.03874080_wp,-0.03782372_wp,-0.07046855_wp, 0.09546597_wp, 0.21953269_wp, &
       & 0.02522348_wp, 0.15263050_wp, 0.08042611_wp, 0.01878626_wp, 0.08715453_wp, &
-      & 0.10500484_wp]
+      & 0.10500484_wp, 0.10034731_wp, 0.15801991_wp,-0.00995585_wp, 0.13654805_wp, & 
+      & 0.15968516_wp, 0.12442023_wp, 0.13340491_wp, 0.11523968_wp, 0.12165907_wp, &
+      & 0.08181387_wp, 0.65060023_wp, 0.18634958_wp, 0.16685501_wp, 0.15080023_wp, &
+      & 0.10094112_wp, 0.10503808_wp, 0.68963544_wp]
 
    !> Element-specific CN scaling constant for the electronegativity equilibration charges.
    real(wp), parameter :: eeq_kcn(max_elem) = [&
@@ -117,7 +124,10 @@ module multicharge_param_eeq2019
       &-0.11000000_wp,-0.03585873_wp,-0.03132400_wp,-0.05902379_wp,-0.02827592_wp, &
       &-0.07606260_wp,-0.02123839_wp, 0.03814822_wp, 0.02146834_wp, 0.01580538_wp, &
       &-0.00894298_wp,-0.05864876_wp,-0.01817842_wp, 0.07721851_wp, 0.07936083_wp, &
-      & 0.05849285_wp]
+      & 0.05849285_wp, 0.00013506_wp,-0.00020631_wp, 0.00328823_wp, 0.00419390_wp, &
+      & 0.00429264_wp, 0.00193300_wp, 0.00478177_wp, 0.00264040_wp, 0.00418168_wp, &
+      & 0.00399258_wp,-0.00293781_wp,-0.00195990_wp, 0.00148017_wp,-0.00011254_wp, &
+      & 0.00023249_wp,-0.00006144_wp,-0.02459107_wp]
 
    !> Element-specific charge widths for the electronegativity equilibration charges.
    real(wp), parameter :: eeq_rad(max_elem) = [&
@@ -138,7 +148,10 @@ module multicharge_param_eeq2019
       & 1.63999999_wp, 1.47055223_wp, 1.81127084_wp, 1.40189963_wp, 1.54015481_wp, &
       & 1.33721475_wp, 1.57165422_wp, 1.04815857_wp, 1.78342098_wp, 2.79106396_wp, &
       & 1.78160840_wp, 2.47588882_wp, 2.37670734_wp, 1.76613217_wp, 2.66172302_wp, &
-      & 2.82773085_wp]
+      & 2.82773085_wp, 1.04059593_wp, 0.60550051_wp, 1.93854984_wp, 0.50189075_wp, &
+      & 0.58180664_wp, 0.73094166_wp, 0.49548126_wp, 0.67685715_wp, 0.59573917_wp, &
+      & 0.35345732_wp, 0.29902232_wp, 0.49626064_wp, 0.55816329_wp, 0.49019371_wp, &
+      & 1.05120718_wp, 0.95651052_wp, 0.35885251_wp]
 
 contains
 
