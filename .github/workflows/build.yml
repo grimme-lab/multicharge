@@ -18,7 +18,6 @@ env:
     intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic
     intel-oneapi-mkl
     intel-oneapi-mkl-devel
-    build-essential
 
 jobs:
   build:
@@ -170,6 +169,7 @@ jobs:
       if: ${{ matrix.compiler == 'intel' }}
       run: |
         source /opt/intel/oneapi/setvars.sh
+        source /opt/intel/oneapi/compiler/2024.0/env/vars.sh
         printenv >> $GITHUB_ENV
 
     - name: Install build and test dependencies
@@ -202,6 +202,7 @@ jobs:
         -DCMAKE_BUILD_TYPE=Debug
         -DCMAKE_INSTALL_PREFIX=$PWD/_dist
         -DCMAKE_INSTALL_LIBDIR=lib
+        -DCMAKE_FORTRAN_COMPILER=${{ env.FC }}
 
     - name: Build library
       run: ninja -C ${{ env.BUILD_DIR }}
