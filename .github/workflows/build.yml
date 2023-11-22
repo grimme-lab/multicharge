@@ -18,6 +18,7 @@ env:
     intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic
     intel-oneapi-mkl
     intel-oneapi-mkl-devel
+    build-essential
 
 jobs:
   build:
@@ -58,8 +59,8 @@ jobs:
       FC: ${{ matrix.compiler == 'intel' && 'ifort' || 'gfortran' }}
       CC: ${{ matrix.compiler == 'intel' && 'icc' || 'gcc' }}
       GCC_V: ${{ matrix.version }}
-      OMP_NUM_THREADS: 1,2,1
       PYTHON_V: 3.8
+      OMP_NUM_THREADS: 1,2,1
 
     steps:
     - name: Checkout code
