@@ -215,12 +215,12 @@ jobs:
     - name: Run unit tests
       if: ${{ matrix.build == 'meson' }}
       run: |
-         meson test -C ${{ env.BUILD_DIR }} --print-errorlogs --no-rebuild --num-processes 2 -t 2
+         meson test -C ${{ env.BUILD_DIR }} --print-errorlogs --no-rebuild --num-processes 1 -t 1
 
     - name: Run unit tests
       if: ${{ matrix.build == 'cmake' }}
       run: |
-         ctest --output-on-failure --parallel 2
+         ctest --output-on-failure --parallel 1
       working-directory: ${{ env.BUILD_DIR }}
 
     - name: Create coverage report
