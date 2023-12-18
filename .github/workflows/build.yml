@@ -5,7 +5,7 @@ on: [push, pull_request]
 env:
   BUILD_DIR: _build
   PIP_PACKAGES: >-
-    meson==0.55
+    meson
     cmake
     ninja
     gcovr
@@ -96,13 +96,14 @@ jobs:
         update: false
         install: >-
           git
+          mingw-w64-x86_64-python
+          mingw-w64-x86_64-python-pip
+          mingw-w64-x86_64-python-setuptools
           mingw-w64-x86_64-gcc
           mingw-w64-x86_64-gcc-fortran
           mingw-w64-x86_64-openblas
           mingw-w64-x86_64-lapack
           mingw-w64-x86_64-cmake
-          mingw-w64-x86_64-python
-          mingw-w64-x86_64-python-pip
           mingw-w64-x86_64-ninja
 
     - name: Prepare for cache restore
@@ -215,12 +216,12 @@ jobs:
     - name: Run unit tests
       if: ${{ matrix.build == 'meson' }}
       run: |
-         meson test -C ${{ env.BUILD_DIR }} --print-errorlogs --no-rebuild --num-processes 1 -t 1
+         meson test -C ${{ env.BUILD_DIR }} --print-errorlogs --no-rebuild --num-processes 2 -t 2
 
     - name: Run unit tests
       if: ${{ matrix.build == 'cmake' }}
       run: |
-         ctest --output-on-failure --parallel 1
+         ctest --output-on-failure --parallel 2
       working-directory: ${{ env.BUILD_DIR }}
 
     - name: Create coverage report
