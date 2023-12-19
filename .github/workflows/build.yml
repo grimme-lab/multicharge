@@ -58,8 +58,8 @@ jobs:
       FC: ${{ matrix.compiler == 'intel' && 'ifort' || 'gfortran' }}
       CC: ${{ matrix.compiler == 'intel' && 'icc' || 'gcc' }}
       GCC_V: ${{ matrix.version }}
-      OMP_NUM_THREADS: 1,2,1
       PYTHON_V: 3.8
+      OMP_NUM_THREADS: 1,2,1
 
     steps:
     - name: Checkout code
@@ -72,17 +72,21 @@ jobs:
     - name: Install GCC (OSX)
       if: ${{ contains(matrix.os, 'macos') && matrix.compiler == 'gnu' }}
       run: |
+        brew install gcc@${{ env.GCC_V }}
         ln -s /usr/local/bin/gfortran-${{ env.GCC_V }} /usr/local/bin/gfortran
         ln -s /usr/local/bin/gcc-${{ env.GCC_V }} /usr/local/bin/gcc
         ln -s /usr/local/bin/g++-${{ env.GCC_V }} /usr/local/bin/g++
 
     - name: Install GCC (Linux)
       if: ${{ contains(matrix.os, 'ubuntu') && matrix.compiler == 'gnu' }}
-      run: >-
-        sudo update-alternatives
-        --install /usr/bin/gcc gcc /usr/bin/gcc-${{ env.GCC_V }} 100
-        --slave /usr/bin/gfortran gfortran /usr/bin/gfortran-${{ env.GCC_V }}
-        --slave /usr/bin/gcov gcov /usr/bin/gcov-${{ env.GCC_V }}
+      run: |
+        sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+        sudo apt-get update
+        sudo apt-get install -y gcc-${{ env.GCC_V}} gfortran-${{ env.GCC_V }}
+        sudo update-alternatives \
+          --install /usr/bin/gcc gcc /usr/bin/gcc-${{ env.GCC_V }} 100 \
+          --slave /usr/bin/gfortran gfortran /usr/bin/gfortran-${{ env.GCC_V }} \
+          --slave /usr/bin/gcov gcov /usr/bin/gcov-${{ env.GCC_V }}
 
     - name: Install GCC (Windows)
       if: ${{ contains(matrix.os, 'windows') && matrix.compiler == 'msys' }}
@@ -92,12 +96,15 @@ jobs:
         update: false
         install: >-
           git
+          mingw-w64-x86_64-python
+          mingw-w64-x86_64-python-pip
+          mingw-w64-x86_64-python-setuptools
+          mingw-w64-x86_64-gcc
           mingw-w64-x86_64-gcc-fortran
           mingw-w64-x86_64-openblas
           mingw-w64-x86_64-lapack
           mingw-w64-x86_64-cmake
-          mingw-w64-x86_64-python
-          mingw-w64-x86_64-python-pip
+          mingw-w64-x86_64-meson
           mingw-w64-x86_64-ninja
 
     - name: Prepare for cache restore
@@ -169,6 +176,7 @@ jobs:
       if: ${{ matrix.compiler == 'intel' }}
       run: |
         source /opt/intel/oneapi/setvars.sh
+        source /opt/intel/oneapi/compiler/2024.0/env/vars.sh
         printenv >> $GITHUB_ENV
 
     - name: Install build and test dependencies
@@ -201,6 +209,7 @@ jobs:
         -DCMAKE_BUILD_TYPE=Debug
         -DCMAKE_INSTALL_PREFIX=$PWD/_dist
         -DCMAKE_INSTALL_LIBDIR=lib
+        -DCMAKE_FORTRAN_COMPILER=${{ env.FC }}
 
     - name: Build library
       run: ninja -C ${{ env.BUILD_DIR }}
@@ -208,7 +217,10 @@ jobs:
     - name: Run unit tests
       if: ${{ matrix.build == 'meson' }}
       run: |
-         meson test -C ${{ env.BUILD_DIR }} --print-errorlogs --no-rebuild --num-processes 2 -t 2
+        meson test -C ${{ env.BUILD_DIR }} --print-errorlogs --no-rebuild
+      env:
+        OMP_NUM_THREADS: 1 
+
 
     - name: Run unit tests
       if: ${{ matrix.build == 'cmake' }}
