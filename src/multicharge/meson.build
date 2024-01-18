@@ -17,12 +17,12 @@ subdir('data')
 subdir('param')
 
 srcs += files(
-  'blas.F90',
+  'blas.f90',
   'cutoff.f90',
   'data.f90',
   'ewald.f90',
-  'lapack.F90',
-  'model.F90',
+  'lapack.f90',
+  'model.f90',
   'ncoord.f90',
   'output.f90',
   'param.f90',

@@ -13,19 +13,15 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
-#ifndef IK
-#define IK i4
-#endif
-
 module multicharge_model
-   use mctc_env, only : error_type, wp, ik => IK
+   use mctc_env, only : error_type, wp
    use mctc_io, only : structure_type
    use mctc_io_constants, only : pi
    use mctc_io_math, only : matdet_3x3, matinv_3x3
    use multicharge_blas, only : gemv, symv, gemm
    use multicharge_cutoff, only : get_lattice_points
    use multicharge_ewald, only : get_alpha
-   use multicharge_lapack, only : sytrf, sytrs, sytri
+   use multicharge_lapack, only : sytrf, sytrs, sytri, ik
    use multicharge_wignerseitz, only : wignerseitz_cell_type, new_wignerseitz_cell
    implicit none
    private

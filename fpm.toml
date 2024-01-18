@@ -5,12 +5,11 @@ author = ["Sebastian Ehlert"]
 maintainer = ["@awvwgk"]
 copyright = "Copyright 2021 Sebastian Ehlert"
 
-[build]
-link = ["lapack", "blas"]
-
 [dependencies]
 mctc-lib.git = "https://github.com/grimme-lab/mctc-lib.git"
 mctc-lib.tag = "v0.3.0"
+lapack-interface.git = "https://github.com/grimme-lab/lapack-interface.git"
+blas-interface.git = "https://github.com/grimme-lab/blas-interface.git"
 
 [dev-dependencies]
 mstore.git = "https://github.com/grimme-lab/mstore.git"
