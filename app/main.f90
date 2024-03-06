@@ -30,7 +30,7 @@ program main
    type(error_type), allocatable :: error
    type(structure_type) :: mol
    type(mchrg_model_type) :: model
-   logical :: grad
+   logical :: grad, exist
    real(wp), parameter :: cn_max = 8.0_wp, cutoff = 25.0_wp
    real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), rcov(:), trans(:, :)
    real(wp), allocatable :: energy(:), gradient(:, :), sigma(:, :)
@@ -58,8 +58,8 @@ program main
       mol%charge = charge
    else
       chargeinput = ".CHRG"
-      inquire(file=chargeinput, exist=stat)
-      if (stat) then
+      inquire(file=chargeinput, exist=exist)
+      if (exist) then
          open(file=chargeinput, newunit=unit)
          allocate(charge)
          read(unit, *, iostat=stat) charge
