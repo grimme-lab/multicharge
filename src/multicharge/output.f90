@@ -82,6 +82,9 @@ subroutine write_ascii_properties(unit, mol, model, cn, qvec)
          & iat, mol%num(isp), mol%sym(isp), cn(iat), qvec(iat), &
          & model%chi(isp) - model%kcn(isp) * sqrt(cn(iat))
    end do
+   write(unit, '(50("-"))')
+   write(unit, '(a7,22x,f10.4)') &
+      & "Σ", sum(qvec)
    write(unit, '(50("-"),/)')
 
 end subroutine write_ascii_properties

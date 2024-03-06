@@ -24,8 +24,9 @@ program main
    implicit none
    character(len=*), parameter :: prog_name = "multicharge"
 
-   character(len=:), allocatable :: input
+   character(len=:), allocatable :: input, chargeinput
    integer, allocatable :: input_format
+   integer :: stat, unit
    type(error_type), allocatable :: error
    type(structure_type) :: mol
    type(mchrg_model_type) :: model
@@ -34,8 +35,9 @@ program main
    real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), rcov(:), trans(:, :)
    real(wp), allocatable :: energy(:), gradient(:, :), sigma(:, :)
    real(wp), allocatable :: qvec(:), dqdr(:, :, :), dqdL(:, :, :)
+   real(wp), allocatable :: charge
 
-   call get_arguments(input, input_format, grad, error)
+   call get_arguments(input, input_format, grad, charge, error)
    if (allocated(error)) then
       write(error_unit, '(a)') error%message
       error stop
@@ -50,6 +52,27 @@ program main
    if (allocated(error)) then
       write(error_unit, '(a)') error%message
       error stop
+   end if
+
+   if (allocated(charge)) then
+      mol%charge = charge
+   else
+      chargeinput = ".CHRG"
+      inquire(file=chargeinput, exist=stat)
+      if (stat) then
+         open(file=chargeinput, newunit=unit)
+         allocate(charge)
+         read(unit, *, iostat=stat) charge
+         if (stat == 0) then
+            mol%charge = charge
+            write(output_unit, '(a,/)') &
+               "[Info] Molecular charge read from '"//chargeinput//"'"
+         else
+            write(output_unit, '(a,/)') &
+               "[Warn] Could not read molecular charge read from '"//chargeinput//"'"
+         end if
+         close(unit)
+      end if
    end if
 
    call new_eeq2019_model(mol, model)
@@ -96,6 +119,7 @@ subroutine help(unit)
 
    write(unit, '(2x, a, t25, a)') &
       "-i, --input <format>", "Hint for the format of the input file", &
+      "-c, --charge <value>", "Set the molecular charge", &
       "--grad", "Evaluate molecular gradient and virial", &
       "--version", "Print program version and exit", &
       "--help", "Show this help message"
@@ -116,7 +140,7 @@ subroutine version(unit)
 end subroutine version
 
 
-subroutine get_arguments(input, input_format, grad, error)
+subroutine get_arguments(input, input_format, grad, charge, error)
 
    !> Input file name
    character(len=:), allocatable :: input
@@ -127,10 +151,13 @@ subroutine get_arguments(input, input_format, grad, error)
    !> Evaluate gradient
    logical, intent(out) :: grad
 
+   !> Charge
+   real(wp), allocatable, intent(out) :: charge
+
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
 
-   integer :: iarg, narg
+   integer :: iarg, narg, iostat
    character(len=:), allocatable :: arg
 
    grad = .false.
@@ -140,10 +167,10 @@ subroutine get_arguments(input, input_format, grad, error)
       iarg = iarg + 1
       call get_argument(iarg, arg)
       select case(arg)
-      case("-help", "--help")
+      case("-h", "-help", "--help")
          call help(output_unit)
          stop
-      case("-version", "--version")
+      case("-v", "-version", "--version")
          call version(output_unit)
          stop
       case default
@@ -161,6 +188,19 @@ subroutine get_arguments(input, input_format, grad, error)
             exit
          end if
          input_format = get_filetype("."//arg)
+      case("-c", "-charge", "--charge")
+         iarg = iarg + 1
+         call get_argument(iarg, arg)
+         if (.not.allocated(arg)) then
+            call fatal_error(error, "Missing argument for charge")
+            exit
+         end if
+         allocate(charge)
+         read(arg, *, iostat=iostat) charge
+         if (iostat /= 0) then
+            call fatal_error(error, "Invalid charge value")
+            exit
+         end if
       case("-grad", "--grad")
          grad = .true.
       end select
