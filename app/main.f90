@@ -120,9 +120,9 @@ subroutine help(unit)
    write(unit, '(2x, a, t25, a)') &
       "-i, --input <format>", "Hint for the format of the input file", &
       "-c, --charge <value>", "Set the molecular charge", &
-      "--grad", "Evaluate molecular gradient and virial", &
-      "--version", "Print program version and exit", &
-      "--help", "Show this help message"
+      "-g, --grad", "Evaluate molecular gradient and virial", &
+      "-v, --version", "Print program version and exit", &
+      "-h, --help", "Show this help message"
 
    write(unit, '(a)')
 
