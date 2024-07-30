@@ -106,9 +106,9 @@ program main
 
    if (json) then
       open(file=json_output, newunit=unit)
-      call json_results(unit, "  ", energy=sum(energy), gradient=gradient, charges=qvec)
+      call json_results(unit, "  ", energy=sum(energy), gradient=gradient, charges=qvec, cn=cn)
       close(unit)
-      write(output_unit, '(a,/)') &
+      write(output_unit, '(a)') &
          "[Info] JSON dump of results written to '"// json_output //"'"
    end if
 

@@ -140,12 +140,13 @@ subroutine write_ascii_results(unit, mol, energy, gradient, sigma)
 
 end subroutine write_ascii_results
 
-subroutine json_results(unit, indentation, energy, gradient, charges)
+subroutine json_results(unit, indentation, energy, gradient, charges, cn)
    integer, intent(in) :: unit
    character(len=*), intent(in), optional :: indentation
    real(wp), intent(in), optional :: energy
    real(wp), intent(in), optional :: gradient(:, :)
    real(wp), intent(in), optional :: charges(:)
+   real(wp), intent(in), optional :: cn(:)
    character(len=:), allocatable :: indent, version_string
    character(len=*), parameter :: jsonkey = "('""',a,'"":',1x)"
    real(wp), allocatable :: array(:)
@@ -154,6 +155,8 @@ subroutine json_results(unit, indentation, energy, gradient, charges)
 
    if (present(indentation)) then
       indent = indentation
+   else
+      indent = ""
    end if
 
    write(unit, '("{")', advance='no')
@@ -178,6 +181,13 @@ subroutine json_results(unit, indentation, energy, gradient, charges)
       if (allocated(indent)) write(unit, '(/,a)', advance='no') repeat(indent, 1)
       write(unit, jsonkey, advance='no') 'charges'
       array = reshape(charges, [size(charges)])
+      call write_json_array(unit, array, indent)
+   end if
+   if (present(cn)) then
+      write(unit, '(",")', advance='no')
+      if (allocated(indent)) write(unit, '(/,a)', advance='no') repeat(indent, 1)
+      write(unit, jsonkey, advance='no') 'coordination numbers'
+      array = reshape(cn, [size(cn)])
       call write_json_array(unit, array, indent)
    end if
    if (allocated(indent)) write(unit, '(/)', advance='no')
