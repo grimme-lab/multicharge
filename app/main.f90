@@ -21,8 +21,10 @@ program main
       & write_ascii_model, write_ascii_properties, write_ascii_results, &
       & get_coordination_number, get_covalent_rad, get_lattice_points, &
       & get_multicharge_version
+   use multicharge_output, only : json_results
    implicit none
    character(len=*), parameter :: prog_name = "multicharge"
+   character(len=*), parameter :: json_output = "multicharge.json"
 
    character(len=:), allocatable :: input, chargeinput
    integer, allocatable :: input_format
@@ -30,14 +32,14 @@ program main
    type(error_type), allocatable :: error
    type(structure_type) :: mol
    type(mchrg_model_type) :: model
-   logical :: grad, exist
+   logical :: grad, json, exist
    real(wp), parameter :: cn_max = 8.0_wp, cutoff = 25.0_wp
    real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), rcov(:), trans(:, :)
    real(wp), allocatable :: energy(:), gradient(:, :), sigma(:, :)
    real(wp), allocatable :: qvec(:), dqdr(:, :, :), dqdL(:, :, :)
    real(wp), allocatable :: charge
 
-   call get_arguments(input, input_format, grad, charge, error)
+   call get_arguments(input, input_format, grad, charge, json, error)
    if (allocated(error)) then
       write(error_unit, '(a)') error%message
       error stop
@@ -102,6 +104,14 @@ program main
    call write_ascii_properties(output_unit, mol, model, cn, qvec)
    call write_ascii_results(output_unit, mol, energy, gradient, sigma)
 
+   if (json) then
+      open(file=json_output, newunit=unit)
+      call json_results(unit, "  ", energy=sum(energy), gradient=gradient, charges=qvec)
+      close(unit)
+      write(output_unit, '(a,/)') &
+         "[Info] JSON dump of results written to '"// json_output //"'"
+   end if
+
 contains
 
 
@@ -140,7 +150,7 @@ subroutine version(unit)
 end subroutine version
 
 
-subroutine get_arguments(input, input_format, grad, charge, error)
+subroutine get_arguments(input, input_format, grad, charge, json, error)
 
    !> Input file name
    character(len=:), allocatable :: input
@@ -150,6 +160,9 @@ subroutine get_arguments(input, input_format, grad, charge, error)
 
    !> Evaluate gradient
    logical, intent(out) :: grad
+
+   !> Provide JSON output
+   logical, intent(out) :: json
 
    !> Charge
    real(wp), allocatable, intent(out) :: charge
@@ -161,6 +174,7 @@ subroutine get_arguments(input, input_format, grad, charge, error)
    character(len=:), allocatable :: arg
 
    grad = .false.
+   json = .false.
    iarg = 0
    narg = command_argument_count()
    do while(iarg < narg)
@@ -203,6 +217,8 @@ subroutine get_arguments(input, input_format, grad, charge, error)
          end if
       case("-grad", "--grad")
          grad = .true.
+      case("-json", "--json")
+         json = .true.
       end select
    end do
 

@@ -19,10 +19,11 @@ module multicharge_output
    use mctc_io_convert, only : autoaa
    use mctc_io_constants, only : pi
    use multicharge_model, only : mchrg_model_type
+   use multicharge_version, only : get_multicharge_version
    implicit none
    private
 
-   public :: write_ascii_model, write_ascii_properties, write_ascii_results
+   public :: write_ascii_model, write_ascii_properties, write_ascii_results, json_results
 
 contains
 
@@ -138,5 +139,67 @@ subroutine write_ascii_results(unit, mol, energy, gradient, sigma)
    end if
 
 end subroutine write_ascii_results
+
+subroutine json_results(unit, indentation, energy, gradient, charges)
+   integer, intent(in) :: unit
+   character(len=*), intent(in), optional :: indentation
+   real(wp), intent(in), optional :: energy
+   real(wp), intent(in), optional :: gradient(:, :)
+   real(wp), intent(in), optional :: charges(:)
+   character(len=:), allocatable :: indent, version_string
+   character(len=*), parameter :: jsonkey = "('""',a,'"":',1x)"
+   real(wp), allocatable :: array(:)
+
+   call get_multicharge_version(string=version_string)
+
+   if (present(indentation)) then
+      indent = indentation
+   end if
+
+   write(unit, '("{")', advance='no')
+   if (allocated(indent)) write(unit, '(/,a)', advance='no') repeat(indent, 1)
+   write(unit, jsonkey, advance='no') 'version'
+   write(unit, '(1x,a)', advance='no') '"'//version_string//'"'
+   if (present(energy)) then
+      write(unit, '(",")', advance='no')
+      if (allocated(indent)) write(unit, '(/,a)', advance='no') repeat(indent, 1)
+      write(unit, jsonkey, advance='no') 'energy'
+      write(unit, '(1x,es25.16)', advance='no') energy
+   end if
+   if (present(gradient)) then
+      write(unit, '(",")', advance='no')
+      if (allocated(indent)) write(unit, '(/,a)', advance='no') repeat(indent, 1)
+      write(unit, jsonkey, advance='no') 'gradient'
+      array = reshape(gradient, [size(gradient)])
+      call write_json_array(unit, array, indent)
+   end if
+   if (present(charges)) then
+      write(unit, '(",")', advance='no')
+      if (allocated(indent)) write(unit, '(/,a)', advance='no') repeat(indent, 1)
+      write(unit, jsonkey, advance='no') 'charges'
+      array = reshape(charges, [size(charges)])
+      call write_json_array(unit, array, indent)
+   end if
+   if (allocated(indent)) write(unit, '(/)', advance='no')
+   write(unit, '("}")')
+
+end subroutine json_results
+
+
+subroutine write_json_array(unit, array, indent)
+   integer, intent(in) :: unit
+   real(wp), intent(in) :: array(:)
+   character(len=:), allocatable, intent(in) :: indent
+   integer :: i
+   write(unit, '("[")', advance='no')
+   do i = 1, size(array)
+      if (allocated(indent)) write(unit, '(/,a)', advance='no') repeat(indent, 2)
+      write(unit, '(es23.16)', advance='no') array(i)
+      if (i /= size(array)) write(unit, '(",")', advance='no')
+   end do
+   if (allocated(indent)) write(unit, '(/,a)', advance='no') repeat(indent, 1)
+   write(unit, '("]")', advance='no')
+end subroutine write_json_array
+
 
 end module multicharge_output
