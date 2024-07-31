@@ -76,8 +76,8 @@ jobs:
         gcc_path=$( which gcc-${{ env.GCC_V }} )
         export FC=$gfortran_path
         export CC=$gcc_path
-        alias gfortran=$gfortran_path
-        alias gcc=$gcc_path
+        ln -s $gfortran_path /usr/local/bin/gfortran
+        ln -s $gcc_path /usr/local/bin/gcc
 
     - name: Install GCC (Linux)
       if: ${{ contains(matrix.os, 'ubuntu') && matrix.compiler == 'gnu' }}
