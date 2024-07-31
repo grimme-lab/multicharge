@@ -186,6 +186,12 @@ jobs:
       if: ${{ contains(matrix.os, 'windows') }}
       run: pip3 install meson==0.55
 
+    - name: Check gfortran version (meson)
+      if: ${{ matrix.build == 'meson' }}
+      run: |
+        gfortran --version
+        which gfortran
+
     - name: Configure build (meson)
       if: ${{ matrix.build == 'meson' }}
       run: >-
