@@ -5,7 +5,7 @@ on: [push, pull_request]
 env:
   BUILD_DIR: _build
   PIP_PACKAGES: >-
-    meson==0.55
+    meson
     cmake
     ninja
     gcovr
@@ -14,10 +14,10 @@ env:
   MACOS_HPCKIT_URL: >-
     https://registrationcenter-download.intel.com/akdlm/irc_nas/17890/m_HPCKit_p_2021.3.0.3226_offline.dmg
   LINUX_INTEL_COMPONENTS: >-
-    intel-oneapi-compiler-fortran
-    intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic
-    intel-oneapi-mkl
-    intel-oneapi-mkl-devel
+    intel-oneapi-compiler-fortran-2021.2.0
+    intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic-2021.2.0
+    intel-oneapi-mkl-2021.2.0
+    intel-oneapi-mkl-devel-2021.2.0
 
 jobs:
   build:
@@ -29,14 +29,14 @@ jobs:
         build: [meson, cmake]
         build-type: [debug]
         compiler: [gnu]
-        version: [10]
+        version: [12]
 
         include:
         - os: ubuntu-latest
           build: meson
           build-type: coverage
           compiler: gnu
-          version: 10
+          version: 11
 
         - os: windows-latest
           build: meson
@@ -58,24 +58,33 @@ jobs:
       FC: ${{ matrix.compiler == 'intel' && 'ifort' || 'gfortran' }}
       CC: ${{ matrix.compiler == 'intel' && 'icc' || 'gcc' }}
       GCC_V: ${{ matrix.version }}
-      PYTHON_V: 3.8
+      PYTHON_V: 3.9
       OMP_NUM_THREADS: 1,2,1
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
-    - uses: actions/setup-python@v1
+    - uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_V }}
 
-    - name: Install GCC (OSX)
+    - name: Link pre-installed GCC and FC (macOS)
       if: ${{ contains(matrix.os, 'macos') && matrix.compiler == 'gnu' }}
       run: |
-        brew install gcc@${{ env.GCC_V }}
-        ln -s /usr/local/bin/gfortran-${{ env.GCC_V }} /usr/local/bin/gfortran
-        ln -s /usr/local/bin/gcc-${{ env.GCC_V }} /usr/local/bin/gcc
-        ln -s /usr/local/bin/g++-${{ env.GCC_V }} /usr/local/bin/g++
+        brew install openblas
+        gfortran_path=$( which gfortran-${{ env.GCC_V }} )
+        gcc_path=$( which gcc-${{ env.GCC_V }} )
+        gplusplus_path=$( which g++-${{ env.GCC_V }} )
+        export FC=$gfortran_path
+        export CC=$gcc_path
+        export CXX=$gplusplus_path
+        ln -s $gfortran_path /usr/local/bin/gfortran
+        ln -s $gcc_path /usr/local/bin/gcc
+        ln -s $gplusplus_path /usr/local/bin/g++
+        echo "PKG_CONFIG_PATH=/usr/local/opt/openblas/lib/pkgconfig" >> $GITHUB_ENV
+        echo "LDFLAGS=-L/opt/homebrew/opt/openblas/lib" >> $GITHUB_ENV
+        echo "CPPFLAGS=-I/opt/homebrew/opt/openblas/include" >> $GITHUB_ENV
 
     - name: Install GCC (Linux)
       if: ${{ contains(matrix.os, 'ubuntu') && matrix.compiler == 'gnu' }}
@@ -176,7 +185,6 @@ jobs:
       if: ${{ matrix.compiler == 'intel' }}
       run: |
         source /opt/intel/oneapi/setvars.sh
-        source /opt/intel/oneapi/compiler/2024.0/env/vars.sh
         printenv >> $GITHUB_ENV
 
     - name: Install build and test dependencies
@@ -186,6 +194,12 @@ jobs:
     - name: Install build and test dependencies
       if: ${{ contains(matrix.os, 'windows') }}
       run: pip3 install meson==0.55
+
+    - name: Check gfortran version for meson build
+      if: ${{ matrix.build == 'meson' && matrix.compiler == 'gnu' }}
+      run: |
+        gfortran --version
+        which gfortran
 
     - name: Configure build (meson)
       if: ${{ matrix.build == 'meson' }}
@@ -199,7 +213,9 @@ jobs:
         ${{ env.MESON_ARGS }}
       env:
         COVERAGE: ${{ matrix.build-type == 'coverage' }}
-        MESON_ARGS: ${{ matrix.compiler == 'intel' && '-Dfortran_link_args=-qopenmp' || '' }}
+        MESON_ARGS: >-
+          ${{ matrix.compiler == 'intel' && '-Dfortran_link_args=-qopenmp' || '' }}
+          ${{ contains(matrix.os, 'macos') && '-Dlapack=openblas' || '' }}
 
     - name: Configure build (CMake)
       if: ${{ matrix.build == 'cmake' }}
