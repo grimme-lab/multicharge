@@ -75,10 +75,14 @@ jobs:
         brew install openblas
         gfortran_path=$( which gfortran-${{ env.GCC_V }} )
         gcc_path=$( which gcc-${{ env.GCC_V }} )
+        gplusplus_path=$( which g++-${{ env.GCC_V }} )
         export FC=$gfortran_path
         export CC=$gcc_path
+        export CXX=$gplusplus_path
         ln -s $gfortran_path /usr/local/bin/gfortran
         ln -s $gcc_path /usr/local/bin/gcc
+        ln -s $gplusplus_path /usr/local/bin/g++
+        echo "PKG_CONFIG_PATH=/usr/local/opt/openblas/lib/pkgconfig" >> $GITHUB_ENV
 
     - name: Install GCC (Linux)
       if: ${{ contains(matrix.os, 'ubuntu') && matrix.compiler == 'gnu' }}
@@ -207,7 +211,9 @@ jobs:
         ${{ env.MESON_ARGS }}
       env:
         COVERAGE: ${{ matrix.build-type == 'coverage' }}
-        MESON_ARGS: ${{ matrix.compiler == 'intel' && '-Dfortran_link_args=-qopenmp' || '' }}
+        MESON_ARGS: >-
+          ${{ matrix.compiler == 'intel' && '-Dfortran_link_args=-qopenmp' || '' }}
+          ${{ contains(matrix.os, 'macos') && '-Dlapack=openblas' || '' }}
 
     - name: Configure build (CMake)
       if: ${{ matrix.build == 'cmake' }}
