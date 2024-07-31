@@ -72,9 +72,7 @@ jobs:
     - name: Link pre-installed GCC and FC (macOS)
       if: ${{ contains(matrix.os, 'macos') && matrix.compiler == 'gnu' }}
       run: |
-        brew install gfortran@${{ env.GCC_V }}
-        alias gfortran=gfortran-${{ env.GCC_V }}
-        alias gcc=gcc-${{ env.GCC_V }}
+        which gfortran-${{ env.GCC_V }}
         export FC=gfortran-${{ env.GCC_V }}
         export CC=gcc-${{ env.GCC_V }}
 
