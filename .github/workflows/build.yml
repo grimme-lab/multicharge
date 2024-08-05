@@ -236,7 +236,15 @@ jobs:
         meson test -C ${{ env.BUILD_DIR }} --print-errorlogs --no-rebuild
       env:
         OMP_NUM_THREADS: 1 
+        MKL_NUM_THREADS: 1
 
+    - name: Run validation tests
+      if: ${{ matrix.build == 'meson' }}
+      run: |
+        meson test -C ${{ env.BUILD_DIR }} --print-errorlogs --no-rebuild --suite multicharge --benchmark
+      env:
+        OMP_NUM_THREADS: 1
+        MKL_NUM_THREADS: 1
 
     - name: Run unit tests
       if: ${{ matrix.build == 'cmake' }}

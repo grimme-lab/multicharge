@@ -131,6 +131,7 @@ subroutine help(unit)
       "-i, --input <format>", "Hint for the format of the input file", &
       "-c, --charge <value>", "Set the molecular charge", &
       "-g, --grad", "Evaluate molecular gradient and virial", &
+      "-j, --json", "Provide JSON output", &
       "-v, --version", "Print program version and exit", &
       "-h, --help", "Show this help message"
 
@@ -215,9 +216,9 @@ subroutine get_arguments(input, input_format, grad, charge, json, error)
             call fatal_error(error, "Invalid charge value")
             exit
          end if
-      case("-grad", "--grad")
+      case("-g", "--grad")
          grad = .true.
-      case("-json", "--json")
+      case("-j", "--json")
          json = .true.
       end select
    end do
