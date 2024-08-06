@@ -16,6 +16,7 @@
 os = host_machine.system()
 fc = meson.get_compiler('fortran')
 fc_id = fc.get_id()
+
 # Treat Intel LLVM compiler as standard Intel compiler for compatibility
 if fc_id == 'intel-llvm'
   fc_id = 'intel'
