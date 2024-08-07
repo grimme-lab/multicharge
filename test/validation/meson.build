@@ -13,5 +13,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-subdir('validation')
-subdir('unit')
+validation_tester = find_program(files('tester.py'))
+
+run_element = [
+  '01_h3+',
+  '02_heada',
+  '03_etlicl-',
+]
+
+foreach t : run_element
+  benchmark(
+    '@0@'.format(t),
+    validation_tester,
+    args: [
+      multicharge_exe,
+      files(t/'multicharge_ref.json'),
+      files(t/'coord'),
+      '--grad',
+      t.contains('+') ? ['--charge', '+1'] : [],
+      t.contains('-') ? ['--charge', '-1'] : [],
+    ],
+    suite: 'multicharge',
+  )
+endforeach

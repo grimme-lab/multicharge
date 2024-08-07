@@ -17,6 +17,9 @@ Electronegativity equilibration model for atomic partial charges.
 *-i, --input* _format_::
 Hint for the format of the input file
 
+*--json*::
+Provide output in JSON format to the file 'multicharge.json'
+
 *--grad*::
 Evaluate molecular gradient and virial
 
