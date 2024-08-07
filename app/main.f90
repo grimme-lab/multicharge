@@ -131,7 +131,7 @@ subroutine help(unit)
       "-i, --input <format>", "Hint for the format of the input file", &
       "-c, --charge <value>", "Set the molecular charge", &
       "-g, --grad", "Evaluate molecular gradient and virial", &
-      "-j, --json", "Provide JSON output", &
+      "-j, --json", "Provide output in JSON format to the file 'multicharge.json'", &
       "-v, --version", "Print program version and exit", &
       "-h, --help", "Show this help message"
 
