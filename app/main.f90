@@ -128,12 +128,12 @@ subroutine help(unit)
       ""
 
    write(unit, '(2x, a, t25, a)') &
-      "-i, --input <format>", "Hint for the format of the input file", &
-      "-c, --charge <value>", "Set the molecular charge", &
-      "-g, --grad", "Evaluate molecular gradient and virial", &
-      "-j, --json", "Provide output in JSON format to the file 'multicharge.json'", &
-      "-v, --version", "Print program version and exit", &
-      "-h, --help", "Show this help message"
+      "-i, -input, --input <format>", "Hint for the format of the input file", &
+      "-c, -charge, --charge <value>", "Set the molecular charge", &
+      "-g, -grad, --grad", "Evaluate molecular gradient and virial", &
+      "-j, -json, --json", "Provide output in JSON format to the file 'multicharge.json'", &
+      "-v, -version, --version", "Print program version and exit", &
+      "-h, -help, --help", "Show this help message"
 
    write(unit, '(a)')
 
@@ -218,7 +218,7 @@ subroutine get_arguments(input, input_format, grad, charge, json, error)
          end if
       case("-g", "-grad", "--grad")
          grad = .true.
-      case("-j", "--json")
+      case("-j", "-json", "--json")
          json = .true.
       end select
    end do
