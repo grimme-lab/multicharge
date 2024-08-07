@@ -216,7 +216,7 @@ subroutine get_arguments(input, input_format, grad, charge, json, error)
             call fatal_error(error, "Invalid charge value")
             exit
          end if
-      case("-grad", "--grad")
+      case("-g", "--grad")
          grad = .true.
       case("-j", "--json")
          json = .true.
