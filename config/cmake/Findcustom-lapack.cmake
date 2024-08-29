@@ -22,10 +22,10 @@ if(WITH_ILP64)
 endif()
 
 if(NOT LAPACK_FOUND)
-  find_package("LAPACK")
+  find_package("LAPACK" REQUIRED)
 
   if(NOT TARGET "BLAS::BLAS")
-    find_package("custom-blas")
+    find_package("custom-blas" REQUIRED)
   endif()
 
   if(NOT TARGET "LAPACK::LAPACK")
