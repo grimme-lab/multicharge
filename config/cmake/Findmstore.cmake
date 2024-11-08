@@ -16,6 +16,7 @@
 set(_lib "mstore")
 set(_pkg "MSTORE")
 set(_url "https://github.com/grimme-lab/mstore")
+set(_rev "v0.3.0")
 
 if(NOT DEFINED "${_pkg}_FIND_METHOD")
   if(DEFINED "${PROJECT_NAME}-dependency-method")
@@ -28,7 +29,7 @@ endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/multicharge-utils.cmake")
 
-multicharge_find_package("${_lib}" "${${_pkg}_FIND_METHOD}" "${_url}" "HEAD")
+multicharge_find_package("${_lib}" "${${_pkg}_FIND_METHOD}" "${_url}" "${_rev}")
 
 if(DEFINED "_${_pkg}_FIND_METHOD")
   unset("${_pkg}_FIND_METHOD")
