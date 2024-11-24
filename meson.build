@@ -25,6 +25,7 @@ project(
   ],
 )
 install = not (meson.is_subproject() and get_option('default_library') == 'static')
+has_cc = add_languages('c', required: false, native: false)
 
 # General configuration information
 inc_dirs = []
