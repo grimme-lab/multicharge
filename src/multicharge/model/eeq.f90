@@ -13,37 +13,41 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
-#ifndef IK
-#define IK i4
-#endif
+!> @file multicharge/model/eeq.f90
+!> Provides implementation of the electronegativity equilibration model (EEQ)
 
-module multicharge_model
-   use mctc_env, only : error_type, wp, ik => IK
+!> Electronegativity equlibration charge model
+module multicharge_model_eeq
+   use mctc_env, only : wp
    use mctc_io, only : structure_type
    use mctc_io_constants, only : pi
-   use mctc_io_math, only : matdet_3x3, matinv_3x3
-   use multicharge_blas, only : gemv, symv, gemm
-   use multicharge_cutoff, only : get_lattice_points
-   use multicharge_ewald, only : get_alpha
-   use multicharge_lapack, only : sytrf, sytrs, sytri
-   use multicharge_wignerseitz, only : wignerseitz_cell_type, new_wignerseitz_cell
+   use mctc_io_math, only : matdet_3x3
+   use mctc_ncoord, only : new_ncoord
+   use multicharge_model_cache, only : mchrg_cache
+   use multicharge_wignerseitz, only : wignerseitz_cell_type
+   use multicharge_model_type, only : mchrg_model_type, get_dir_trans, get_rec_trans
    implicit none
    private
 
-   public :: mchrg_model_type, new_mchrg_model
+   public :: eeq_model, new_eeq_model
 
 
-   type :: mchrg_model_type
-      real(wp), allocatable :: rad(:)
-      real(wp), allocatable :: chi(:)
-      real(wp), allocatable :: eta(:)
-      real(wp), allocatable :: kcn(:)
+   type, extends(mchrg_model_type) :: eeq_model
    contains
-      procedure :: solve
-   end type mchrg_model_type
+      !> Update multicharge cache
+      procedure :: update
+      !> Calculate right-hand side (electronegativity)
+      procedure :: get_vrhs
+      !> Calculate Coulomb matrix 
+      procedure :: get_amat_0d
+      !> Calculate Coulomb matrix periodic
+      procedure :: get_amat_3d
+      !> Calculate Coulomb matrix derivative
+      procedure :: get_damat_0d
+      !> Calculate Coulomb matrix derivative periodic
+      procedure :: get_damat_3d
+   end type eeq_model
 
-
-   real(wp), parameter :: twopi = 2 * pi
    real(wp), parameter :: sqrtpi = sqrt(pi)
    real(wp), parameter :: sqrt2pi = sqrt(2.0_wp/pi)
    real(wp), parameter :: eps = sqrt(epsilon(0.0_wp))
@@ -51,48 +55,94 @@ module multicharge_model
 contains
 
 
-subroutine new_mchrg_model(self, chi, rad, eta, kcn)
-   type(mchrg_model_type), intent(out) :: self
-   real(wp), intent(in) :: rad(:)
-   real(wp), intent(in) :: chi(:)
-   real(wp), intent(in) :: eta(:)
-   real(wp), intent(in) :: kcn(:)
-
-   self%rad = rad
-   self%chi = chi
-   self%eta = eta
-   self%kcn = kcn
-
-end subroutine new_mchrg_model
-
-
-subroutine get_vrhs(self, mol, cn, xvec, dxdcn)
-   type(mchrg_model_type), intent(in) :: self
+subroutine new_eeq_model(self, mol, chi, rad, eta, kcnchi, &
+   & cutoff, cn_exp, rcov, cn_max, dielectric)
+   !> Electronegativity equilibration model
+   type(eeq_model), intent(out) :: self
+   !> Molecular structure data
    type(structure_type), intent(in) :: mol
+   !> Electronegativity
+   real(wp), intent(in) :: chi(:)
+   !> Exponent gaussian charge 
+   real(wp), intent(in) :: rad(:)
+   !> Chemical hardness
+   real(wp), intent(in) :: eta(:)
+   !> CN scaling factor for electronegativity
+   real(wp), intent(in) :: kcnchi(:)
+   !> Cutoff radius for coordination number
+   real(wp), intent(in), optional :: cutoff
+   !> Steepness of the CN counting function
+   real(wp), intent(in), optional :: cn_exp
+   !> Covalent radii for CN
+   real(wp), intent(in), optional :: rcov(:)
+   !> Maximum CN cutoff for CN
+   real(wp), intent(in), optional :: cn_max
+   !> Dielectric constant of the surrounding medium 
+   real(wp), intent(in), optional :: dielectric
+
+   self%chi = chi
+   self%rad = rad
+   self%eta = eta
+   self%kcnchi = kcnchi
+   
+   if (present(dielectric)) then
+      self%dielectric = dielectric
+   else
+      self%dielectric = 1.0_wp
+   end if
+
+   call new_ncoord(self%ncoord, mol, "erf", cutoff=cutoff, kcn=cn_exp, &
+      & rcov=rcov, cut=cn_max)
+
+end subroutine new_eeq_model
+
+subroutine update(self, mol, grad, cache)
+   class(eeq_model), intent(in) :: self
+   type(structure_type), intent(in) :: mol
+   logical, intent(in) :: grad
+   type(mchrg_cache), intent(inout) :: cache
+
+end subroutine update
+
+subroutine get_vrhs(self, mol, cache, cn, qloc, xvec, dcndr, dcndL, &
+   & dqlocdr, dqlocdL, dxdr, dxdL)
+   class(eeq_model), intent(in) :: self
+   type(structure_type), intent(in) :: mol
+   type(mchrg_cache), intent(in) :: cache
    real(wp), intent(in) :: cn(:)
+   real(wp), intent(in) :: qloc(:)
    real(wp), intent(out) :: xvec(:)
-   real(wp), intent(out), optional :: dxdcn(:)
+   real(wp), intent(in), optional :: dcndr(:, :, :)
+   real(wp), intent(in), optional :: dcndL(:, :, :)
+   real(wp), intent(in), optional :: dqlocdr(:, :, :)
+   real(wp), intent(in), optional :: dqlocdL(:, :, :)
+   real(wp), intent(out), optional :: dxdr(:, :, :)
+   real(wp), intent(out), optional :: dxdL(:, :, :)
    real(wp), parameter :: reg = 1.0e-14_wp
 
    integer :: iat, izp
    real(wp) :: tmp
 
-   if (present(dxdcn)) then
+   if (present(dxdr) .and. present(dxdL) &
+      & .and. present(dcndr) .and. present(dcndL)) then
+      dxdr(:, :, :) = 0.0_wp
+      dxdL(:, :, :) = 0.0_wp
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(mol, self, cn, xvec, dxdcn) private(iat, izp, tmp)
+      !$omp shared(mol, self, cn, dcndr, dcndL, xvec, dxdr, dxdL) &
+      !$omp private(iat, izp, tmp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
-         tmp = self%kcn(izp) / sqrt(cn(iat) + reg)
-         xvec(iat) = -self%chi(izp) + tmp*cn(iat)
-         dxdcn(iat) = 0.5_wp*tmp
+         tmp = self%kcnchi(izp) / sqrt(cn(iat) + reg)
+         xvec(iat) = -self%chi(izp) + tmp * cn(iat)
+         dxdr(:, :, iat) = 0.5_wp * tmp * dcndr(:, :, iat) + dxdr(:, :, iat)
+         dxdL(:, :, iat) = 0.5_wp * tmp * dcndL(:, :, iat) + dxdL(:, :, iat)
       end do
-      dxdcn(mol%nat+1) = 0.0_wp
    else
       !$omp parallel do default(none) schedule(runtime) &
       !$omp shared(mol, self, cn, xvec) private(iat, izp, tmp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
-         tmp = self%kcn(izp) / sqrt(cn(iat) + reg)
+         tmp = self%kcnchi(izp) / sqrt(cn(iat) + reg)
          xvec(iat) = -self%chi(izp) + tmp*cn(iat)
       end do
    end if
@@ -101,32 +151,14 @@ subroutine get_vrhs(self, mol, cn, xvec, dxdcn)
 end subroutine get_vrhs
 
 
-subroutine get_dir_trans(lattice, trans)
-   real(wp), intent(in) :: lattice(:, :)
-   real(wp), allocatable, intent(out) :: trans(:, :)
-   integer, parameter :: rep(3) = 2
-
-   call get_lattice_points(lattice, rep, .true., trans)
-
-end subroutine get_dir_trans
-
-subroutine get_rec_trans(lattice, trans)
-   real(wp), intent(in) :: lattice(:, :)
-   real(wp), allocatable, intent(out) :: trans(:, :)
-   integer, parameter :: rep(3) = 2
-   real(wp) :: rec_lat(3, 3)
-
-   rec_lat = twopi*transpose(matinv_3x3(lattice))
-   call get_lattice_points(rec_lat, rep, .false., trans)
-
-end subroutine get_rec_trans
-
-
-subroutine get_amat_0d(self, mol, amat)
-   type(mchrg_model_type), intent(in) :: self
+subroutine get_amat_0d(self, mol, cache, cn, qloc, amat)
+   class(eeq_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
+   type(mchrg_cache), intent(in) :: cache
+   real(wp), intent(in) :: cn(:)
+   real(wp), intent(in) :: qloc(:)
    real(wp), intent(out) :: amat(:, :)
-
+   
    integer :: iat, jat, izp, jzp
    real(wp) :: vec(3), r2, gam, tmp
 
@@ -142,7 +174,7 @@ subroutine get_amat_0d(self, mol, amat)
          vec = mol%xyz(:, jat) - mol%xyz(:, iat)
          r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
          gam = 1.0_wp / (self%rad(izp)**2 + self%rad(jzp)**2)
-         tmp = erf(sqrt(r2*gam))/sqrt(r2)
+         tmp = erf(sqrt(r2*gam))/(sqrt(r2)*self%dielectric)
          amat(jat, iat) = amat(jat, iat) + tmp
          amat(iat, jat) = amat(iat, jat) + tmp
       end do
@@ -156,9 +188,10 @@ subroutine get_amat_0d(self, mol, amat)
 
 end subroutine get_amat_0d
 
-subroutine get_amat_3d(self, mol, wsc, alpha, amat)
-   type(mchrg_model_type), intent(in) :: self
+subroutine get_amat_3d(self, mol, cache, wsc, alpha, amat)
+   class(eeq_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
+   type(mchrg_cache), intent(in) :: cache
    type(wignerseitz_cell_type), intent(in) :: wsc
    real(wp), intent(in) :: alpha
    real(wp), intent(out) :: amat(:, :)
@@ -255,10 +288,18 @@ subroutine get_amat_rec_3d(rij, vol, alp, trans, amat)
 
 end subroutine get_amat_rec_3d
 
-subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
-   type(mchrg_model_type), intent(in) :: self
+subroutine get_damat_0d(self, mol, cache, cn, qloc, qvec, dcndr, dcndL, &
+   & dqlocdr, dqlocdL, dadr, dadL, atrace)
+   class(eeq_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
+   type(mchrg_cache), intent(in) :: cache
+   real(wp), intent(in) :: cn(:)
+   real(wp), intent(in) :: qloc(:)
    real(wp), intent(in) :: qvec(:)
+   real(wp), intent(in) :: dcndr(:, :, :)
+   real(wp), intent(in) :: dcndL(:, :, :)
+   real(wp), intent(in) :: dqlocdr(:, :, :)
+   real(wp), intent(in) :: dqlocdL(:, :, :)
    real(wp), intent(out) :: dadr(:, :, :)
    real(wp), intent(out) :: dadL(:, :, :)
    real(wp), intent(out) :: atrace(:, :)
@@ -281,7 +322,8 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
          r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
          gam = 1.0_wp/sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
          arg = gam*gam*r2
-         dtmp = 2.0_wp*gam*exp(-arg)/(sqrtpi*r2)-erf(sqrt(arg))/(r2*sqrt(r2))
+         dtmp = 2.0_wp*gam*exp(-arg)/(sqrtpi*r2*self%dielectric) &
+            & - erf(sqrt(arg))/(r2*sqrt(r2)*self%dielectric)
          dG = dtmp*vec
          dS = spread(dG, 1, 3) * spread(vec, 2, 3)
          atrace(:, iat) = +dG*qvec(jat) + atrace(:, iat)
@@ -295,9 +337,10 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
 
 end subroutine get_damat_0d
 
-subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
-   type(mchrg_model_type), intent(in) :: self
+subroutine get_damat_3d(self, mol, cache, wsc, alpha, qvec, dadr, dadL, atrace)
+   class(eeq_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
+   type(mchrg_cache), intent(in) :: cache
    type(wignerseitz_cell_type), intent(in) :: wsc
    real(wp), intent(in) :: alpha
    real(wp), intent(in) :: qvec(:)
@@ -422,111 +465,5 @@ subroutine get_damat_rec_3d(rij, vol, alp, trans, dg, ds)
 
 end subroutine get_damat_rec_3d
 
-subroutine solve(self, mol, cn, dcndr, dcndL, energy, gradient, sigma, qvec, dqdr, dqdL)
-   class(mchrg_model_type), intent(in) :: self
-   type(structure_type), intent(in) :: mol
-   real(wp), intent(in), contiguous :: cn(:)
-   real(wp), intent(in), contiguous, optional :: dcndr(:, :, :)
-   real(wp), intent(in), contiguous, optional :: dcndL(:, :, :)
-   real(wp), intent(out), contiguous, optional :: qvec(:)
-   real(wp), intent(out), contiguous, optional :: dqdr(:, :, :)
-   real(wp), intent(out), contiguous, optional :: dqdL(:, :, :)
-   real(wp), intent(inout), contiguous, optional :: energy(:)
-   real(wp), intent(inout), contiguous, optional :: gradient(:, :)
-   real(wp), intent(inout), contiguous, optional :: sigma(:, :)
 
-   integer :: ic, jc, iat, ndim
-   logical :: grad, cpq, dcn
-   real(wp) :: alpha
-   integer(ik) :: info
-   integer(ik), allocatable :: ipiv(:)
-
-   real(wp), allocatable :: xvec(:), vrhs(:), amat(:, :), ainv(:, :)
-   real(wp), allocatable :: dxdcn(:), atrace(:, :), dadr(:, :, :), dadL(:, :, :)
-   type(wignerseitz_cell_type) :: wsc
-
-   ndim = mol%nat + 1
-   if (any(mol%periodic)) then
-      call new_wignerseitz_cell(wsc, mol)
-      call get_alpha(mol%lattice, alpha)
-   end if
-
-   dcn = present(dcndr) .and. present(dcndL)
-   grad = present(gradient) .and. present(sigma) .and. dcn
-   cpq = present(dqdr) .and. present(dqdL) .and. dcn
-
-   allocate(amat(ndim, ndim), xvec(ndim))
-   allocate(ipiv(ndim))
-   if (grad.or.cpq) then
-      allocate(dxdcn(ndim))
-   end if
-
-   call get_vrhs(self, mol, cn, xvec, dxdcn)
-   if (any(mol%periodic)) then
-      call get_amat_3d(self, mol, wsc, alpha, amat)
-   else
-      call get_amat_0d(self, mol, amat)
-   end if
-
-   vrhs = xvec
-   ainv = amat
-
-   call sytrf(ainv, ipiv, info=info, uplo='l')
-
-   if (info == 0) then
-      if (cpq) then
-         call sytri(ainv, ipiv, info=info, uplo='l')
-         if (info == 0) then
-            call symv(ainv, xvec, vrhs, uplo='l')
-            do ic = 1, ndim
-               do jc = ic+1, ndim
-                  ainv(ic, jc) = ainv(jc, ic)
-               end do
-            end do
-         end if
-      else
-         call sytrs(ainv, vrhs, ipiv, info=info, uplo='l')
-      end if
-   end if
-
-   if (present(qvec)) then
-      qvec(:) = vrhs(:mol%nat)
-   end if
-
-   if (present(energy)) then
-      call symv(amat, vrhs, xvec, alpha=0.5_wp, beta=-1.0_wp, uplo='l')
-      energy(:) = energy(:) + vrhs(:mol%nat) * xvec(:mol%nat)
-   end if
-
-   if (grad.or.cpq) then
-      allocate(dadr(3, mol%nat, ndim), dadL(3, 3, ndim), atrace(3, mol%nat))
-      if (any(mol%periodic)) then
-         call get_damat_3d(self, mol, wsc, alpha, vrhs, dadr, dadL, atrace)
-      else
-         call get_damat_0d(self, mol, vrhs, dadr, dadL, atrace)
-      end if
-      xvec(:) = -dxdcn * vrhs
-   end if
-
-   if (grad) then
-      call gemv(dadr, vrhs, gradient, beta=1.0_wp)
-      call gemv(dcndr, xvec(:mol%nat), gradient, beta=1.0_wp)
-      call gemv(dadL, vrhs, sigma, beta=1.0_wp, alpha=0.5_wp)
-      call gemv(dcndL, xvec(:mol%nat), sigma, beta=1.0_wp)
-   end if
-
-   if (cpq) then
-      do iat = 1, mol%nat
-         dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
-         dadr(:, :, iat) = -dcndr(:, :, iat) * dxdcn(iat) + dadr(:, :, iat)
-         dadL(:, :, iat) = -dcndL(:, :, iat) * dxdcn(iat) + dadL(:, :, iat)
-      end do
-
-      call gemm(dadr, ainv(:, :mol%nat), dqdr, alpha=-1.0_wp)
-      call gemm(dadL, ainv(:, :mol%nat), dqdL, alpha=-1.0_wp)
-   end if
-
-end subroutine solve
-
-
-end module multicharge_model
+end module multicharge_model_eeq

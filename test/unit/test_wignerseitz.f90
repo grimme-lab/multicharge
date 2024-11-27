@@ -18,8 +18,8 @@ module test_wignerseitz
    use mctc_env_testing, only : new_unittest, unittest_type, error_type, check, &
       & test_failed
    use mctc_io_structure, only : structure_type
+   use mctc_cutoff, only : get_lattice_points
    use mstore, only : get_structure
-   use multicharge_cutoff, only : get_lattice_points
    use multicharge_wignerseitz
    implicit none
    private

@@ -16,31 +16,93 @@
 module multicharge_param
    use mctc_env, only : wp
    use mctc_io, only : structure_type
-   use multicharge_model, only : mchrg_model_type, new_mchrg_model
+   use mctc_data, only : get_covalent_rad, get_pauling_en
+   use multicharge_model, only : mchrg_model_type, &
+      & new_eeq_model, eeq_model, new_eeqbc_model, eeqbc_model
    use multicharge_param_eeq2019, only : get_eeq_chi, get_eeq_eta, &
-      & get_eeq_rad, get_eeq_kcn
+      & get_eeq_rad, get_eeq_kcnchi
+   use multicharge_param_eeqbc2024, only : get_eeqbc_chi, get_eeqbc_eta, &
+      & get_eeqbc_rad, get_eeqbc_kcnchi, get_eeqbc_kqchi, get_eeqbc_kqeta, &
+      & get_eeqbc_cap, get_eeqbc_cov_radii, get_eeqbc_avg_cn
    implicit none
    private
 
-   public :: new_eeq2019_model
+   public :: new_eeq2019_model, new_eeqbc2024_model, mchargeModel
+
+   !> Possible charge models enumerator
+   type :: TMchargeModelEnum
+      !> Classic electronegativity equilibration model
+      integer :: eeq2019 = 1
+      !> Bond-capacitor corrected electronegativity equilibration model
+      integer :: eeqbc2024 = 2
+   end type TMchargeModelEnum
+
+   !> Actual charge model enumerator
+   type(TMchargeModelEnum), parameter :: mchargeModel = TMchargeModelEnum()
 
 contains
 
-subroutine new_eeq2019_model(mol, model)
+subroutine new_eeq2019_model(mol, model, dielectric)
    !> Molecular structure data
    type(structure_type), intent(in) :: mol
    !> Electronegativity equilibration model
-   type(mchrg_model_type), intent(out) :: model
+   class(mchrg_model_type), allocatable, intent(out) :: model
+   !> Dielectric constant of the medium
+   real(wp), intent(in), optional :: dielectric
 
-   real(wp), allocatable :: chi(:), eta(:), kcn(:), rad(:)
+   real(wp), allocatable :: chi(:), eta(:), kcnchi(:), rad(:), rcov(:)
+   type(eeq_model), allocatable :: eeq
 
    chi = get_eeq_chi(mol%num)
    eta = get_eeq_eta(mol%num)
-   kcn = get_eeq_kcn(mol%num)
+   kcnchi = get_eeq_kcnchi(mol%num)
    rad = get_eeq_rad(mol%num)
+   rcov = get_covalent_rad(mol%num)
 
-   call new_mchrg_model(model, chi=chi, rad=rad, eta=eta, kcn=kcn)
+   allocate(eeq)
+   call new_eeq_model(eeq, mol=mol, chi=chi, rad=rad, eta=eta, kcnchi=kcnchi, &
+      & cutoff=25.0_wp, cn_exp=7.5_wp, rcov=rcov, cn_max=8.0_wp, & 
+      & dielectric=dielectric)
+   call move_alloc(eeq, model)
 
 end subroutine new_eeq2019_model
+
+subroutine new_eeqbc2024_model(mol, model, dielectric)
+   !> Molecular structure data
+   type(structure_type), intent(in) :: mol
+   !> Electronegativity equilibration model
+   class(mchrg_model_type), allocatable, intent(out) :: model
+   !> Dielectric constant of the medium
+   real(wp), intent(in), optional :: dielectric
+
+   real(wp), allocatable :: chi(:), eta(:), rad(:), kcnchi(:), &
+      & kqchi(:), kqeta(:), cap(:), rcov(:), avg_cn(:), en(:)
+   type(eeqbc_model), allocatable :: eeqbc
+
+   chi = get_eeqbc_chi(mol%num)
+   eta = get_eeqbc_eta(mol%num)
+   rad = get_eeqbc_rad(mol%num)
+   kcnchi = get_eeqbc_kcnchi(mol%num)
+   kqchi = get_eeqbc_kqchi(mol%num)
+   kqeta = get_eeqbc_kqeta(mol%num)
+   cap = get_eeqbc_cap(mol%num)
+   rcov = get_eeqbc_cov_radii(mol%num)
+   avg_cn = get_eeqbc_avg_cn(mol%num)
+   ! Electronegativities normalized to Fluorine 
+   ! with actinides (Th-Lr) set to average of 1.30 
+   en = get_pauling_en(mol%num)
+   en = merge(en, 1.30_wp, mol%num < 90)
+   en = merge(0.80_wp, en, mol%num == 87)
+   en = en/3.98_wp
+
+   allocate(eeqbc)
+   call new_eeqbc_model(eeqbc, mol=mol, chi=chi, rad=rad, eta=eta, &
+      & kcnchi=kcnchi, kqchi=kqchi, kqeta=kqeta, kcnrad=0.145_wp, &
+      & cap=cap, avg_cn=avg_cn, kbc=0.65_wp, cutoff=25.0_wp, & 
+      & cn_exp=2.0_wp, rcov=rcov, en=en, norm_exp=0.8_wp, &
+      & dielectric=dielectric)
+   call move_alloc(eeqbc, model)
+
+end subroutine new_eeqbc2024_model
 
 end module multicharge_param

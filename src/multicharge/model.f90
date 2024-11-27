@@ -13,9 +13,22 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
-module multicharge_data
-   use multicharge_data_covrad, only : get_covalent_rad
-   implicit none
-   public
+!> @dir multicharge/model
+!> Contains the implementation of the charge models
 
-end module multicharge_data
+!> @file multicharge/model.f90
+!> Provides a reexport of the charge model implementations
+
+!> Proxy module to reexport the charge model implementations
+module multicharge_model
+   use multicharge_model_type, only : mchrg_model_type
+   use multicharge_model_eeq, only : eeq_model, new_eeq_model
+   use multicharge_model_eeqbc, only : eeqbc_model, new_eeqbc_model
+   implicit none
+   private
+
+   public :: mchrg_model_type
+   public :: eeq_model, new_eeq_model
+   public :: eeqbc_model, new_eeqbc_model
+
+end module multicharge_model

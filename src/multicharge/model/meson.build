@@ -14,5 +14,8 @@
 # limitations under the License.
 
 srcs += files(
-  'covrad.f90',
+  'cache.f90',
+  'eeq.f90',
+  'eeqbc.f90',
+  'type.F90',
 )

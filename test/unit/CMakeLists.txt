@@ -17,7 +17,6 @@
 set(
   tests
   "model"
-  "ncoord"
   "pbc"
   "wignerseitz"
 )

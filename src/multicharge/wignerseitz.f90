@@ -16,7 +16,7 @@
 module multicharge_wignerseitz
    use mctc_env, only : wp
    use mctc_io, only : structure_type
-   use multicharge_cutoff, only : get_lattice_points
+   use mctc_cutoff, only : get_lattice_points
    implicit none
    private
 

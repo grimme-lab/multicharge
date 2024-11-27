@@ -13,17 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-subdir('data')
+subdir('model')
 subdir('param')
 
 srcs += files(
   'blas.F90',
-  'cutoff.f90',
-  'data.f90',
   'ewald.f90',
   'lapack.F90',
-  'model.F90',
-  'ncoord.f90',
+  'model.f90',
   'output.f90',
   'param.f90',
   'version.f90',

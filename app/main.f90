@@ -17,29 +17,30 @@ program main
    use, intrinsic :: iso_fortran_env, only : output_unit, error_unit, input_unit
    use mctc_env, only : error_type, fatal_error, get_argument, wp
    use mctc_io, only : structure_type, read_structure, filetype, get_filetype
-   use multicharge, only : mchrg_model_type, new_eeq2019_model, &
-      & write_ascii_model, write_ascii_properties, write_ascii_results, &
-      & get_coordination_number, get_covalent_rad, get_lattice_points, &
-      & get_multicharge_version
+   use mctc_cutoff, only : get_lattice_points
+   use multicharge, only : mchrg_model_type, mchargeModel, new_eeq2019_model, &
+      & new_eeqbc2024_model, get_multicharge_version, &
+      & write_ascii_model, write_ascii_properties, write_ascii_results
    use multicharge_output, only : json_results
    implicit none
    character(len=*), parameter :: prog_name = "multicharge"
    character(len=*), parameter :: json_output = "multicharge.json"
 
    character(len=:), allocatable :: input, chargeinput
-   integer, allocatable :: input_format
+   integer, allocatable :: input_format, model_id
    integer :: stat, unit
    type(error_type), allocatable :: error
    type(structure_type) :: mol
-   type(mchrg_model_type) :: model
+   class(mchrg_model_type), allocatable :: model
    logical :: grad, json, exist
    real(wp), parameter :: cn_max = 8.0_wp, cutoff = 25.0_wp
    real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), rcov(:), trans(:, :)
+   real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
    real(wp), allocatable :: energy(:), gradient(:, :), sigma(:, :)
    real(wp), allocatable :: qvec(:), dqdr(:, :, :), dqdL(:, :, :)
-   real(wp), allocatable :: charge
+   real(wp), allocatable :: charge, dielectric
 
-   call get_arguments(input, input_format, grad, charge, json, error)
+   call get_arguments(input, model_id, input_format, grad, charge, json, dielectric, error)
    if (allocated(error)) then
       write(error_unit, '(a)') error%message
       error stop
@@ -77,18 +78,27 @@ program main
       end if
    end if
 
-   call new_eeq2019_model(mol, model)
+   if (model_id == mchargeModel%eeq2019) then
+      call new_eeq2019_model(mol, model, dielectric)
+   else if (model_id == mchargeModel%eeqbc2024) then
+      call new_eeqbc2024_model(mol, model, dielectric)
+   else 
+      call fatal_error(error, "Invalid model")
+      error stop
+   end if 
+
    call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
    call write_ascii_model(output_unit, mol, model)
 
-   allocate(cn(mol%nat))
+   allocate(cn(mol%nat), qloc(mol%nat))
    if (grad) then
       allocate(dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat))
+      allocate(dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat))
    end if
 
-   rcov = get_covalent_rad(mol%num)
-   call get_coordination_number(mol, trans, cutoff, rcov, cn, dcndr, dcndL, cut=cn_max)
+   call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
+   call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
    allocate(energy(mol%nat), qvec(mol%nat))
    energy(:) = 0.0_wp
@@ -98,8 +108,8 @@ program main
       sigma(:, :) = 0.0_wp
    end if
 
-   call model%solve(mol, cn, dcndr, dcndL, energy, gradient, sigma, &
-      & qvec, dqdr, dqdL)
+   call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
+      & energy, gradient, sigma, qvec, dqdr, dqdL)
 
    call write_ascii_properties(output_unit, mol, model, cn, qvec)
    call write_ascii_results(output_unit, mol, energy, gradient, sigma)
@@ -128,10 +138,12 @@ subroutine help(unit)
       ""
 
    write(unit, '(2x, a, t25, a)') &
+      "-m, -model, --model <model>", "Choose the charge model", &   
       "-i, -input, --input <format>", "Hint for the format of the input file", &
       "-c, -charge, --charge <value>", "Set the molecular charge", &
       "-g, -grad, --grad", "Evaluate molecular gradient and virial", &
       "-j, -json, --json", "Provide output in JSON format to the file 'multicharge.json'", &
+      "-e, -eps, --eps <value>", "Set the dielectric constant of the medium (default vacuum)", &
       "-v, -version, --version", "Print program version and exit", &
       "-h, -help, --help", "Show this help message"
 
@@ -151,10 +163,14 @@ subroutine version(unit)
 end subroutine version
 
 
-subroutine get_arguments(input, input_format, grad, charge, json, error)
+subroutine get_arguments(input, model_id, input_format, grad, charge, &
+   & json, dielectric, error)
 
    !> Input file name
    character(len=:), allocatable :: input
+
+   !> ID of choosen model type
+   integer, allocatable, intent(out) :: model_id
 
    !> Input file format
    integer, allocatable, intent(out) :: input_format
@@ -171,9 +187,13 @@ subroutine get_arguments(input, input_format, grad, charge, json, error)
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
 
+   !> Dielectric constant of the medium
+   real(wp), allocatable, intent(out) :: dielectric
+
    integer :: iarg, narg, iostat
    character(len=:), allocatable :: arg
 
+   model_id = mchargeModel%eeq2019
    grad = .false.
    json = .false.
    iarg = 0
@@ -195,6 +215,21 @@ subroutine get_arguments(input, input_format, grad, charge, json, error)
          end if
          call fatal_error(error, "Too many positional arguments present")
          exit
+      case("-m", "-model", "--model")
+         iarg = iarg + 1
+         call get_argument(iarg, arg)
+         if (.not.allocated(arg)) then
+            call fatal_error(error, "Missing argument for model")
+            exit
+         end if
+         if (arg == "eeq2019" .or. arg == "eeq") then
+            model_id = mchargeModel%eeq2019
+         else if (arg == "eeqbc2024" .or. arg == "eeqbc") then
+            model_id = mchargeModel%eeqbc2024
+         else
+            call fatal_error(error, "Invalid model")
+            exit
+         end if
       case("-i", "-input", "--input")
          iarg = iarg + 1
          call get_argument(iarg, arg)
@@ -220,6 +255,19 @@ subroutine get_arguments(input, input_format, grad, charge, json, error)
          grad = .true.
       case("-j", "-json", "--json")
          json = .true.
+      case("-e", "-eps", "--eps")
+         iarg = iarg + 1
+         call get_argument(iarg, arg)
+         if (.not.allocated(arg)) then
+            call fatal_error(error, "Missing argument for dielectric constant")
+            exit
+         end if
+         allocate(dielectric)
+         read(arg, *, iostat=iostat) charge
+         if (iostat /= 0) then
+            call fatal_error(error, "Invalid dielectric constant value")
+            exit
+         end if
       end select
    end do
 

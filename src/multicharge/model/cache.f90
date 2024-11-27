@@ -13,14 +13,24 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
-module multicharge
-   use multicharge_model, only : mchrg_model_type
-   use multicharge_output, only : write_ascii_model, write_ascii_properties, &
-      & write_ascii_results
-   use multicharge_param, only : new_eeq2019_model, new_eeqbc2024_model, mchargeModel
-   use multicharge_version, only : get_multicharge_version
+!> @file multicharge/model/cache.f90
+!> Contains the cache for the charge models 
+
+!> Cache for charge models
+module multicharge_model_cache
+   use mctc_env, only : wp
+   use mctc_io, only : structure_type
    implicit none
-   public
+   private
 
+   !> Cache for the charge model
+   type, public :: mchrg_cache
+      !> Constraint matrix
+      real(wp), allocatable :: cmat(:, :)
+      !> Derivative of constraint matrix w.r.t positions
+      real(wp), allocatable :: dcdr(:, :, :)
+      !> Derivative of constraint matrix w.r.t lattice vectors
+      real(wp), allocatable :: dcdL(:, :, :)
+   end type mchrg_cache
 
-end module multicharge
+end module multicharge_model_cache

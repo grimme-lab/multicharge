@@ -17,7 +17,10 @@ set(dir "${CMAKE_CURRENT_SOURCE_DIR}")
 
 list(
   APPEND srcs
-  "${dir}/covrad.f90"
+  "${dir}/cache.f90"
+  "${dir}/eeq.f90"
+  "${dir}/eeqbc.f90"
+  "${dir}/type.F90"
 )
 
 set(srcs "${srcs}" PARENT_SCOPE)

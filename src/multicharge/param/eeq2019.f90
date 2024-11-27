@@ -24,7 +24,7 @@ module multicharge_param_eeq2019
    implicit none
    private
 
-   public :: get_eeq_chi, get_eeq_eta, get_eeq_rad, get_eeq_kcn
+   public :: get_eeq_chi, get_eeq_eta, get_eeq_rad, get_eeq_kcnchi
 
 
    !> Element-specific electronegativity for the electronegativity equilibration charges.
@@ -40,10 +40,10 @@ module multicharge_param_eeq2019
    end interface get_eeq_eta
 
    !> Element-specific CN scaling constant for the electronegativity equilibration charges.
-   interface get_eeq_kcn
-      module procedure :: get_eeq_kcn_sym
-      module procedure :: get_eeq_kcn_num
-   end interface get_eeq_kcn
+   interface get_eeq_kcnchi
+      module procedure :: get_eeq_kcnchi_sym
+      module procedure :: get_eeq_kcnchi_num
+   end interface get_eeq_kcnchi
 
    !> Element-specific charge widths for the electronegativity equilibration charges.
    interface get_eeq_rad
@@ -105,7 +105,7 @@ module multicharge_param_eeq2019
       &-0.00059592_wp,-0.00012585_wp,-0.00140896_wp]
 
    !> Element-specific CN scaling constant for the electronegativity equilibration charges.
-   real(wp), parameter :: eeq_kcn(max_elem) = [&
+   real(wp), parameter :: eeq_kcnchi(max_elem) = [&
       & 0.04916110_wp, 0.10937243_wp,-0.12349591_wp,-0.02665108_wp,-0.02631658_wp, &
       & 0.06005196_wp, 0.09279548_wp, 0.11689703_wp, 0.15704746_wp, 0.07987901_wp, &
       &-0.10002962_wp,-0.07712863_wp,-0.02170561_wp,-0.04964052_wp, 0.14250599_wp, &
@@ -221,35 +221,35 @@ end function get_eeq_eta_num
 
 
 !> Get CN scaling for species with a given symbol
-elemental function get_eeq_kcn_sym(symbol) result(kcn)
+elemental function get_eeq_kcnchi_sym(symbol) result(kcnchi)
 
    !> Element symbol
    character(len=*), intent(in) :: symbol
 
    !> CN scaling
-   real(wp) :: kcn
+   real(wp) :: kcnchi
 
-   kcn = get_eeq_kcn(to_number(symbol))
+   kcnchi = get_eeq_kcnchi(to_number(symbol))
 
-end function get_eeq_kcn_sym
+end function get_eeq_kcnchi_sym
 
 
 !> Get CN scaling for species with a given atomic number
-elemental function get_eeq_kcn_num(number) result(kcn)
+elemental function get_eeq_kcnchi_num(number) result(kcnchi)
 
    !> Atomic number
    integer, intent(in) :: number
 
    !> CN scaling
-   real(wp) :: kcn
+   real(wp) :: kcnchi
 
-   if (number > 0 .and. number <= size(eeq_kcn, dim=1)) then
-      kcn = eeq_kcn(number)
+   if (number > 0 .and. number <= size(eeq_kcnchi, dim=1)) then
+      kcnchi = eeq_kcnchi(number)
    else
-      kcn = -1.0_wp
+      kcnchi = -1.0_wp
    end if
 
-end function get_eeq_kcn_num
+end function get_eeq_kcnchi_num
 
 
 !> Get charge width for species with a given symbol
