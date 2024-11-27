@@ -13,23 +13,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if ((BLA_VENDOR MATCHES ^Intel) OR (DEFINED ENV{MKLROOT}))
-  enable_language("C")
-endif()
+# Unit testing
+set(
+  tests
+  "model"
+  "ncoord"
+  "pbc"
+  "wignerseitz"
+)
+set(
+  test-srcs
+  "main.f90"
+)
+foreach(t IN LISTS tests)
+  string(MAKE_C_IDENTIFIER ${t} t) 
+  list(APPEND test-srcs "test_${t}.f90")
+endforeach()
 
-if(WITH_ILP64)
-  set(BLA_SIZEOF_INTEGER 8)
-endif()
+add_executable(
+  "${PROJECT_NAME}-tester"
+  "${test-srcs}"
+)
+target_link_libraries(
+  "${PROJECT_NAME}-tester"
+  PRIVATE
+  "${PROJECT_NAME}-lib"
+  "mstore::mstore"
+)
 
-if(NOT LAPACK_FOUND)
-  find_package("LAPACK" REQUIRED)
-
-  if(NOT TARGET "BLAS::BLAS")
-    find_package("custom-blas" REQUIRED)
-  endif()
-
-  if(NOT TARGET "LAPACK::LAPACK")
-    add_library("LAPACK::LAPACK" INTERFACE IMPORTED)
-    target_link_libraries("LAPACK::LAPACK" INTERFACE "${LAPACK_LIBRARIES}" "BLAS::BLAS")
-  endif()
-endif()
+foreach(t IN LISTS tests)
+  add_test("${t}" "${PROJECT_NAME}-tester" "${t}")
+endforeach()

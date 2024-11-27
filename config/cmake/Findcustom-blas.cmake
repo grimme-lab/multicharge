@@ -22,7 +22,7 @@ if(WITH_ILP64)
 endif()
 
 if(NOT BLAS_FOUND)
-  find_package("BLAS")
+  find_package("BLAS" REQUIRED)
   if(NOT TARGET "BLAS::BLAS")
     add_library("BLAS::BLAS" INTERFACE IMPORTED)
     target_link_libraries("BLAS::BLAS" INTERFACE "${BLAS_LIBRARIES}")

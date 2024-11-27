@@ -21,21 +21,25 @@ program main
       & write_ascii_model, write_ascii_properties, write_ascii_results, &
       & get_coordination_number, get_covalent_rad, get_lattice_points, &
       & get_multicharge_version
+   use multicharge_output, only : json_results
    implicit none
    character(len=*), parameter :: prog_name = "multicharge"
+   character(len=*), parameter :: json_output = "multicharge.json"
 
-   character(len=:), allocatable :: input
+   character(len=:), allocatable :: input, chargeinput
    integer, allocatable :: input_format
+   integer :: stat, unit
    type(error_type), allocatable :: error
    type(structure_type) :: mol
    type(mchrg_model_type) :: model
-   logical :: grad
+   logical :: grad, json, exist
    real(wp), parameter :: cn_max = 8.0_wp, cutoff = 25.0_wp
    real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), rcov(:), trans(:, :)
    real(wp), allocatable :: energy(:), gradient(:, :), sigma(:, :)
    real(wp), allocatable :: qvec(:), dqdr(:, :, :), dqdL(:, :, :)
+   real(wp), allocatable :: charge
 
-   call get_arguments(input, input_format, grad, error)
+   call get_arguments(input, input_format, grad, charge, json, error)
    if (allocated(error)) then
       write(error_unit, '(a)') error%message
       error stop
@@ -50,6 +54,27 @@ program main
    if (allocated(error)) then
       write(error_unit, '(a)') error%message
       error stop
+   end if
+
+   if (allocated(charge)) then
+      mol%charge = charge
+   else
+      chargeinput = ".CHRG"
+      inquire(file=chargeinput, exist=exist)
+      if (exist) then
+         open(file=chargeinput, newunit=unit)
+         allocate(charge)
+         read(unit, *, iostat=stat) charge
+         if (stat == 0) then
+            mol%charge = charge
+            write(output_unit, '(a,/)') &
+               "[Info] Molecular charge read from '"//chargeinput//"'"
+         else
+            write(output_unit, '(a,/)') &
+               "[Warn] Could not read molecular charge read from '"//chargeinput//"'"
+         end if
+         close(unit)
+      end if
    end if
 
    call new_eeq2019_model(mol, model)
@@ -79,6 +104,14 @@ program main
    call write_ascii_properties(output_unit, mol, model, cn, qvec)
    call write_ascii_results(output_unit, mol, energy, gradient, sigma)
 
+   if (json) then
+      open(file=json_output, newunit=unit)
+      call json_results(unit, "  ", energy=sum(energy), gradient=gradient, charges=qvec, cn=cn)
+      close(unit)
+      write(output_unit, '(a)') &
+         "[Info] JSON dump of results written to '"// json_output //"'"
+   end if
+
 contains
 
 
@@ -95,10 +128,12 @@ subroutine help(unit)
       ""
 
    write(unit, '(2x, a, t25, a)') &
-      "-i, --input <format>", "Hint for the format of the input file", &
-      "--grad", "Evaluate molecular gradient and virial", &
-      "--version", "Print program version and exit", &
-      "--help", "Show this help message"
+      "-i, -input, --input <format>", "Hint for the format of the input file", &
+      "-c, -charge, --charge <value>", "Set the molecular charge", &
+      "-g, -grad, --grad", "Evaluate molecular gradient and virial", &
+      "-j, -json, --json", "Provide output in JSON format to the file 'multicharge.json'", &
+      "-v, -version, --version", "Print program version and exit", &
+      "-h, -help, --help", "Show this help message"
 
    write(unit, '(a)')
 
@@ -116,7 +151,7 @@ subroutine version(unit)
 end subroutine version
 
 
-subroutine get_arguments(input, input_format, grad, error)
+subroutine get_arguments(input, input_format, grad, charge, json, error)
 
    !> Input file name
    character(len=:), allocatable :: input
@@ -127,23 +162,30 @@ subroutine get_arguments(input, input_format, grad, error)
    !> Evaluate gradient
    logical, intent(out) :: grad
 
+   !> Provide JSON output
+   logical, intent(out) :: json
+
+   !> Charge
+   real(wp), allocatable, intent(out) :: charge
+
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
 
-   integer :: iarg, narg
+   integer :: iarg, narg, iostat
    character(len=:), allocatable :: arg
 
    grad = .false.
+   json = .false.
    iarg = 0
    narg = command_argument_count()
    do while(iarg < narg)
       iarg = iarg + 1
       call get_argument(iarg, arg)
       select case(arg)
-      case("-help", "--help")
+      case("-h", "-help", "--help")
          call help(output_unit)
          stop
-      case("-version", "--version")
+      case("-v", "-version", "--version")
          call version(output_unit)
          stop
       case default
@@ -161,8 +203,23 @@ subroutine get_arguments(input, input_format, grad, error)
             exit
          end if
          input_format = get_filetype("."//arg)
-      case("-grad", "--grad")
+      case("-c", "-charge", "--charge")
+         iarg = iarg + 1
+         call get_argument(iarg, arg)
+         if (.not.allocated(arg)) then
+            call fatal_error(error, "Missing argument for charge")
+            exit
+         end if
+         allocate(charge)
+         read(arg, *, iostat=iostat) charge
+         if (iostat /= 0) then
+            call fatal_error(error, "Invalid charge value")
+            exit
+         end if
+      case("-g", "-grad", "--grad")
          grad = .true.
+      case("-j", "-json", "--json")
+         json = .true.
       end select
    end do
 

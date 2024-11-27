@@ -13,42 +13,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Find mstore dependency for testing
-mstore_dep = dependency(
-  'mstore',
-  version: '>=0.1',
-  fallback: ['mstore', 'mstore_dep'],
-  required: not meson.is_subproject(),
-  default_options: [
-    'default_library=static',
-  ],
-)
-# If we do not find mstore and are a subproject, we just skip testing
-if not mstore_dep.found()
-   subdir_done()
-endif
-
-tests = [
-  'model',
-  'ncoord',
-  'pbc',
-  'wignerseitz',
-]
-
-test_srcs = files(
-  'main.f90',
-)
-foreach t : tests
-  test_srcs += files('test_@0@.f90'.format(t.underscorify()))
-endforeach
-
-tester = executable(
-  'tester',
-  sources: test_srcs,
-  dependencies: [multicharge_dep, mstore_dep],
-  link_language: 'fortran',
-)
-
-foreach t : tests
-  test(t, tester, args: t)
-endforeach
+subdir('validation')
+subdir('unit')

@@ -13,23 +13,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if ((BLA_VENDOR MATCHES ^Intel) OR (DEFINED ENV{MKLROOT}))
-  enable_language("C")
-endif()
+validation_tester = find_program(files('tester.py'))
 
-if(WITH_ILP64)
-  set(BLA_SIZEOF_INTEGER 8)
-endif()
+run_element = [
+  '01_h3+',
+  '02_heada',
+  '03_etlicl-',
+]
 
-if(NOT LAPACK_FOUND)
-  find_package("LAPACK" REQUIRED)
-
-  if(NOT TARGET "BLAS::BLAS")
-    find_package("custom-blas" REQUIRED)
-  endif()
-
-  if(NOT TARGET "LAPACK::LAPACK")
-    add_library("LAPACK::LAPACK" INTERFACE IMPORTED)
-    target_link_libraries("LAPACK::LAPACK" INTERFACE "${LAPACK_LIBRARIES}" "BLAS::BLAS")
-  endif()
-endif()
+foreach t : run_element
+  benchmark(
+    '@0@'.format(t),
+    validation_tester,
+    args: [
+      multicharge_exe,
+      files(t/'multicharge_ref.json'),
+      files(t/'coord'),
+      '--grad',
+      t.contains('+') ? ['--charge', '+1'] : [],
+      t.contains('-') ? ['--charge', '-1'] : [],
+    ],
+    suite: 'multicharge',
+  )
+endforeach
