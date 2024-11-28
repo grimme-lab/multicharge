@@ -137,7 +137,7 @@ subroutine help(unit)
       "higher multipole moments", &
       ""
 
-   write(unit, '(2x, a, t25, a)') &
+   write(unit, '(2x, a, t35, a)') &
       "-m, -model, --model <model>", "Choose the charge model", &   
       "-i, -input, --input <format>", "Hint for the format of the input file", &
       "-c, -charge, --charge <value>", "Set the molecular charge", &
@@ -263,7 +263,7 @@ subroutine get_arguments(input, model_id, input_format, grad, charge, &
             exit
          end if
          allocate(dielectric)
-         read(arg, *, iostat=iostat) charge
+         read(arg, *, iostat=iostat) dielectric
          if (iostat /= 0) then
             call fatal_error(error, "Invalid dielectric constant value")
             exit
