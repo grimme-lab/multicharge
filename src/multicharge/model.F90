@@ -494,7 +494,8 @@ subroutine solve(self, mol, cn, dcndr, dcndL, energy, gradient, sigma, qvec, dqd
    end if
 
    if (present(energy)) then
-      call symv(amat, vrhs, xvec, alpha=0.5_wp, beta=-1.0_wp, uplo='l')
+      call symv(amat(:, :mol%nat), vrhs(:mol%nat), xvec(:mol%nat), &
+         & alpha=0.5_wp, beta=-1.0_wp, uplo='l')
       energy(:) = energy(:) + vrhs(:mol%nat) * xvec(:mol%nat)
    end if
 

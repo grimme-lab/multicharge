@@ -16,7 +16,7 @@
 module test_model
    use mctc_env, only : wp
    use mctc_env_testing, only : new_unittest, unittest_type, error_type, check, test_failed
-   use mctc_io_structure, only : structure_type
+   use mctc_io_structure, only : structure_type, new
    use mstore, only : get_structure
    use multicharge_data, only : get_covalent_rad
    use multicharge_model
@@ -55,7 +55,10 @@ subroutine collect_model(testsuite)
       & new_unittest("dqdr-mb09", test_dqdr_mb09), &
       & new_unittest("dqdr-mb10", test_dqdr_mb10), &
       & new_unittest("dqdL-mb11", test_dqdL_mb11), &
-      & new_unittest("dqdL-mb12", test_dqdL_mb12) &
+      & new_unittest("dqdL-mb12", test_dqdL_mb12), &
+      & new_unittest("gradient-h2plus", test_g_h2plus), &
+      & new_unittest("gradient-znooh", test_g_znooh), &
+      & new_unittest("dqdr-znooh", test_dqdr_znooh) &
       & ]
 
 end subroutine collect_model
@@ -464,12 +467,12 @@ subroutine test_e_mb03(error)
 
    type(structure_type) :: mol
    real(wp), parameter :: ref(16) = [&
-      &-1.13826350631987E-1_wp,-5.62509056571450E-1_wp, 2.40314584307323E-2_wp, &
-      & 2.34612384482528E-1_wp, 3.24513111881020E-1_wp, 4.02366323905675E-2_wp, &
-      &-2.17529318207133E-1_wp, 2.75364844977006E-2_wp, 4.02137369467059E-2_wp, &
-      & 5.04840322940993E-2_wp,-3.53634572772168E-1_wp,-1.87985748794416E-1_wp, &
-      &-2.52739835528964E-1_wp, 1.24520645208966E-1_wp, 2.69468093358888E-1_wp, &
-      & 2.15919407508634E-2_wp]
+      &-2.18698345033562E-1_wp,-1.04793885931268E+0_wp, 4.78963353574572E-2_wp, &
+      & 5.76566377591676E-1_wp, 7.37187470977927E-1_wp, 8.06020047053305E-2_wp, &
+      &-4.19837955782898E-1_wp, 5.49627510550566E-2_wp, 8.01486728591565E-2_wp, &
+      & 1.00618944521776E-1_wp,-6.61715169034150E-1_wp,-3.60531647289563E-1_wp, &
+      &-4.87729666337974E-1_wp, 2.48257554279938E-1_wp, 6.96027176590956E-1_wp, &
+      & 4.31679925875087E-2_wp]
 
    call get_structure(mol, "MB16-43", "03")
    call gen_test(error, mol, eref=ref)
@@ -484,12 +487,12 @@ subroutine test_e_mb04(error)
 
    type(structure_type) :: mol
    real(wp), parameter :: ref(16) = [&
-      & 5.48650497749607E-2_wp,-2.25780913208624E-1_wp, 4.35281631902307E-2_wp, &
-      &-1.57205780814366E-1_wp, 4.09837366864403E-3_wp, 6.31282692438352E-2_wp, &
-      & 7.48306233723622E-2_wp, 5.87730150647742E-2_wp, 6.10308494414398E-2_wp, &
-      & 8.63933930367129E-2_wp,-9.99483536957020E-2_wp, 2.02497843626054E-1_wp, &
-      & 3.47529062386466E-2_wp,-2.37058804560779E-1_wp, 6.74225102943070E-2_wp, &
-      &-1.36552339896561E-1_wp]
+      & 1.13974214746111E-1_wp,-4.41735365367827E-1_wp, 8.99036489938394E-2_wp, &
+      &-2.97539904703271E-1_wp, 8.05174117097006E-3_wp, 1.31105783760276E-1_wp, &
+      & 1.54594451996644E-1_wp, 1.19929653841255E-1_wp, 1.26056586309101E-1_wp, &
+      & 1.78439005754586E-1_wp,-1.98703462666082E-1_wp, 4.19630120027785E-1_wp, &
+      & 7.05569220334930E-2_wp,-4.50925107441869E-1_wp, 1.39289602382354E-1_wp, &
+      &-2.67853086061429E-1_wp]
 
    call get_structure(mol, "MB16-43", "04")
    call gen_test(error, mol, eref=ref)
@@ -599,6 +602,73 @@ subroutine test_dqdL_mb12(error)
    call test_numdqdL(error, mol)
 
 end subroutine test_dqdL_mb12
+
+
+subroutine test_g_h2plus(error)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   type(structure_type) :: mol
+
+   integer, parameter :: nat = 2
+   real(wp), parameter :: charge = 1.0_wp
+   integer, parameter :: num(nat) = [1, 1]
+   real(wp), parameter :: xyz(3, nat) = reshape([ &
+      & +0.00000000000000_wp, +0.00000000000000_wp, +0.00000000000000_wp, &
+      & +1.00000000000000_wp, +0.00000000000000_wp, +0.00000000000000_wp],&
+      & [3, nat])
+
+   call new(mol, num, xyz, charge)
+   call test_numgrad(error, mol)
+
+end subroutine test_g_h2plus
+
+
+subroutine test_g_znooh(error)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   type(structure_type) :: mol
+
+   integer, parameter :: nat = 4
+   real(wp), parameter :: charge = -1.0_wp
+   integer, parameter :: num(nat) = [30, 8, 8, 1]
+   real(wp), parameter :: xyz(3, nat) = reshape([ &
+      & -0.30631629283878_wp, -1.11507514203552_wp, +0.00000000000000_wp, &
+      & -0.06543072660074_wp, -4.32862093666082_wp, +0.00000000000000_wp, &
+      & -0.64012239724097_wp, +2.34966763895920_wp, +0.00000000000000_wp, &
+      & +1.01186941668051_wp, +3.09402843973713_wp, +0.00000000000000_wp],&
+      & [3, nat])
+
+   call new(mol, num, xyz, charge)
+   call test_numgrad(error, mol)
+
+end subroutine test_g_znooh
+
+
+subroutine test_dqdr_znooh(error)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   type(structure_type) :: mol
+
+   integer, parameter :: nat = 4
+   real(wp), parameter :: charge = -1.0_wp
+   integer, parameter :: num(nat) = [30, 8, 8, 1]
+   real(wp), parameter :: xyz(3, nat) = reshape([ &
+      & -0.30631629283878_wp, -1.11507514203552_wp, +0.00000000000000_wp, &
+      & -0.06543072660074_wp, -4.32862093666082_wp, +0.00000000000000_wp, &
+      & -0.64012239724097_wp, +2.34966763895920_wp, +0.00000000000000_wp, &
+      & +1.01186941668051_wp, +3.09402843973713_wp, +0.00000000000000_wp],&
+      & [3, nat])
+
+   call new(mol, num, xyz, charge)
+   call test_numdqdr(error, mol)
+
+end subroutine test_dqdr_znooh
 
 
 end module test_model
