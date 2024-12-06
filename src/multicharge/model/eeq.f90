@@ -23,7 +23,6 @@ module multicharge_model_eeq
    use mctc_io_constants, only : pi
    use mctc_io_math, only : matdet_3x3
    use mctc_ncoord, only : new_ncoord
-   use multicharge_model_cache, only : mchrg_cache
    use multicharge_wignerseitz, only : wignerseitz_cell_type
    use multicharge_model_type, only : mchrg_model_type, get_dir_trans, get_rec_trans
    implicit none
@@ -34,8 +33,6 @@ module multicharge_model_eeq
 
    type, extends(mchrg_model_type) :: eeq_model
    contains
-      !> Update multicharge cache
-      procedure :: update
       !> Calculate right-hand side (electronegativity)
       procedure :: get_vrhs
       !> Calculate Coulomb matrix 
@@ -96,19 +93,10 @@ subroutine new_eeq_model(self, mol, chi, rad, eta, kcnchi, &
 
 end subroutine new_eeq_model
 
-subroutine update(self, mol, grad, cache)
-   class(eeq_model), intent(in) :: self
-   type(structure_type), intent(in) :: mol
-   logical, intent(in) :: grad
-   type(mchrg_cache), intent(inout) :: cache
-
-end subroutine update
-
-subroutine get_vrhs(self, mol, cache, cn, qloc, xvec, dcndr, dcndL, &
+subroutine get_vrhs(self, mol, cn, qloc, xvec, dcndr, dcndL, &
    & dqlocdr, dqlocdL, dxdr, dxdL)
    class(eeq_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
-   type(mchrg_cache), intent(in) :: cache
    real(wp), intent(in) :: cn(:)
    real(wp), intent(in) :: qloc(:)
    real(wp), intent(out) :: xvec(:)
@@ -151,10 +139,9 @@ subroutine get_vrhs(self, mol, cache, cn, qloc, xvec, dcndr, dcndL, &
 end subroutine get_vrhs
 
 
-subroutine get_amat_0d(self, mol, cache, cn, qloc, amat)
+subroutine get_amat_0d(self, mol, cn, qloc, amat)
    class(eeq_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
-   type(mchrg_cache), intent(in) :: cache
    real(wp), intent(in) :: cn(:)
    real(wp), intent(in) :: qloc(:)
    real(wp), intent(out) :: amat(:, :)
@@ -188,10 +175,9 @@ subroutine get_amat_0d(self, mol, cache, cn, qloc, amat)
 
 end subroutine get_amat_0d
 
-subroutine get_amat_3d(self, mol, cache, wsc, alpha, amat)
+subroutine get_amat_3d(self, mol, wsc, alpha, amat)
    class(eeq_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
-   type(mchrg_cache), intent(in) :: cache
    type(wignerseitz_cell_type), intent(in) :: wsc
    real(wp), intent(in) :: alpha
    real(wp), intent(out) :: amat(:, :)
@@ -288,11 +274,10 @@ subroutine get_amat_rec_3d(rij, vol, alp, trans, amat)
 
 end subroutine get_amat_rec_3d
 
-subroutine get_damat_0d(self, mol, cache, cn, qloc, qvec, dcndr, dcndL, &
+subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
    & dqlocdr, dqlocdL, dadr, dadL, atrace)
    class(eeq_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
-   type(mchrg_cache), intent(in) :: cache
    real(wp), intent(in) :: cn(:)
    real(wp), intent(in) :: qloc(:)
    real(wp), intent(in) :: qvec(:)
@@ -337,10 +322,9 @@ subroutine get_damat_0d(self, mol, cache, cn, qloc, qvec, dcndr, dcndL, &
 
 end subroutine get_damat_0d
 
-subroutine get_damat_3d(self, mol, cache, wsc, alpha, qvec, dadr, dadL, atrace)
+subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
    class(eeq_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
-   type(mchrg_cache), intent(in) :: cache
    type(wignerseitz_cell_type), intent(in) :: wsc
    real(wp), intent(in) :: alpha
    real(wp), intent(in) :: qvec(:)
