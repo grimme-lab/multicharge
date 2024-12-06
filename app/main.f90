@@ -34,10 +34,10 @@ program main
    class(mchrg_model_type), allocatable :: model
    logical :: grad, json, exist
    real(wp), parameter :: cn_max = 8.0_wp, cutoff = 25.0_wp
-   real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), rcov(:), trans(:, :)
-   real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
+   real(wp), allocatable :: cn(:), rcov(:), trans(:, :)
+   real(wp), allocatable :: qloc(:)
    real(wp), allocatable :: energy(:), gradient(:, :), sigma(:, :)
-   real(wp), allocatable :: qvec(:), dqdr(:, :, :), dqdL(:, :, :)
+   real(wp), allocatable :: qvec(:)
    real(wp), allocatable :: charge, dielectric
 
    call get_arguments(input, model_id, input_format, grad, charge, json, dielectric, error)
@@ -91,15 +91,6 @@ program main
 
    call write_ascii_model(output_unit, mol, model)
 
-   allocate(cn(mol%nat), qloc(mol%nat))
-   if (grad) then
-      allocate(dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat))
-      allocate(dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat))
-   end if
-
-   call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
-   call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
-
    allocate(energy(mol%nat), qvec(mol%nat))
    energy(:) = 0.0_wp
    if (grad) then
@@ -108,8 +99,7 @@ program main
       sigma(:, :) = 0.0_wp
    end if
 
-   call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
-      & energy, gradient, sigma, qvec, dqdr, dqdL)
+   call model%solve(mol, cn, qloc, energy, gradient, sigma, qvec)
 
    call write_ascii_properties(output_unit, mol, model, cn, qvec)
    call write_ascii_results(output_unit, mol, energy, gradient, sigma)

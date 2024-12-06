@@ -219,6 +219,16 @@ subroutine solve(self, mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
    type(wignerseitz_cell_type) :: wsc
    type(mchrg_cache) :: cache
 
+   allocate(cn(mol%nat), qloc(mol%nat))
+   if (grad) then
+      allocate(dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat))
+      allocate(dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat))
+   end if
+
+   call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
+   call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
+
+
    ndim = mol%nat + 1
    if (any(mol%periodic)) then
       call new_wignerseitz_cell(wsc, mol)
