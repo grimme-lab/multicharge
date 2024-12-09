@@ -13,10 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-subdir('cache')
+set(dir "${CMAKE_CURRENT_SOURCE_DIR}")
 
-srcs += files(
-  'eeq.f90',
-  'eeqbc.f90',
-  'type.F90',
+list(
+  APPEND srcs
+  "${dir}/eeq.f90"
+  "${dir}/eeqbc.f90"
+  "${dir}/type.F90"
 )
+
+set(srcs "${srcs}" PARENT_SCOPE)

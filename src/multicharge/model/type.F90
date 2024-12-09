@@ -35,6 +35,7 @@ module multicharge_model_type
    use multicharge_ewald, only: get_alpha
    use multicharge_lapack, only: sytrf, sytrs, sytri
    use multicharge_wignerseitz, only: wignerseitz_cell_type, new_wignerseitz_cell
+   use multicharge_model_cache, only: mchrg_cache
    implicit none
    private
 
@@ -67,43 +68,78 @@ module multicharge_model_type
       procedure :: solve
       !> Calculate local charges from electronegativity weighted CN
       procedure :: local_charge
+      !> Update cache
+      procedure(update), deferred :: update
       !> Calculate right-hand side (electronegativity)
-      procedure(get_vrhs), deferred :: get_vrhs
+      procedure(get_xvec), deferred :: get_xvec
       !> Calculate Coulomb matrix
+      procedure(get_coulomb_matrix), deferred :: get_coulomb_matrix
+      !> Molecular
       procedure(get_amat_0d), deferred :: get_amat_0d
-      !> Calculate Coulomb matrix periodic
+      !> Preiodic
       procedure(get_amat_3d), deferred :: get_amat_3d
       !> Calculate Coulomb matrix derivative
+      procedure(get_coulomb_derivs), deferred :: get_coulomb_derivs
+      !> Molecular
       procedure(get_damat_0d), deferred :: get_damat_0d
-      !> Calculate Coulomb matrix derivative periodic
+      !> Periodic
       procedure(get_damat_3d), deferred :: get_damat_3d
    end type mchrg_model_type
 
    abstract interface
-
-      subroutine get_vrhs(self, mol, cn, qloc, xvec, dcndr, dcndL, &
-         & dqlocdr, dqlocdL, dxdr, dxdL)
-         import :: mchrg_model_type, structure_type, wp
+      subroutine update(self, mol, cache, cn, qloc, grad)
+         import :: mchrg_model_type, structure_type, mchrg_cache, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
-         real(wp), intent(in) :: cn(:)
-         real(wp), intent(in) :: qloc(:)
+         class(mchrg_cache), intent(out) :: cache
+         real(wp), intent(in), target :: cn(:), qloc(:)
+         logical, intent(in) :: grad
+      end subroutine update
+
+      subroutine get_coulomb_matrix(self, mol, cache, amat)
+         import :: mchrg_model_type, structure_type, mchrg_cache, wp
+         class(mchrg_model_type), intent(in) :: self
+         type(structure_type), intent(in) :: mol
+         class(mchrg_cache), intent(in) :: cache
+         real(wp), intent(out) :: amat(:, :)
+      end subroutine get_coulomb_matrix
+
+      subroutine get_coulomb_derivs(self, mol, cache, amat, vrhs, dadr, dadL, atrace)
+         import :: mchrg_model_type, structure_type, mchrg_cache, wp
+         class(mchrg_model_type), intent(in) :: self
+         type(structure_type), intent(in) :: mol
+         class(mchrg_cache), intent(in) :: cache
+         real(wp), intent(in) :: amat(:, :), vrhs(:)
+         real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
+      end subroutine get_coulomb_derivs
+
+      subroutine get_xvec(self, mol, cache, xvec, dxdr, dxdL)
+         import :: mchrg_model_type, mchrg_cache, structure_type, wp
+         class(mchrg_model_type), intent(in) :: self
+         type(structure_type), intent(in) :: mol
+         class(mchrg_cache), intent(inout) :: cache
          real(wp), intent(out) :: xvec(:)
-         real(wp), intent(in), optional :: dcndr(:, :, :)
-         real(wp), intent(in), optional :: dcndL(:, :, :)
-         real(wp), intent(in), optional :: dqlocdr(:, :, :)
-         real(wp), intent(in), optional :: dqlocdL(:, :, :)
          real(wp), intent(out), optional :: dxdr(:, :, :)
          real(wp), intent(out), optional :: dxdL(:, :, :)
-      end subroutine get_vrhs
+      end subroutine get_xvec
+
+      subroutine get_xvec_derivs(self, mol, cache, xvec, dxdr, dxdL)
+         import :: mchrg_model_type, structure_type, mchrg_cache, wp
+         class(mchrg_model_type), intent(in) :: self
+         type(structure_type), intent(in) :: mol
+         class(mchrg_cache), intent(in) :: cache
+         real(wp), intent(in) :: xvec(:)
+         real(wp), intent(out) :: dxdr(:, :, :)
+         real(wp), intent(out) :: dxdL(:, :, :)
+      end subroutine get_xvec_derivs
 
       subroutine get_amat_0d(self, mol, cn, qloc, amat)
          import :: mchrg_model_type, structure_type, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
-         real(wp), intent(in) :: cn(:)
-         real(wp), intent(in) :: qloc(:)
          real(wp), intent(out) :: amat(:, :)
+         real(wp), intent(in), optional :: cn(:)
+         real(wp), intent(in), optional :: qloc(:)
       end subroutine get_amat_0d
 
       subroutine get_amat_3d(self, mol, wsc, alpha, amat)
@@ -121,16 +157,16 @@ module multicharge_model_type
          import :: mchrg_model_type, structure_type, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
-         real(wp), intent(in) :: cn(:)
-         real(wp), intent(in) :: qloc(:)
          real(wp), intent(in) :: qvec(:)
-         real(wp), intent(in) :: dcndr(:, :, :)
-         real(wp), intent(in) :: dcndL(:, :, :)
-         real(wp), intent(in) :: dqlocdr(:, :, :)
-         real(wp), intent(in) :: dqlocdL(:, :, :)
          real(wp), intent(out) :: dadr(:, :, :)
          real(wp), intent(out) :: dadL(:, :, :)
          real(wp), intent(out) :: atrace(:, :)
+         real(wp), intent(in), optional :: cn(:)
+         real(wp), intent(in), optional :: qloc(:)
+         real(wp), intent(in), optional :: dcndr(:, :, :)
+         real(wp), intent(in), optional :: dcndL(:, :, :)
+         real(wp), intent(in), optional :: dqlocdr(:, :, :)
+         real(wp), intent(in), optional :: dqlocdL(:, :, :)
       end subroutine get_damat_0d
 
       subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
@@ -173,71 +209,61 @@ contains
 
    end subroutine get_rec_trans
 
-   subroutine solve(self, mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
-         & energy, gradient, sigma, qvec, dqdr, dqdL)
+   subroutine solve(self, mol, cn, qloc, energy, gradient, sigma, qvec)
       class(mchrg_model_type), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      real(wp), intent(in), contiguous :: cn(:)
-      real(wp), intent(in), contiguous :: qloc(:)
-      real(wp), intent(in), contiguous, optional :: dcndr(:, :, :)
-      real(wp), intent(in), contiguous, optional :: dcndL(:, :, :)
-      real(wp), intent(in), contiguous, optional :: dqlocdr(:, :, :)
-      real(wp), intent(in), contiguous, optional :: dqlocdL(:, :, :)
+      real(wp), intent(in), target, contiguous :: cn(:)
+      real(wp), intent(in), target, contiguous :: qloc(:)
       real(wp), intent(out), contiguous, optional :: qvec(:)
-      real(wp), intent(out), contiguous, optional :: dqdr(:, :, :)
-      real(wp), intent(out), contiguous, optional :: dqdL(:, :, :)
       real(wp), intent(inout), contiguous, optional :: energy(:)
       real(wp), intent(inout), contiguous, optional :: gradient(:, :)
       real(wp), intent(inout), contiguous, optional :: sigma(:, :)
 
       integer :: ic, jc, iat, ndim
       logical :: grad, cpq, dcn
-      real(wp) :: alpha
       integer(ik) :: info
       integer(ik), allocatable :: ipiv(:)
 
-      real(wp), allocatable :: xvec(:), vrhs(:), amat(:, :), ainv(:, :)
-      real(wp), allocatable :: dxdr(:, :, :), dxdL(:, :, :), &
-         & dadr(:, :, :), dadL(:, :, :), atrace(:, :), res(:)
-      type(wignerseitz_cell_type) :: wsc
+      !> Variables for solving ES equation
+      real(wp), allocatable :: xvec(:), vrhs(:), amat(:, :)
+      real(wp), allocatable :: ainv(:, :)
+      !> Gradients
+      real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :)
+      real(wp), allocatable :: dxdr(:, :, :), dxdL(:, :, :)
+      real(wp), allocatable :: dqdr(:, :, :), dqdL(:, :, :)
+      class(mchrg_cache) :: cache
 
+      !> Calculate gradient if the respective array is allocated
+      grad = present(gradient) .and. allocated(gradient) .and. present(sigma) .and. allocated(sigma)
+      ! dcn = present(dcndr) .and. present(dcndL)
+      ! grad = present(gradient) .and. present(sigma) .and. dcn
+      ! cpq = present(dqdr) .and. present(dqdL) .and. dcn
+
+      !> Prepare CN and local charges arrays
       allocate (cn(mol%nat), qloc(mol%nat))
-      if (grad) then
-         allocate (dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat))
-         allocate (dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat))
-      end if
 
-      call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
-      call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
+      !> Update cache, allocate arrays
+      call self%update(mol, cache, cn, qloc, grad)
 
+      !> Get CNs and local charges
+      call self%ncoord%get_coordination_number(mol, trans, cn, cache%dcndr, cache%dcndL)
+      call self%local_charge(mol, trans, qloc, cache%dqlocdr, cache%dqlocdL)
+
+      !> Prepare amat and EN vector
       ndim = mol%nat + 1
-      if (any(mol%periodic)) then
-         call new_wignerseitz_cell(wsc, mol)
-         call get_alpha(mol%lattice, alpha)
-      end if
+      allocate (amat(ndim, ndim))
 
-      dcn = present(dcndr) .and. present(dcndL)
-      grad = present(gradient) .and. present(sigma) .and. dcn
-      cpq = present(dqdr) .and. present(dqdL) .and. dcn
+      !> Get amat
+      call self%get_coulomb_matrix(mol, cache, amat)
 
-      allocate (amat(ndim, ndim), xvec(ndim))
-      allocate (ipiv(ndim))
-      if (grad .or. cpq) then
-         allocate (dxdr(3, mol%nat, ndim), dxdL(3, 3, ndim))
-      end if
-
-      call self%get_vrhs(mol, cn, qloc, xvec, dcndr, dcndL, &
-         & dqlocdr, dqlocdL, dxdr, dxdL)
-
-      if (any(mol%periodic)) then
-         call self%get_amat_3d(mol, wsc, alpha, amat)
-      else
-         call self%get_amat_0d(mol, cn, qloc, amat)
-      end if
+      !> Get RHS of ES equation
+      allocate (xvec(ndim))
+      call self%get_xvec(mol, cache, xvec, dxdr, dxdL)
 
       vrhs = xvec
       ainv = amat
 
+      allocate (ipiv(ndim))
       call sytrf(ainv, ipiv, info=info, uplo='l')
 
       if (info == 0) then
@@ -260,30 +286,30 @@ contains
          qvec(:) = vrhs(:mol%nat)
       end if
 
+      !> Solve
       if (present(energy)) then
-         call symv(amat(:mol%nat, :mol%nat), vrhs(:mol%nat), xvec(:mol%nat), alpha=0.5_wp, beta=-1.0_wp, uplo='l')
+         call symv(amat(:, :mol%nat), vrhs(:mol%nat), xvec(:mol%nat), alpha=0.5_wp, beta=-1.0_wp, uplo='l')
          energy(:) = energy(:) + vrhs(:mol%nat)*xvec(:mol%nat)
       end if
 
-      if (grad .or. cpq) then
+      !> Allocate and get amat derivatives
+      if (grad) then ! .or. cpq
          allocate (dadr(3, mol%nat, ndim), dadL(3, 3, ndim), atrace(3, mol%nat))
-         if (any(mol%periodic)) then
-            call self%get_damat_3d(mol, wsc, alpha, vrhs, dadr, dadL, atrace)
-         else
-            call self%get_damat_0d(mol, cn, qloc, vrhs, dcndr, dcndL, &
-            & dqlocdr, dqlocdL, dadr, dadL, atrace)
-         end if
-      end if
+         allocate (dxdr(3, mol%nat, ndim), dxdL(3, 3, ndim))
+         call self%get_xvec_derivs(mol, cache, xvec, dxdr, dxdL)
+         call self%get_coulomb_derivs(mol, cache, amat, dadr, dadL, atrace)
+         !end if
 
-      if (grad) then
+         !if (grad) then
          gradient = 0.0_wp
-         call gemv(dadr(:, :, :mol%nat), vrhs(:mol%nat), gradient, beta=1.0_wp)!, alpha=0.5_wp)
-         call gemv(dxdr(:, :, :mol%nat), vrhs(:mol%nat), gradient, beta=1.0_wp, alpha=-1.0_wp)
+         call gemv(dadr, vrhs, gradient, beta=1.0_wp)
+         call gemv(dxdr, vrhs, gradient, beta=1.0_wp, alpha=-1.0_wp)
          call gemv(dadL, vrhs, sigma, beta=1.0_wp, alpha=0.5_wp)
          call gemv(dxdL, vrhs, sigma, beta=1.0_wp, alpha=-1.0_wp)
-      end if
+         !end if
 
-      if (cpq) then
+         !if (cpq) then
+         ! NOTE: this seems pointless now since neither array is returned
          do iat = 1, mol%nat
             dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
             dadr(:, :, iat) = -dxdr(:, :, iat) + dadr(:, :, iat)
