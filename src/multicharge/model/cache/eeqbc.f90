@@ -26,8 +26,10 @@ module multicharge_eeqbc_cache
 
    !> Cache for the EEQ-BC charge model
    type, extends(mchrg_cache), public :: eeqbc_cache
-      !> Constraint matrix
+      !> Full constraint matrix for 0d case
       real(wp), allocatable :: cmat(:, :)
+      !> Contributions for every WSC image for diagonal elements of constraint matrix
+      real(wp), allocatable :: cmat_diag(:, :)
       !> Derivative of constraint matrix w.r.t positions
       real(wp), allocatable :: dcdr(:, :, :)
       !> Derivative of constraint matrix w.r.t lattice vectors
@@ -47,10 +49,14 @@ contains
       if (any(mol%periodic)) then
          call new_wignerseitz_cell(self%wsc, mol)
          call get_alpha(mol%lattice, self%alpha)
+         !> Allocate cmat diagonal WSC image contributions
+         ! NOTE: one additional dimension for T=0
+         allocate (self%cmat_diag(mol%nat, self%wsc%nimg_max+1))
+      else
+         !> Allocate cmat
+         allocate (self%cmat(mol%nat + 1, mol%nat + 1))
       end if
 
-      !> Allocate cmat and derivs
-      allocate (self%cmat(mol%nat + 1, mol%nat + 1))
       if (grad) then
          allocate (self%dcndr(3, mol%nat, mol%nat), self%dcndL(3, 3, mol%nat))
          allocate (self%dqlocdr(3, mol%nat, mol%nat), self%dqlocdL(3, 3, mol%nat))

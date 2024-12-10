@@ -100,7 +100,7 @@ module multicharge_model_type
          import :: mchrg_model_type, structure_type, mchrg_cache, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
-         class(mchrg_cache), intent(in) :: cache
+         class(mchrg_cache), intent(inout) :: cache
          real(wp), intent(out) :: amat(:, :)
       end subroutine get_coulomb_matrix
 
@@ -108,7 +108,7 @@ module multicharge_model_type
          import :: mchrg_model_type, structure_type, mchrg_cache, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
-         class(mchrg_cache), intent(in) :: cache
+         class(mchrg_cache), intent(inout) :: cache
          real(wp), intent(in) :: amat(:, :), vrhs(:)
          real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
       end subroutine get_coulomb_derivs
@@ -127,26 +127,28 @@ module multicharge_model_type
          import :: mchrg_model_type, structure_type, mchrg_cache, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
-         class(mchrg_cache), intent(in) :: cache
+         class(mchrg_cache), intent(inout) :: cache
          real(wp), intent(in) :: xvec(:)
          real(wp), intent(out) :: dxdr(:, :, :)
          real(wp), intent(out) :: dxdL(:, :, :)
       end subroutine get_xvec_derivs
 
-      subroutine get_amat_0d(self, mol, cn, qloc, amat)
-         import :: mchrg_model_type, structure_type, wp
+      subroutine get_amat_0d(self, mol, cache, cn, qloc, amat)
+         import :: mchrg_model_type, mchrg_cache, structure_type, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
+         class(mchrg_cache), intent(inout) :: cache
          real(wp), intent(out) :: amat(:, :)
          real(wp), intent(in), optional :: cn(:)
          real(wp), intent(in), optional :: qloc(:)
       end subroutine get_amat_0d
 
-      subroutine get_amat_3d(self, mol, wsc, alpha, amat)
-         import :: mchrg_model_type, structure_type, &
+      subroutine get_amat_3d(self, mol, cache, wsc, alpha, amat)
+         import :: mchrg_model_type, mchrg_cache, structure_type, &
             & wignerseitz_cell_type, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
+         class(mchrg_cache), intent(inout) :: cache
          type(wignerseitz_cell_type), intent(in) :: wsc
          real(wp), intent(in) :: alpha
          real(wp), intent(out) :: amat(:, :)
@@ -258,7 +260,7 @@ contains
 
       !> Get RHS of ES equation
       allocate (xvec(ndim))
-      call self%get_xvec(mol, cache, xvec, dxdr, dxdL)
+      call self%get_xvec(mol, cache, xvec)
 
       vrhs = xvec
       ainv = amat

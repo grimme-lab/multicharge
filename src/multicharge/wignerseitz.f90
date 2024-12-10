@@ -23,6 +23,7 @@ module multicharge_wignerseitz
    public :: wignerseitz_cell_type, new_wignerseitz_cell
 
    type :: wignerseitz_cell_type
+      integer :: nimg_max
       integer, allocatable :: nimg(:, :)
       integer, allocatable :: tridx(:, :, :)
       real(wp), allocatable :: trans(:, :)
@@ -57,6 +58,7 @@ subroutine new_wignerseitz_cell(self, mol)
    allocate(self%nimg(mol%nat, mol%nat), self%tridx(ntr, mol%nat, mol%nat), &
       & tridx(ntr))
 
+   self%nimg_max = 0
    !$omp parallel do default(none) schedule(runtime) collapse(2) &
    !$omp shared(mol, trans, self) private(iat, jat, vec, nimg, tridx)
    do iat = 1, mol%nat
@@ -65,6 +67,7 @@ subroutine new_wignerseitz_cell(self, mol)
          call get_pairs(nimg, trans, vec, tridx)
          self%nimg(jat, iat) = nimg
          self%tridx(:, jat, iat) = tridx
+         self%nimg_max = max(nimg, self%nimg_max)
       end do
    end do
 
