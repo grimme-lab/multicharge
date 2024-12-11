@@ -19,7 +19,7 @@ list(
   APPEND srcs
   "${dir}/eeq.f90"
   "${dir}/eeqbc.f90"
-  "${dir}/type.F90"
+  "${dir}/type.f90"
 )
 
 set(srcs "${srcs}" PARENT_SCOPE)
