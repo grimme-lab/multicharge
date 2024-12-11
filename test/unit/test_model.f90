@@ -99,8 +99,8 @@ contains
       integer :: iat, ic
       real(wp), parameter :: trans(3, 1) = 0.0_wp
       real(wp), parameter :: step = 1.0e-6_wp
-      real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :)
-      real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
+      real(wp), allocatable :: cn(:)
+      real(wp), allocatable :: qloc(:)
       real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
       real(wp), allocatable :: qvec(:), numgrad(:, :, :), amatr(:, :), amatl(:, :)
       type(mchrg_cache) :: cache
@@ -114,7 +114,7 @@ contains
       ! Obtain the vector of charges
       call model%ncoord%get_coordination_number(mol, trans, cn)
       call model%local_charge(mol, trans, qloc)
-      call model%update(mol, .false., cache)
+      call model%update(mol, cache, cn, qloc, .false.)
       call model%solve(mol, cn, qloc, qvec=qvec)
 
       lp: do iat = 1, mol%nat
@@ -124,16 +124,16 @@ contains
             mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
-            call model%update(mol, .false., cache)
-            call model%get_amat_0d(mol, cache, cn, qloc, amatr)
+            call model%update(mol, cache, cn, qloc, .false.)
+            call model%get_coulomb_matrix(mol, cache, amatr)
 
             ! Left-hand side
             amatl(:, :) = 0.0_wp
             mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
-            call model%update(mol, .false., cache)
-            call model%get_amat_0d(mol, cache, cn, qloc, amatl)
+            call model%update(mol, cache, cn, qloc, .false.)
+            call model%get_coulomb_matrix(mol, cache, amatl)
 
             mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
             numgrad(ic, iat, :) = 0.5_wp*qvec(iat)*(amatr(iat, :) - amatl(iat, :))/step
@@ -141,11 +141,10 @@ contains
       end do lp
 
       ! Analytical gradient
-      call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
-      call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
-      call model%update(mol, .true., cache)
-      call model%get_damat_0d(mol, cache, cn, qloc, qvec, dcndr, dcndL, &
-         & dqlocdr, dqlocdL, dadr, dadL, atrace)
+      call model%ncoord%get_coordination_number(mol, trans, cn, cache%dcndr, cache%dcndL)
+      call model%local_charge(mol, trans, qloc, cache%dqlocdr, cache%dqlocdL)
+      call model%update(mol, cache, cn, qloc, .false.)
+      call model%get_coulomb_derivs(mol, cache, amat, qvec, dadr, dadL, atrace)
 
       if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the A matrix does not match")
