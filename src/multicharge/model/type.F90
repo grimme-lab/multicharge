@@ -209,7 +209,7 @@ contains
 
    end subroutine get_rec_trans
 
-   subroutine solve(self, mol, cn, qloc, energy, gradient, sigma, qvec)
+   subroutine solve(self, mol, cn, qloc, energy, gradient, sigma, qvec, dqdr, dqdL)
       class(mchrg_model_type), intent(in) :: self
       type(structure_type), intent(in) :: mol
       real(wp), intent(inout), contiguous :: cn(:)
@@ -218,6 +218,8 @@ contains
       real(wp), intent(inout), contiguous, optional :: energy(:)
       real(wp), intent(inout), contiguous, optional :: gradient(:, :)
       real(wp), intent(inout), contiguous, optional :: sigma(:, :)
+      real(wp), intent(out), contiguous, optional :: dqdr(:, :, :)
+      real(wp), intent(out), contiguous, optional :: dqdL(:, :, :)
 
       integer :: ic, jc, iat, ndim
       logical :: grad, cpq, dcn
@@ -230,7 +232,6 @@ contains
       !> Gradients
       real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :)
       real(wp), allocatable :: dxdr(:, :, :), dxdL(:, :, :)
-      real(wp), allocatable :: dqdr(:, :, :), dqdL(:, :, :)
       class(mchrg_cache) :: cache
 
       !> Calculate gradient if the respective arrays are present
@@ -244,8 +245,13 @@ contains
       call self%update(mol, cache, cn, qloc, grad)
 
       !> Get CNs and local charges
-      call self%ncoord%get_coordination_number(mol, trans, cn, cache%dcndr, cache%dcndL)
-      call self%local_charge(mol, trans, qloc, cache%dqlocdr, cache%dqlocdL)
+      if (grad) then
+         call self%ncoord%get_coordination_number(mol, trans, cn)
+         call self%local_charge(mol, trans, qloc)
+      else
+         call self%ncoord%get_coordination_number(mol, trans, cn, cache%dcndr, cache%dcndL)
+         call self%local_charge(mol, trans, qloc, cache%dqlocdr, cache%dqlocdL)
+      end if
 
       !> Get amat
       ndim = mol%nat + 1
@@ -305,7 +311,6 @@ contains
          !end if
 
          !if (cpq) then
-         ! NOTE: this seems pointless now since neither array is returned
          do iat = 1, mol%nat
             dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
             dadr(:, :, iat) = -dxdr(:, :, iat) + dadr(:, :, iat)

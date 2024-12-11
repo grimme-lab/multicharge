@@ -633,7 +633,6 @@ contains
       ! call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
       ! call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
-      ! FIXME: maybe add dqdr, dqdL to solve signature or make separate get_q_derivs
       call model%solve(mol, cn, qloc, dqdr=dqdr, dqdL=dqdL)
       if (allocated(error)) return
 
@@ -701,7 +700,6 @@ contains
       ! call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
       ! call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
-      ! FIXME: maybe add dqdr, dqdL to solve signature or make separate get_q_derivs
       call model%solve(mol, cn, qloc, dqdr=dqdr, dqdL=dqdL)
       if (allocated(error)) return
 
