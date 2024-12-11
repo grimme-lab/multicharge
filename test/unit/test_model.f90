@@ -105,9 +105,7 @@ contains
       real(wp), allocatable :: qvec(:), numgrad(:, :, :), amatr(:, :), amatl(:, :)
       type(mchrg_cache) :: cache
 
-      allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
-         & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
-         & amatr(mol%nat + 1, mol%nat + 1), amatl(mol%nat + 1, mol%nat + 1), &
+      allocate (cn(mol%nat), amatr(mol%nat + 1, mol%nat + 1), amatl(mol%nat + 1, mol%nat + 1), &
          & dadr(3, mol%nat, mol%nat + 1), dadL(3, 3, mol%nat + 1), atrace(3, mol%nat), &
          & numgrad(3, mol%nat, mol%nat + 1), qvec(mol%nat))
 
@@ -144,7 +142,7 @@ contains
       call model%ncoord%get_coordination_number(mol, trans, cn, cache%dcndr, cache%dcndL)
       call model%local_charge(mol, trans, qloc, cache%dqlocdr, cache%dqlocdL)
       call model%update(mol, cache, cn, qloc, .false.)
-      call model%get_coulomb_derivs(mol, cache, amat, qvec, dadr, dadL, atrace)
+      call model%get_coulomb_derivs(mol, cache, qvec, dadr, dadL, atrace)
 
       if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the A matrix does not match")
@@ -187,7 +185,7 @@ contains
 
       call model%ncoord%get_coordination_number(mol, trans, cn)
       call model%local_charge(mol, trans, qloc)
-      call model%update(mol, .false., cache)
+      call model%update(mol, cache, cn, qloc, .false.)
       call model%solve(mol, cn, qloc, qvec=qvec)
       qvec = 1.0_wp
 
@@ -203,7 +201,7 @@ contains
             !call model%ncoord%get_coordination_number(mol, trans, cn)
             !call model%local_charge(mol, trans, qloc)
             !call model%update(mol, .false., cache)
-            call model%get_amat_0d(mol, cache, cn, qloc, amatr)
+            call model%get_coulomb_matrix(mol, cache, amatr)
             if (allocated(error)) exit lp
 
             amatl(:, :) = 0.0_wp
@@ -213,7 +211,7 @@ contains
             !call model%ncoord%get_coordination_number(mol, trans, cn)
             !call model%local_charge(mol, trans, qloc)
             !call model%update(mol, .false., cache)
-            call model%get_amat_0d(mol, cache, cn, qloc, amatl)
+            call model%get_coulomb_matrix(mol, cache, amatl)
             if (allocated(error)) exit lp
 
             eps(jc, ic) = eps(jc, ic) + step
@@ -231,13 +229,12 @@ contains
       !call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
       !call model%update(mol, .true., cache)
 
-      dcndr(:, :, :) = 0.0_wp
-      dcndL(:, :, :) = 0.0_wp
-      dqlocdr(:, :, :) = 0.0_wp
-      dqlocdL(:, :, :) = 0.0_wp
+      cache%dcndr(:, :, :) = 0.0_wp
+      cache%dcndL(:, :, :) = 0.0_wp
+      cache%dqlocdr(:, :, :) = 0.0_wp
+      cache%dqlocdL(:, :, :) = 0.0_wp
 
-      call model%get_damat_0d(mol, cache, cn, qloc, qvec, dcndr, dcndL, &
-         & dqlocdr, dqlocdL, dadr, dadL, atrace)
+      call model%get_coulomb_derivs(mol, cache, qvec, dadr, dadL, atrace)
       if (allocated(error)) return
 
       ! do iat = 1, mol%nat

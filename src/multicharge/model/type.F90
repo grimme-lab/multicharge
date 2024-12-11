@@ -104,12 +104,12 @@ module multicharge_model_type
          real(wp), intent(out) :: amat(:, :)
       end subroutine get_coulomb_matrix
 
-      subroutine get_coulomb_derivs(self, mol, cache, amat, vrhs, dadr, dadL, atrace)
+      subroutine get_coulomb_derivs(self, mol, cache, vrhs, dadr, dadL, atrace)
          import :: mchrg_model_type, structure_type, mchrg_cache, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
          class(mchrg_cache), intent(inout) :: cache
-         real(wp), intent(in) :: amat(:, :), vrhs(:)
+         real(wp), intent(in) :: vrhs(:)
          real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
       end subroutine get_coulomb_derivs
 
@@ -295,7 +295,7 @@ contains
          allocate (dadr(3, mol%nat, ndim), dadL(3, 3, ndim), atrace(3, mol%nat))
          allocate (dxdr(3, mol%nat, ndim), dxdL(3, 3, ndim))
          call self%get_xvec_derivs(mol, cache, xvec, dxdr, dxdL)
-         call self%get_coulomb_derivs(mol, cache, amat, dadr, dadL, atrace)
+         call self%get_coulomb_derivs(mol, cache, xvec, dadr, dadL, atrace)
          !end if
 
          !if (grad) then

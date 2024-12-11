@@ -253,11 +253,11 @@ contains
 
    end subroutine get_xvec_derivs
 
-   subroutine get_coulomb_derivs(self, mol, cache, amat, vrhs, dadr, dadL, atrace)
+   subroutine get_coulomb_derivs(self, mol, cache, vrhs, dadr, dadL, atrace)
       class(mchrg_model_type), intent(in) :: self
       type(structure_type), intent(in) :: mol
       class(mchrg_cache), intent(in) :: cache
-      real(wp), intent(in) :: amat(:, :), vrhs(:)
+      real(wp), intent(in) :: vrhs(:)
       real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
 
       if (any(mol%periodic)) then
