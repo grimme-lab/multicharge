@@ -212,8 +212,8 @@ contains
    subroutine solve(self, mol, cn, qloc, energy, gradient, sigma, qvec)
       class(mchrg_model_type), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      real(wp), intent(in), target, contiguous :: cn(:)
-      real(wp), intent(in), target, contiguous :: qloc(:)
+      real(wp), intent(inout), contiguous :: cn(:)
+      real(wp), intent(inout), contiguous :: qloc(:)
       real(wp), intent(out), contiguous, optional :: qvec(:)
       real(wp), intent(inout), contiguous, optional :: energy(:)
       real(wp), intent(inout), contiguous, optional :: gradient(:, :)
@@ -239,10 +239,8 @@ contains
       ! grad = present(gradient) .and. present(sigma) .and. dcn
       ! cpq = present(dqdr) .and. present(dqdL) .and. dcn
 
-      !> Prepare CN and local charges arrays
-      allocate (cn(mol%nat), qloc(mol%nat))
-
       !> Update cache
+      ! NOTE: only stores pointers to cn, qloc
       call self%update(mol, cache, cn, qloc, grad)
 
       !> Get CNs and local charges

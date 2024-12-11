@@ -109,10 +109,14 @@ contains
          & dadr(3, mol%nat, mol%nat + 1), dadL(3, 3, mol%nat + 1), atrace(3, mol%nat), &
          & numgrad(3, mol%nat, mol%nat + 1), qvec(mol%nat))
 
+      !> Prepare the model and cache to later also receive gradients
+      ! NOTE: further calls of update not necessary since the cache stores pointers to the
+      ! cn and qloc
+      call model%update(mol, cache, cn, qloc, .true.)
+
       ! Obtain the vector of charges
-      call model%ncoord%get_coordination_number(mol, trans, cn)
-      call model%local_charge(mol, trans, qloc)
-      call model%update(mol, cache, cn, qloc, .false.)
+      ! call model%ncoord%get_coordination_number(mol, trans, cn)
+      ! call model%local_charge(mol, trans, qloc)
       call model%solve(mol, cn, qloc, qvec=qvec)
 
       lp: do iat = 1, mol%nat
@@ -122,7 +126,6 @@ contains
             mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
-            call model%update(mol, cache, cn, qloc, .false.)
             call model%get_coulomb_matrix(mol, cache, amatr)
 
             ! Left-hand side
@@ -130,7 +133,6 @@ contains
             mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
-            call model%update(mol, cache, cn, qloc, .false.)
             call model%get_coulomb_matrix(mol, cache, amatl)
 
             mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
@@ -141,7 +143,6 @@ contains
       ! Analytical gradient
       call model%ncoord%get_coordination_number(mol, trans, cn, cache%dcndr, cache%dcndL)
       call model%local_charge(mol, trans, qloc, cache%dqlocdr, cache%dqlocdL)
-      call model%update(mol, cache, cn, qloc, .false.)
       call model%get_coulomb_derivs(mol, cache, qvec, dadr, dadL, atrace)
 
       if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2)) then
@@ -183,9 +184,13 @@ contains
          & dadr(3, mol%nat, mol%nat + 1), dadL(3, 3, mol%nat + 1), atrace(3, mol%nat), &
          & numsigma(3, 3, mol%nat + 1), qvec(mol%nat), xyz(3, mol%nat))
 
-      call model%ncoord%get_coordination_number(mol, trans, cn)
-      call model%local_charge(mol, trans, qloc)
-      call model%update(mol, cache, cn, qloc, .false.)
+      !> Prepare the model and cache to later also receive gradients
+      ! NOTE: further calls of update not necessary since the cache stores pointers to the
+      ! cn and qloc
+      call model%update(mol, cache, cn, qloc, .true.)
+
+      ! call model%ncoord%get_coordination_number(mol, trans, cn)
+      ! call model%local_charge(mol, trans, qloc)
       call model%solve(mol, cn, qloc, qvec=qvec)
       qvec = 1.0_wp
 
@@ -275,16 +280,17 @@ contains
       integer :: iat, ic
       real(wp), parameter :: trans(3, 1) = 0.0_wp
       real(wp), parameter :: step = 1.0e-6_wp
-      real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :)
-      real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
+      real(wp), allocatable :: cn(:)
+      real(wp), allocatable :: qloc(:)
       real(wp), allocatable :: dbdr(:, :, :), dbdL(:, :, :)
       real(wp), allocatable :: numgrad(:, :, :), xvecr(:), xvecl(:)
       type(mchrg_cache) :: cache
 
-      allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
-         & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
+      allocate (cn(mol%nat), qloc(mol%nat), &
          & xvecr(mol%nat + 1), xvecl(mol%nat + 1), numgrad(3, mol%nat, mol%nat + 1), &
          & dbdr(3, mol%nat, mol%nat + 1), dbdL(3, 3, mol%nat + 1))
+
+      call model%update(mol, cache, cn, qloc, .true.)
 
       lp: do iat = 1, mol%nat
          do ic = 1, 3
@@ -293,16 +299,15 @@ contains
             mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
-            call model%update(mol, .false., cache)
-            call model%get_vrhs(mol, cache, cn, qloc, xvecr)
+            call model%get_xvec(mol, cache, xvecr)
 
             ! Left-hand side
             xvecl(:) = 0.0_wp
             mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
-            call model%update(mol, .false., cache)
-            call model%get_vrhs(mol, cache, cn, qloc, xvecl)
+            call model%update(mol, cache, cn, qloc, .false.)
+            call model%get_xvec(mol, cache, xvecl)
 
             mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
             numgrad(ic, iat, :) = 0.5_wp*(xvecr(:) - xvecl(:))/step
@@ -310,11 +315,9 @@ contains
       end do lp
 
       ! Analytical gradient
-      call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
-      call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
-      call model%update(mol, .true., cache)
-      call model%get_vrhs(mol, cache, cn, qloc, xvecr, dcndr, dcndL, &
-         & dqlocdr, dqlocdL, dbdr, dbdL)
+      call model%ncoord%get_coordination_number(mol, trans, cn, cache%dcndr, cache%dcndL)
+      call model%local_charge(mol, trans, qloc, cache%dqlocdr, cache%dqlocdL)
+      call model%get_xvec_derivs(mol, cache, xvecr, dbdr, dbdL)
 
       if (any(abs(dbdr(:, :, :) - numgrad(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the b vector does not match")
@@ -396,10 +399,10 @@ contains
 
       allocate (cn(mol%nat), qloc(mol%nat))
 
-      call model%ncoord%get_coordination_number(mol, trans, cn)
-      if (allocated(model%ncoord_en)) then
-         call model%local_charge(mol, trans, qloc)
-      end if
+      ! call model%ncoord%get_coordination_number(mol, trans, cn)
+      ! if (allocated(model%ncoord_en)) then
+      !    call model%local_charge(mol, trans, qloc)
+      ! end if
 
       if (present(eref)) then
          allocate (energy(mol%nat))
@@ -469,16 +472,12 @@ contains
          do ic = 1, 3
             energy(:) = 0.0_wp
             mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
-            call model%ncoord%get_coordination_number(mol, trans, cn)
-            call model%local_charge(mol, trans, qloc)
             call model%solve(mol, cn, qloc, energy=energy)
             if (allocated(error)) exit lp
             er = sum(energy)
 
             energy(:) = 0.0_wp
             mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
-            call model%ncoord%get_coordination_number(mol, trans, cn)
-            call model%local_charge(mol, trans, qloc)
             call model%solve(mol, cn, qloc, energy=energy)
             if (allocated(error)) exit lp
             el = sum(energy)
@@ -489,8 +488,8 @@ contains
       end do lp
       if (allocated(error)) return
 
-      call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
-      call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
+      ! call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
+      ! call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
       ! dcndr(:, :, :) = 0.0_wp
       ! dcndL(:, :, :) = 0.0_wp
@@ -498,8 +497,7 @@ contains
       ! dqlocdL(:, :, :) = 0.0_wp
 
       energy(:) = 0.0_wp
-      call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
-         & gradient=gradient, sigma=sigma)
+      call model%solve(mol, cn, qloc, gradient=gradient, sigma=sigma)
       if (allocated(error)) return
 
       if (any(abs(gradient(:, :) - numgrad(:, :)) > thr2)) then
@@ -551,8 +549,8 @@ contains
             eps(jc, ic) = eps(jc, ic) + step
             mol%xyz(:, :) = matmul(eps, xyz)
             lattr(:, :) = matmul(eps, trans)
-            call model%ncoord%get_coordination_number(mol, trans, cn)
-            call model%local_charge(mol, trans, qloc)
+            ! call model%ncoord%get_coordination_number(mol, trans, cn)
+            ! call model%local_charge(mol, trans, qloc)
             call model%solve(mol, cn, qloc, energy=energy)
             if (allocated(error)) exit lp
             er = sum(energy)
@@ -561,8 +559,8 @@ contains
             eps(jc, ic) = eps(jc, ic) - 2*step
             mol%xyz(:, :) = matmul(eps, xyz)
             lattr(:, :) = matmul(eps, trans)
-            call model%ncoord%get_coordination_number(mol, trans, cn)
-            call model%local_charge(mol, trans, qloc)
+            ! call model%ncoord%get_coordination_number(mol, trans, cn)
+            ! call model%local_charge(mol, trans, qloc)
             call model%solve(mol, cn, qloc, energy=energy)
             if (allocated(error)) exit lp
             el = sum(energy)
@@ -575,12 +573,11 @@ contains
       end do lp
       if (allocated(error)) return
 
-      call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
-      call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
+      ! call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
+      ! call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
       energy(:) = 0.0_wp
-      call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
-         & energy, gradient, sigma)
+      call model%solve(mol, cn, qloc, energy, gradient, sigma)
       if (allocated(error)) return
 
       if (any(abs(sigma(:, :) - numsigma(:, :)) > thr2)) then
@@ -616,14 +613,14 @@ contains
       lp: do iat = 1, mol%nat
          do ic = 1, 3
             mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
-            call model%ncoord%get_coordination_number(mol, trans, cn)
-            call model%local_charge(mol, trans, qloc)
+            ! call model%ncoord%get_coordination_number(mol, trans, cn)
+            ! call model%local_charge(mol, trans, qloc)
             call model%solve(mol, cn, qloc, qvec=qr)
             if (allocated(error)) exit lp
 
             mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
-            call model%ncoord%get_coordination_number(mol, trans, cn)
-            call model%local_charge(mol, trans, qloc)
+            ! call model%ncoord%get_coordination_number(mol, trans, cn)
+            ! call model%local_charge(mol, trans, qloc)
             call model%solve(mol, cn, qloc, qvec=ql)
             if (allocated(error)) exit lp
 
@@ -633,11 +630,11 @@ contains
       end do lp
       if (allocated(error)) return
 
-      call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
-      call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
+      ! call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
+      ! call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
-      call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
-         & dqdr=dqdr, dqdL=dqdL)
+      ! FIXME: maybe add dqdr, dqdL to solve signature or make separate get_q_derivs
+      call model%solve(mol, cn, qloc, dqdr=dqdr, dqdL=dqdL)
       if (allocated(error)) return
 
       if (any(abs(dqdr(:, :, :) - numdr(:, :, :)) > thr2)) then
@@ -680,16 +677,16 @@ contains
             eps(jc, ic) = eps(jc, ic) + step
             mol%xyz(:, :) = matmul(eps, xyz)
             lattr(:, :) = matmul(eps, trans)
-            call model%ncoord%get_coordination_number(mol, trans, cn)
-            call model%local_charge(mol, trans, qloc)
+            ! call model%ncoord%get_coordination_number(mol, trans, cn)
+            ! call model%local_charge(mol, trans, qloc)
             call model%solve(mol, cn, qloc, qvec=qr)
             if (allocated(error)) exit lp
 
             eps(jc, ic) = eps(jc, ic) - 2*step
             mol%xyz(:, :) = matmul(eps, xyz)
             lattr(:, :) = matmul(eps, trans)
-            call model%ncoord%get_coordination_number(mol, trans, cn)
-            call model%local_charge(mol, trans, qloc)
+            ! call model%ncoord%get_coordination_number(mol, trans, cn)
+            ! call model%local_charge(mol, trans, qloc)
             call model%solve(mol, cn, qloc, qvec=ql)
             if (allocated(error)) exit lp
 
@@ -701,11 +698,11 @@ contains
       end do lp
       if (allocated(error)) return
 
-      call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
-      call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
+      ! call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
+      ! call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
-      call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
-         & dqdr=dqdr, dqdL=dqdL)
+      ! FIXME: maybe add dqdr, dqdL to solve signature or make separate get_q_derivs
+      call model%solve(mol, cn, qloc, dqdr=dqdr, dqdL=dqdL)
       if (allocated(error)) return
 
       if (any(abs(dqdL(:, :, :) - numdL(:, :, :)) > thr2)) then

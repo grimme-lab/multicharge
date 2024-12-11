@@ -121,7 +121,6 @@ contains
       type(structure_type), intent(in) :: mol
       class(mchrg_cache), intent(inout) :: cache
       real(wp), intent(out) :: xvec(:)
-      real(wp), parameter :: reg = 1.0e-14_wp
 
       integer :: iat, izp
       real(wp) :: tmp
@@ -144,6 +143,7 @@ contains
       real(wp), intent(in) :: xvec(:)
       real(wp), intent(out) :: dxdr(:, :, :)
       real(wp), intent(out) :: dxdL(:, :, :)
+      real(wp), parameter :: reg = 1.0e-14_wp
 
       integer :: iat
 
