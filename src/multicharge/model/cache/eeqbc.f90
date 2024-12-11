@@ -34,6 +34,7 @@ module multicharge_eeqbc_cache
       real(wp), allocatable :: dcdr(:, :, :)
       !> Derivative of constraint matrix w.r.t lattice vectors
       real(wp), allocatable :: dcdL(:, :, :)
+      real(wp), allocatable :: xtmp(:)
    contains
       !>
       procedure :: update
@@ -51,11 +52,14 @@ contains
          call get_alpha(mol%lattice, self%alpha)
          !> Allocate cmat diagonal WSC image contributions
          ! NOTE: one additional dimension for T=0
-         allocate (self%cmat_diag(mol%nat, self%wsc%nimg_max+1))
+         allocate (self%cmat_diag(mol%nat, self%wsc%nimg_max + 1))
       else
          !> Allocate cmat
          allocate (self%cmat(mol%nat + 1, mol%nat + 1))
       end if
+
+      !> Allocate (for get_xvec and xvec_derivs)
+      allocate (self%xtmp(mol%nat + 1))
 
       if (grad) then
          allocate (self%dcndr(3, mol%nat, mol%nat), self%dcndL(3, 3, mol%nat))

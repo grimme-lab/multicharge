@@ -179,8 +179,14 @@ contains
       if (any(mol%periodic)) then
          !> Get cmat diagonal contributions for all WSC images
          call self%get_cmat_diag_3d(mol, cache%cmat_diag)
+         ! if (grad) then
+         ! call self%get_dcmat_3d()
+         ! end if
       else
          call self%get_cmat_0d(mol, cache%cmat)
+         if (grad) then
+            call self%get_dcmat_0d(mol, cache%dcdr, cache%dcdL)
+         end if
       end if
 
       !> Refer CN and local charge arrays in cache
@@ -196,16 +202,15 @@ contains
 
       integer :: iat, izp
 
-      allocate (cache%tmp(mol%nat + 1))
       !$omp parallel do default(none) schedule(runtime) &
       !$omp shared(mol, self) private(iat, izp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
-         cache%tmp(iat) = -self%chi(izp) + self%kcnchi(izp)*cache%cn(iat) &
+         cache%xtmp(iat) = -self%chi(izp) + self%kcnchi(izp)*cache%cn(iat) &
             & + self%kqchi(izp)*cache%qloc(iat)
       end do
       cache%tmp(mol%nat + 1) = mol%charge
-      call gemv(cache%cmat, cache%tmp, xvec)
+      call gemv(cache%cmat, cache%xtmp, xvec)
 
    end subroutine get_xvec
 
@@ -240,8 +245,8 @@ contains
             dxdr(:, :, iat) = tmpdqloc*cache%dqlocdr(:, :, jat) + dxdr(:, :, iat)
             dxdL(:, :, iat) = tmpdqloc*cache%dqlocdL(:, :, jat) + dxdL(:, :, iat)
             ! Capacitance derivative
-            dxdr(:, iat, iat) = cache%tmp(jat)*cache%dcdr(:, iat, jat) + dxdr(:, iat, iat)
-            dxdr(:, iat, jat) = (cache%tmp(iat) - cache%tmp(jat))*cache%dcdr(:, iat, jat) &
+            dxdr(:, iat, iat) = cache%xtmp(jat)*cache%dcdr(:, iat, jat) + dxdr(:, iat, iat)
+            dxdr(:, iat, jat) = (cache%xtmp(iat) - cache%xtmp(jat))*cache%dcdr(:, iat, jat) &
                & + dxdr(:, iat, jat)
          end do
       end do
@@ -272,17 +277,17 @@ contains
       if (any(mol%periodic)) then
          call self%get_amat_3d(mol, cache%wsc, cache%alpha, amat, cache%cmat)
       else
-         call self%get_amat_0d(mol, amat, cache%cmat, cache%cn, cache%qloc)
+         call self%get_amat_0d(mol, amat, cache%cn, cache%qloc, cache%cmat)
       end if
    end subroutine get_colomb_matrix
 
-   subroutine get_amat_0d(self, mol, cache, cn, qloc, amat)
+   subroutine get_amat_0d(self, mol, amat, cn, qloc, cmat)
       class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), intent(inout) :: cache
-      real(wp), intent(in) :: cn(:)
-      real(wp), intent(in) :: qloc(:)
       real(wp), intent(out) :: amat(:, :)
+      real(wp), intent(in), optional :: cn(:)
+      real(wp), intent(in), optional :: qloc(:)
+      real(wp), intent(in), optional :: cmat(:, :)
 
       integer :: iat, jat, izp, jzp
       real(wp) :: vec(3), r2, gam2, tmp, norm_cn, radi, radj
@@ -383,7 +388,7 @@ contains
          end do
          ! Effective hardness (T=0 contribution)
          tmp = self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi
-         amat(iat, iat) = amat(iat, iat) + cache%cmat_diag(iat, wsc%nimg_max+1)*tmp + 1.0_wp
+         amat(iat, iat) = amat(iat, iat) + cache%cmat_diag(iat, wsc%nimg_max + 1)*tmp + 1.0_wp
       end do
 
       amat(mol%nat + 1, 1:mol%nat + 1) = 1.0_wp
@@ -714,7 +719,7 @@ contains
       real(wp), intent(out) :: cmat
 
       real(wp) :: r2, arg
-      
+
       r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
       ! Capacitance of bond between atom i and j
       arg = -kbc*(sqrt(r2) - rvdw)/rvdw
@@ -751,10 +756,11 @@ contains
                cmat(jat, img) = cmat(jat, img) + tmp
             end do
             !> Contribution for T=0
+            ! NOTE: do we need this really?
             vec = mol%xyz(:, iat) - mol%xyz(:, jat)
             call self%get_cmat_pair(mol, tmp, vec, rvdw, capi, capj)
-            cmat(iat, wsc%nimg_max+1) = cmat(iat, wsc%nimg_max+1) + tmp
-            cmat(jat, wsc%nimg_max+1) = cmat(jat, wsc%nimg_max+1) + tmp
+            cmat(iat, wsc%nimg_max + 1) = cmat(iat, wsc%nimg_max + 1) + tmp
+            cmat(jat, wsc%nimg_max + 1) = cmat(jat, wsc%nimg_max + 1) + tmp
          end do
       end do
    end subroutine get_cmat_diag_3d
@@ -762,8 +768,8 @@ contains
    subroutine get_dcmat_0d(self, mol, dcdr, dcdL)
       class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      real(wp), intent(out), optional :: dcdr(:, :, :)
-      real(wp), intent(out), optional :: dcdL(:, :, :)
+      real(wp), intent(out) :: dcdr(:, :, :)
+      real(wp), intent(out) :: dcdL(:, :, :)
 
       integer :: iat, jat, izp, jzp, isp, jsp
       real(wp) :: vec(3), r2, rvdw, dtmp, arg, dG(3), dS(3, 3)

@@ -113,14 +113,12 @@ module multicharge_model_type
          real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
       end subroutine get_coulomb_derivs
 
-      subroutine get_xvec(self, mol, cache, xvec, dxdr, dxdL)
+      subroutine get_xvec(self, mol, cache, xvec)
          import :: mchrg_model_type, mchrg_cache, structure_type, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
          class(mchrg_cache), intent(inout) :: cache
          real(wp), intent(out) :: xvec(:)
-         real(wp), intent(out), optional :: dxdr(:, :, :)
-         real(wp), intent(out), optional :: dxdL(:, :, :)
       end subroutine get_xvec
 
       subroutine get_xvec_derivs(self, mol, cache, xvec, dxdr, dxdL)
@@ -133,14 +131,14 @@ module multicharge_model_type
          real(wp), intent(out) :: dxdL(:, :, :)
       end subroutine get_xvec_derivs
 
-      subroutine get_amat_0d(self, mol, cache, cn, qloc, amat)
+      subroutine get_amat_0d(self, mol, amat, cn, qloc, cmat)
          import :: mchrg_model_type, mchrg_cache, structure_type, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
-         class(mchrg_cache), intent(inout) :: cache
          real(wp), intent(out) :: amat(:, :)
          real(wp), intent(in), optional :: cn(:)
          real(wp), intent(in), optional :: qloc(:)
+         real(wp), intent(in), optional :: cmat(:, :)
       end subroutine get_amat_0d
 
       subroutine get_amat_3d(self, mol, cache, wsc, alpha, amat)
@@ -235,8 +233,8 @@ contains
       real(wp), allocatable :: dqdr(:, :, :), dqdL(:, :, :)
       class(mchrg_cache) :: cache
 
-      !> Calculate gradient if the respective array is allocated
-      grad = present(gradient) .and. allocated(gradient) .and. present(sigma) .and. allocated(sigma)
+      !> Calculate gradient if the respective arrays are present
+      grad = present(gradient) .and. present(sigma)
       ! dcn = present(dcndr) .and. present(dcndL)
       ! grad = present(gradient) .and. present(sigma) .and. dcn
       ! cpq = present(dqdr) .and. present(dqdL) .and. dcn
@@ -244,18 +242,16 @@ contains
       !> Prepare CN and local charges arrays
       allocate (cn(mol%nat), qloc(mol%nat))
 
-      !> Update cache, allocate arrays
+      !> Update cache
       call self%update(mol, cache, cn, qloc, grad)
 
       !> Get CNs and local charges
       call self%ncoord%get_coordination_number(mol, trans, cn, cache%dcndr, cache%dcndL)
       call self%local_charge(mol, trans, qloc, cache%dqlocdr, cache%dqlocdL)
 
-      !> Prepare amat and EN vector
+      !> Get amat
       ndim = mol%nat + 1
       allocate (amat(ndim, ndim))
-
-      !> Get amat
       call self%get_coulomb_matrix(mol, cache, amat)
 
       !> Get RHS of ES equation

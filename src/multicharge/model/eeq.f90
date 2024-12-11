@@ -25,6 +25,7 @@ module multicharge_model_eeq
    use mctc_ncoord, only: new_ncoord
    use multicharge_wignerseitz, only: wignerseitz_cell_type
    use multicharge_model_type, only: mchrg_model_type, get_dir_trans, get_rec_trans
+   use multicharge_model_cache, only: mchrg_cache
    implicit none
    private
 
@@ -32,16 +33,24 @@ module multicharge_model_eeq
 
    type, extends(mchrg_model_type) :: eeq_model
    contains
+      procedure :: update
+      procedure :: get_coulomb_matrix
+      procedure :: get_coulomb_derivs
       !> Calculate right-hand side (electronegativity)
-      procedure :: get_vrhs
+      procedure :: get_xvec
+      procedure :: get_xvec_derivs
       !> Calculate Coulomb matrix
       procedure :: get_amat_0d
       !> Calculate Coulomb matrix periodic
       procedure :: get_amat_3d
+      procedure :: get_amat_dir_3d
+      procedure :: get_amat_rec_3d
       !> Calculate Coulomb matrix derivative
       procedure :: get_damat_0d
       !> Calculate Coulomb matrix derivative periodic
       procedure :: get_damat_3d
+      procedure :: get_damat_dir_3d
+      procedure :: get_damat_rec_3d
    end type eeq_model
 
    real(wp), parameter :: sqrtpi = sqrt(pi)
@@ -91,56 +100,99 @@ contains
 
    end subroutine new_eeq_model
 
-   subroutine get_vrhs(self, mol, cn, qloc, xvec, dcndr, dcndL, &
-      & dqlocdr, dqlocdL, dxdr, dxdL)
+   subroutine update(self, mol, cache, cn, qloc, grad)
+      class(mchrg_model_type), intent(in) :: self
+      type(structure_type), intent(in) :: mol
+      class(mchrg_cache), intent(out) :: cache
+      real(wp), intent(in), target :: cn(:), qloc(:)
+      logical, intent(in) :: grad
+
+      allocate (eeq_cache :: cache)
+
+      call cache%update(mol, grad)
+
+      !> Refer CN and local charge arrays in cache
+      cache%cn => cn
+      cache%qloc => qloc
+   end subroutine update
+
+   subroutine get_xvec(self, mol, cache, xvec)
       class(eeq_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      real(wp), intent(in) :: cn(:)
-      real(wp), intent(in) :: qloc(:)
+      class(mchrg_cache), intent(inout) :: cache
       real(wp), intent(out) :: xvec(:)
-      real(wp), intent(in), optional :: dcndr(:, :, :)
-      real(wp), intent(in), optional :: dcndL(:, :, :)
-      real(wp), intent(in), optional :: dqlocdr(:, :, :)
-      real(wp), intent(in), optional :: dqlocdL(:, :, :)
-      real(wp), intent(out), optional :: dxdr(:, :, :)
-      real(wp), intent(out), optional :: dxdL(:, :, :)
       real(wp), parameter :: reg = 1.0e-14_wp
 
       integer :: iat, izp
       real(wp) :: tmp
 
-      if (present(dxdr) .and. present(dxdL) &
-         & .and. present(dcndr) .and. present(dcndL)) then
-         dxdr(:, :, :) = 0.0_wp
-         dxdL(:, :, :) = 0.0_wp
-         !$omp parallel do default(none) schedule(runtime) &
-         !$omp shared(mol, self, cn, dcndr, dcndL, xvec, dxdr, dxdL) &
-         !$omp private(iat, izp, tmp)
-         do iat = 1, mol%nat
-            izp = mol%id(iat)
-            tmp = self%kcnchi(izp)/sqrt(cn(iat) + reg)
-            xvec(iat) = -self%chi(izp) + tmp*cn(iat)
-            dxdr(:, :, iat) = 0.5_wp*tmp*dcndr(:, :, iat) + dxdr(:, :, iat)
-            dxdL(:, :, iat) = 0.5_wp*tmp*dcndL(:, :, iat) + dxdL(:, :, iat)
-         end do
-      else
-         !$omp parallel do default(none) schedule(runtime) &
-         !$omp shared(mol, self, cn, xvec) private(iat, izp, tmp)
-         do iat = 1, mol%nat
-            izp = mol%id(iat)
-            tmp = self%kcnchi(izp)/sqrt(cn(iat) + reg)
-            xvec(iat) = -self%chi(izp) + tmp*cn(iat)
-         end do
-      end if
+      !$omp parallel do default(none) schedule(runtime) &
+      !$omp shared(mol, self, xvec) private(iat, izp, tmp)
+      do iat = 1, mol%nat
+         izp = mol%id(iat)
+         tmp = self%kcnchi(izp)/sqrt(cache%cn(iat) + reg)
+         xvec(iat) = -self%chi(izp) + tmp*cache%cn(iat)
+      end do
       xvec(mol%nat + 1) = mol%charge
 
-   end subroutine get_vrhs
+   end subroutine get_xvec
 
-   subroutine get_amat_0d(self, mol, cn, qloc, amat)
+   subroutine get_xvec_derivs(self, mol, cache, xvec, dxdr, dxdL)
+      class(mchrg_model_type), intent(in) :: self
+      type(structure_type), intent(in) :: mol
+      class(mchrg_cache), intent(inout) :: cache
+      real(wp), intent(in) :: xvec(:)
+      real(wp), intent(out) :: dxdr(:, :, :)
+      real(wp), intent(out) :: dxdL(:, :, :)
+
+      integer :: iat
+
+      dxdr(:, :, :) = 0.0_wp
+      dxdL(:, :, :) = 0.0_wp
+
+      !$omp parallel do default(none) schedule(runtime) &
+      !$omp shared(mol, self, xvec, dxdr, dxdL) &
+      !$omp private(iat, izp, tmp)
+      do iat = 1, mol%nat
+         izp = mol%id(iat)
+         tmp = self%kcnchi(izp)/sqrt(cache%cn(iat) + reg)
+         xvec(iat) = -self%chi(izp) + tmp*cache%cn(iat)
+         dxdr(:, :, iat) = 0.5_wp*tmp*cache%dcndr(:, :, iat) + dxdr(:, :, iat)
+         dxdL(:, :, iat) = 0.5_wp*tmp*cache%dcndL(:, :, iat) + dxdL(:, :, iat)
+      end do
+   end subroutine get_xvec_derivs
+
+   subroutine get_coulomb_matrix(self, mol, cache, amat)
+      class(mchrg_model_type), intent(in) :: self
+      type(structure_type), intent(in) :: mol
+      class(mchrg_cache), intent(inout) :: cache
+      real(wp), intent(out) :: amat(:, :)
+
+      if (any(mol%periodic)) then
+         call self%get_amat_3d(mol, cache%wsc, cache%alpha, amat)
+      else
+         call self%get_amat_0d(mol, amat)
+      end if
+   end subroutine get_colomb_matrix
+
+   subroutine get_coulomb_derivs(self, mol, cache, amat, vrhs, dadr, dadL, atrace)
+      class(mchrg_model_type), intent(in) :: self
+      type(structure_type), intent(in) :: mol
+      class(mchrg_cache), intent(in) :: cache
+      real(wp), intent(in) :: amat(:, :), vrhs(:)
+      real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
+
+      if (any(mol%periodic)) then
+         call self%get_damat_3d(mol, cache%wsc, cache%alpha, vrhs, dadr, dadL, atrace)
+      else
+         call self%get_damat_0d(mol, cache%cn, cache%qloc, vrhs, cache%dcndr, cache%dcndL, &
+         & cache%dqlocdr, cache%dqlocdL, dadr, dadL, atrace)
+      end if
+   end subroutine get_coulomb_derivs
+
+   subroutine get_amat_0d(self, mol, amat)
       class(eeq_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      real(wp), intent(in) :: cn(:)
-      real(wp), intent(in) :: qloc(:)
       real(wp), intent(out) :: amat(:, :)
 
       integer :: iat, jat, izp, jzp
