@@ -21,6 +21,8 @@ module multicharge_eeq_cache
    use mctc_env, only: wp
    use mctc_io, only: structure_type
    use multicharge_model_cache, only: mchrg_cache
+   use multicharge_wignerseitz, only: new_wignerseitz_cell, wignerseitz_cell_type
+   use multicharge_ewald, only: get_alpha
    implicit none
    private
 

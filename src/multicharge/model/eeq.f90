@@ -44,14 +44,10 @@ module multicharge_model_eeq
       procedure :: get_amat_0d
       !> Calculate Coulomb matrix periodic
       procedure :: get_amat_3d
-      procedure :: get_amat_dir_3d
-      procedure :: get_amat_rec_3d
       !> Calculate Coulomb matrix derivative
       procedure :: get_damat_0d
       !> Calculate Coulomb matrix derivative periodic
       procedure :: get_damat_3d
-      procedure :: get_damat_dir_3d
-      procedure :: get_damat_rec_3d
    end type eeq_model
 
    real(wp), parameter :: sqrtpi = sqrt(pi)
@@ -127,12 +123,15 @@ contains
       integer :: iat, izp
       real(wp) :: tmp
 
+      type(eeq_cache), pointer :: ccache
+      ccache => cast_cache(cache)
+
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(mol, self, xvec) private(iat, izp, tmp)
+      !$omp shared(mol, self, xvec, ccache) private(iat, izp, tmp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
-         tmp = self%kcnchi(izp)/sqrt(cache%cn(iat) + reg)
-         xvec(iat) = -self%chi(izp) + tmp*cache%cn(iat)
+         tmp = self%kcnchi(izp)/sqrt(ccache%cn(iat) + reg)
+         xvec(iat) = -self%chi(izp) + tmp*ccache%cn(iat)
       end do
       xvec(mol%nat + 1) = mol%charge
 
@@ -149,17 +148,20 @@ contains
       integer :: iat, izp
       real(wp) :: tmp
 
+      type(eeq_cache), pointer :: ccache
+      ccache => cast_cache(cache)
+
       dxdr(:, :, :) = 0.0_wp
       dxdL(:, :, :) = 0.0_wp
 
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(mol, self, dxdr, dxdL) &
+      !$omp shared(mol, self, ccache, dxdr, dxdL) &
       !$omp private(iat, izp, tmp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
-         tmp = self%kcnchi(izp)/sqrt(cache%cn(iat) + reg)
-         dxdr(:, :, iat) = 0.5_wp*tmp*cache%dcndr(:, :, iat) + dxdr(:, :, iat)
-         dxdL(:, :, iat) = 0.5_wp*tmp*cache%dcndL(:, :, iat) + dxdL(:, :, iat)
+         tmp = self%kcnchi(izp)/sqrt(ccache%cn(iat) + reg)
+         dxdr(:, :, iat) = 0.5_wp*tmp*ccache%dcndr(:, :, iat) + dxdr(:, :, iat)
+         dxdL(:, :, iat) = 0.5_wp*tmp*ccache%dcndL(:, :, iat) + dxdL(:, :, iat)
       end do
    end subroutine get_xvec_derivs
 
@@ -169,8 +171,11 @@ contains
       class(mchrg_cache), intent(inout) :: cache
       real(wp), intent(out) :: amat(:, :)
 
+      type(eeq_cache), pointer :: ccache
+      ccache => cast_cache(cache)
+
       if (any(mol%periodic)) then
-         call self%get_amat_3d(mol, cache%wsc, cache%alpha, amat)
+         call self%get_amat_3d(mol, ccache%wsc, ccache%alpha, amat)
       else
          call self%get_amat_0d(mol, amat)
       end if
@@ -183,11 +188,14 @@ contains
       real(wp), intent(in) :: vrhs(:)
       real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
 
+      type(eeq_cache), pointer :: ccache
+      ccache => cast_cache(cache)
+
       if (any(mol%periodic)) then
-         call self%get_damat_3d(mol, cache%wsc, cache%alpha, vrhs, dadr, dadL, atrace)
+         call self%get_damat_3d(mol, ccache%wsc, ccache%alpha, vrhs, dadr, dadL, atrace)
       else
-         call self%get_damat_0d(mol, cache%cn, cache%qloc, vrhs, cache%dcndr, cache%dcndL, &
-         & cache%dqlocdr, cache%dqlocdL, dadr, dadL, atrace)
+         call self%get_damat_0d(mol, ccache%cn, ccache%qloc, vrhs, ccache%dcndr, ccache%dcndL, &
+         & ccache%dqlocdr, ccache%dqlocdL, dadr, dadL, atrace)
       end if
    end subroutine get_coulomb_derivs
 
@@ -498,5 +506,18 @@ contains
       end do
 
    end subroutine get_damat_rec_3d
+
+   function cast_cache(cache) result(ccache)
+      class(mchrg_cache), intent(in) :: cache
+      type(eeq_cache), pointer :: ccache
+
+      select type(cache)
+      type is (eeq_cache)
+         ccache => cache
+      class default 
+         ccache => null()
+         error stop "invalid cache type (eeqbc)"
+      end select
+   end function
 
 end module multicharge_model_eeq
