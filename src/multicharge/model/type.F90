@@ -72,18 +72,12 @@ module multicharge_model_type
       procedure(update), deferred :: update
       !> Calculate right-hand side (electronegativity)
       procedure(get_xvec), deferred :: get_xvec
+      !> Calculate xvec Gradients
+      procedure(get_xvec_derivs), deferred :: get_xvec_derivs
       !> Calculate Coulomb matrix
       procedure(get_coulomb_matrix), deferred :: get_coulomb_matrix
-      !> Molecular
-      procedure(get_amat_0d), deferred :: get_amat_0d
-      !> Preiodic
-      procedure(get_amat_3d), deferred :: get_amat_3d
-      !> Calculate Coulomb matrix derivative
+      !> Calculate Coulomb matrix derivatives
       procedure(get_coulomb_derivs), deferred :: get_coulomb_derivs
-      !> Molecular
-      procedure(get_damat_0d), deferred :: get_damat_0d
-      !> Periodic
-      procedure(get_damat_3d), deferred :: get_damat_3d
    end type mchrg_model_type
 
    abstract interface
@@ -91,7 +85,7 @@ module multicharge_model_type
          import :: mchrg_model_type, structure_type, mchrg_cache, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
-         class(mchrg_cache), intent(out) :: cache
+         class(mchrg_cache), allocatable, intent(out) :: cache
          real(wp), intent(in), target :: cn(:), qloc(:)
          logical, intent(in) :: grad
       end subroutine update
@@ -121,66 +115,65 @@ module multicharge_model_type
          real(wp), intent(out) :: xvec(:)
       end subroutine get_xvec
 
-      subroutine get_xvec_derivs(self, mol, cache, xvec, dxdr, dxdL)
+      subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
          import :: mchrg_model_type, structure_type, mchrg_cache, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
          class(mchrg_cache), intent(inout) :: cache
-         real(wp), intent(in) :: xvec(:)
          real(wp), intent(out) :: dxdr(:, :, :)
          real(wp), intent(out) :: dxdL(:, :, :)
       end subroutine get_xvec_derivs
 
-      subroutine get_amat_0d(self, mol, amat, cn, qloc, cmat)
-         import :: mchrg_model_type, mchrg_cache, structure_type, wp
-         class(mchrg_model_type), intent(in) :: self
-         type(structure_type), intent(in) :: mol
-         real(wp), intent(out) :: amat(:, :)
-         real(wp), intent(in), optional :: cn(:)
-         real(wp), intent(in), optional :: qloc(:)
-         real(wp), intent(in), optional :: cmat(:, :)
-      end subroutine get_amat_0d
+      !subroutine get_amat_0d(self, mol, amat, cn, qloc, cmat)
+      !   import :: mchrg_model_type, mchrg_cache, structure_type, wp
+      !   class(mchrg_model_type), intent(in) :: self
+      !   type(structure_type), intent(in) :: mol
+      !   real(wp), intent(out) :: amat(:, :)
+      !   real(wp), intent(in), optional :: cn(:)
+      !   real(wp), intent(in), optional :: qloc(:)
+      !   real(wp), intent(in), optional :: cmat(:, :)
+      !end subroutine get_amat_0d
 
-      subroutine get_amat_3d(self, mol, cache, wsc, alpha, amat)
-         import :: mchrg_model_type, mchrg_cache, structure_type, &
-            & wignerseitz_cell_type, wp
-         class(mchrg_model_type), intent(in) :: self
-         type(structure_type), intent(in) :: mol
-         class(mchrg_cache), intent(inout) :: cache
-         type(wignerseitz_cell_type), intent(in) :: wsc
-         real(wp), intent(in) :: alpha
-         real(wp), intent(out) :: amat(:, :)
-      end subroutine get_amat_3d
+      !subroutine get_amat_3d(self, mol, cache, wsc, alpha, amat)
+      !   import :: mchrg_model_type, mchrg_cache, structure_type, &
+      !      & wignerseitz_cell_type, wp
+      !   class(mchrg_model_type), intent(in) :: self
+      !   type(structure_type), intent(in) :: mol
+      !   class(mchrg_cache), intent(inout) :: cache
+      !   type(wignerseitz_cell_type), intent(in) :: wsc
+      !   real(wp), intent(in) :: alpha
+      !   real(wp), intent(out) :: amat(:, :)
+      !end subroutine get_amat_3d
 
-      subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
-         & dqlocdr, dqlocdL, dadr, dadL, atrace)
-         import :: mchrg_model_type, structure_type, wp
-         class(mchrg_model_type), intent(in) :: self
-         type(structure_type), intent(in) :: mol
-         real(wp), intent(in) :: qvec(:)
-         real(wp), intent(out) :: dadr(:, :, :)
-         real(wp), intent(out) :: dadL(:, :, :)
-         real(wp), intent(out) :: atrace(:, :)
-         real(wp), intent(in), optional :: cn(:)
-         real(wp), intent(in), optional :: qloc(:)
-         real(wp), intent(in), optional :: dcndr(:, :, :)
-         real(wp), intent(in), optional :: dcndL(:, :, :)
-         real(wp), intent(in), optional :: dqlocdr(:, :, :)
-         real(wp), intent(in), optional :: dqlocdL(:, :, :)
-      end subroutine get_damat_0d
+      !subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
+      !   & dqlocdr, dqlocdL, dadr, dadL, atrace)
+      !   import :: mchrg_model_type, structure_type, wp
+      !   class(mchrg_model_type), intent(in) :: self
+      !   type(structure_type), intent(in) :: mol
+      !   real(wp), intent(in) :: qvec(:)
+      !   real(wp), intent(out) :: dadr(:, :, :)
+      !   real(wp), intent(out) :: dadL(:, :, :)
+      !   real(wp), intent(out) :: atrace(:, :)
+      !   real(wp), intent(in), optional :: cn(:)
+      !   real(wp), intent(in), optional :: qloc(:)
+      !   real(wp), intent(in), optional :: dcndr(:, :, :)
+      !   real(wp), intent(in), optional :: dcndL(:, :, :)
+      !   real(wp), intent(in), optional :: dqlocdr(:, :, :)
+      !   real(wp), intent(in), optional :: dqlocdL(:, :, :)
+      !end subroutine get_damat_0d
 
-      subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
-         import :: mchrg_model_type, structure_type, &
-            & wignerseitz_cell_type, wp
-         class(mchrg_model_type), intent(in) :: self
-         type(structure_type), intent(in) :: mol
-         type(wignerseitz_cell_type), intent(in) :: wsc
-         real(wp), intent(in) :: alpha
-         real(wp), intent(in) :: qvec(:)
-         real(wp), intent(out) :: dadr(:, :, :)
-         real(wp), intent(out) :: dadL(:, :, :)
-         real(wp), intent(out) :: atrace(:, :)
-      end subroutine get_damat_3d
+      !subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
+      !   import :: mchrg_model_type, structure_type, &
+      !      & wignerseitz_cell_type, wp
+      !   class(mchrg_model_type), intent(in) :: self
+      !   type(structure_type), intent(in) :: mol
+      !   type(wignerseitz_cell_type), intent(in) :: wsc
+      !   real(wp), intent(in) :: alpha
+      !   real(wp), intent(in) :: qvec(:)
+      !   real(wp), intent(out) :: dadr(:, :, :)
+      !   real(wp), intent(out) :: dadL(:, :, :)
+      !   real(wp), intent(out) :: atrace(:, :)
+      !end subroutine get_damat_3d
 
    end interface
 
@@ -230,9 +223,10 @@ contains
       real(wp), allocatable :: xvec(:), vrhs(:), amat(:, :)
       real(wp), allocatable :: ainv(:, :)
       !> Gradients
-      real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :)
+      real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
       real(wp), allocatable :: dxdr(:, :, :), dxdL(:, :, :)
-      class(mchrg_cache) :: cache
+      class(mchrg_cache), allocatable :: cache
+      real(wp), allocatable :: trans(:, :)
 
       !> Calculate gradient if the respective arrays are present
       grad = present(gradient) .and. present(sigma)
@@ -243,6 +237,11 @@ contains
       !> Update cache
       ! NOTE: only stores pointers to cn, qloc
       call self%update(mol, cache, cn, qloc, grad)
+
+      !> Get lattice points
+      if (any(mol%periodic)) then
+         call get_dir_trans(mol%lattice, trans)
+      end if
 
       !> Get CNs and local charges
       if (grad) then
@@ -298,7 +297,7 @@ contains
       if (grad) then ! .or. cpq
          allocate (dadr(3, mol%nat, ndim), dadL(3, 3, ndim), atrace(3, mol%nat))
          allocate (dxdr(3, mol%nat, ndim), dxdL(3, 3, ndim))
-         call self%get_xvec_derivs(mol, cache, xvec, dxdr, dxdL)
+         call self%get_xvec_derivs(mol, cache, dxdr, dxdL)
          call self%get_coulomb_derivs(mol, cache, xvec, dadr, dadL, atrace)
          !end if
 

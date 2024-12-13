@@ -29,12 +29,12 @@ module multicharge_eeq_cache
    contains
       !>
       procedure :: update
-   end type eeqbc_cache
+   end type eeq_cache
 
 contains
    subroutine update(self, mol, grad)
       logical, intent(in) :: grad
-      class(mchrg_cache), intent(inout) :: self
+      class(eeq_cache), intent(inout) :: self
       type(structure_type), intent(in) :: mol
 
       !> Create WSC
@@ -51,4 +51,4 @@ contains
       !> Setup cmat
    end subroutine update
 
-end module multicharge_model_cache
+end module multicharge_eeq_cache

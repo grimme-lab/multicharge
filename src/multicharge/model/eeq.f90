@@ -26,6 +26,7 @@ module multicharge_model_eeq
    use multicharge_wignerseitz, only: wignerseitz_cell_type
    use multicharge_model_type, only: mchrg_model_type, get_dir_trans, get_rec_trans
    use multicharge_model_cache, only: mchrg_cache
+   use multicharge_eeq_cache, only: eeq_cache
    implicit none
    private
 
@@ -101,9 +102,9 @@ contains
    end subroutine new_eeq_model
 
    subroutine update(self, mol, cache, cn, qloc, grad)
-      class(mchrg_model_type), intent(in) :: self
+      class(eeq_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), intent(out) :: cache
+      class(mchrg_cache), allocatable, intent(out) :: cache
       real(wp), intent(in), target :: cn(:), qloc(:)
       logical, intent(in) :: grad
 
@@ -121,6 +122,7 @@ contains
       type(structure_type), intent(in) :: mol
       class(mchrg_cache), intent(inout) :: cache
       real(wp), intent(out) :: xvec(:)
+      real(wp), parameter :: reg = 1.0e-14_wp
 
       integer :: iat, izp
       real(wp) :: tmp
@@ -136,34 +138,33 @@ contains
 
    end subroutine get_xvec
 
-   subroutine get_xvec_derivs(self, mol, cache, xvec, dxdr, dxdL)
-      class(mchrg_model_type), intent(in) :: self
+   subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
+      class(eeq_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
       class(mchrg_cache), intent(inout) :: cache
-      real(wp), intent(in) :: xvec(:)
       real(wp), intent(out) :: dxdr(:, :, :)
       real(wp), intent(out) :: dxdL(:, :, :)
       real(wp), parameter :: reg = 1.0e-14_wp
 
-      integer :: iat
+      integer :: iat, izp
+      real(wp) :: tmp
 
       dxdr(:, :, :) = 0.0_wp
       dxdL(:, :, :) = 0.0_wp
 
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(mol, self, xvec, dxdr, dxdL) &
+      !$omp shared(mol, self, dxdr, dxdL) &
       !$omp private(iat, izp, tmp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
          tmp = self%kcnchi(izp)/sqrt(cache%cn(iat) + reg)
-         xvec(iat) = -self%chi(izp) + tmp*cache%cn(iat)
          dxdr(:, :, iat) = 0.5_wp*tmp*cache%dcndr(:, :, iat) + dxdr(:, :, iat)
          dxdL(:, :, iat) = 0.5_wp*tmp*cache%dcndL(:, :, iat) + dxdL(:, :, iat)
       end do
    end subroutine get_xvec_derivs
 
    subroutine get_coulomb_matrix(self, mol, cache, amat)
-      class(mchrg_model_type), intent(in) :: self
+      class(eeq_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
       class(mchrg_cache), intent(inout) :: cache
       real(wp), intent(out) :: amat(:, :)
@@ -173,12 +174,12 @@ contains
       else
          call self%get_amat_0d(mol, amat)
       end if
-   end subroutine get_colomb_matrix
+   end subroutine get_coulomb_matrix
 
    subroutine get_coulomb_derivs(self, mol, cache, vrhs, dadr, dadL, atrace)
-      class(mchrg_model_type), intent(in) :: self
+      class(eeq_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), intent(in) :: cache
+      class(mchrg_cache), intent(inout) :: cache
       real(wp), intent(in) :: vrhs(:)
       real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
 

@@ -25,7 +25,7 @@ module multicharge_model_cache
    private
 
    !> Cache for the charge model
-   type, public :: mchrg_cache
+   type, abstract, public :: mchrg_cache
       !> Store tmp array from xvec calculation for reuse
       real(wp), allocatable :: tmp(:)
       !> Pointers to CN and local charge arrays

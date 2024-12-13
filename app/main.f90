@@ -17,7 +17,6 @@ program main
    use, intrinsic :: iso_fortran_env, only: output_unit, error_unit, input_unit
    use mctc_env, only: error_type, fatal_error, get_argument, wp
    use mctc_io, only: structure_type, read_structure, filetype, get_filetype
-   use mctc_cutoff, only: get_lattice_points
    use multicharge, only: mchrg_model_type, mchargeModel, new_eeq2019_model, &
       & new_eeqbc2024_model, get_multicharge_version, &
       & write_ascii_model, write_ascii_properties, write_ascii_results
@@ -34,7 +33,7 @@ program main
    class(mchrg_model_type), allocatable :: model
    logical :: grad, json, exist
    real(wp), parameter :: cn_max = 8.0_wp, cutoff = 25.0_wp
-   real(wp), allocatable :: cn(:), rcov(:), trans(:, :)
+   real(wp), allocatable :: cn(:), rcov(:)
    real(wp), allocatable :: qloc(:)
    real(wp), allocatable :: energy(:), gradient(:, :), sigma(:, :)
    real(wp), allocatable :: qvec(:)
@@ -86,8 +85,6 @@ program main
       call fatal_error(error, "Invalid model")
       error stop
    end if
-
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
    call write_ascii_model(output_unit, mol, model)
 

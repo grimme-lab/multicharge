@@ -36,7 +36,7 @@ module multicharge_model_eeqbc
    implicit none
    private
 
-   public :: eeqbc_model, new_eeqbc_model
+   public :: eeqbc_model, new_eeqbc_model, get_cmat_pair
 
    type, extends(mchrg_model_type) :: eeqbc_model
       !> Bond capacitance
@@ -47,6 +47,8 @@ module multicharge_model_eeqbc
       real(wp) :: kbc
       !> Exponent of the distance/CN normalization
       real(wp) :: norm_exp
+      !> vdW radii 
+      real(wp), allocatable :: rvdw(:, :)
    contains
       procedure :: update
       procedure :: get_coulomb_matrix
@@ -166,9 +168,9 @@ contains
    end subroutine new_eeqbc_model
 
    subroutine update(self, mol, cache, cn, qloc, grad)
-      class(mchrg_model_type), intent(in) :: self
+      class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), intent(out) :: cache
+      class(mchrg_cache), allocatable, intent(out) :: cache
       real(wp), intent(in), target :: cn(:), qloc(:)
       logical, intent(in) :: grad
 
@@ -195,9 +197,9 @@ contains
    end subroutine update
 
    subroutine get_xvec(self, mol, cache, xvec)
-      class(multicharge_model_type), intent(in) :: self
+      class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), intent(inout) :: cache
+      class(eeqbc_cache), intent(inout) :: cache
       real(wp), intent(out) :: xvec(:)
 
       integer :: iat, izp
@@ -214,11 +216,10 @@ contains
 
    end subroutine get_xvec
 
-   subroutine get_xvec_derivs(self, mol, cache, xvec, dxdr, dxdL)
-      class(mchrg_model_type), intent(in) :: self
+   subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
+      class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), intent(inout) :: cache
-      real(wp), intent(in) :: xvec(:)
+      class(eeqbc_cache), intent(inout) :: cache
       real(wp), intent(out) :: dxdr(:, :, :)
       real(wp), intent(out) :: dxdL(:, :, :)
 
@@ -254,40 +255,41 @@ contains
    end subroutine get_xvec_derivs
 
    subroutine get_coulomb_derivs(self, mol, cache, vrhs, dadr, dadL, atrace)
-      class(mchrg_model_type), intent(in) :: self
+      class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), intent(in) :: cache
+      class(eeqbc_cache), intent(inout) :: cache
       real(wp), intent(in) :: vrhs(:)
       real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
 
       if (any(mol%periodic)) then
          call self%get_damat_3d(mol, cache%wsc, cache%alpha, vrhs, dadr, dadL, atrace)
       else
-         call self%get_damat_0d(mol, cache%cn, cache%qloc, vrhs, cache%dcndr, cache%dcndL, &
-         & cache%dqlocdr, cache%dqlocdL, dadr, dadL, atrace)
+         call self%get_damat_0d(mol, cache%cmat, cache%dcdr, cache%dcdL, cache%cn, & 
+         & cache%qloc, vrhs, cache%dcndr, cache%dcndL, cache%dqlocdr, &
+         & cache%dqlocdL, dadr, dadL, atrace)
       end if
    end subroutine get_coulomb_derivs
 
    subroutine get_coulomb_matrix(self, mol, cache, amat)
-      class(mchrg_model_type), intent(in) :: self
+      class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), intent(inout) :: cache
+      class(eeqbc_cache), intent(inout) :: cache
       real(wp), intent(out) :: amat(:, :)
 
       if (any(mol%periodic)) then
-         call self%get_amat_3d(mol, cache%wsc, cache%alpha, amat, cache%cmat)
+         call self%get_amat_3d(mol, cache%wsc, cache%alpha, amat, cache%cmat_diag)
       else
          call self%get_amat_0d(mol, amat, cache%cn, cache%qloc, cache%cmat)
       end if
-   end subroutine get_colomb_matrix
+   end subroutine get_coulomb_matrix
 
    subroutine get_amat_0d(self, mol, amat, cn, qloc, cmat)
       class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
       real(wp), intent(out) :: amat(:, :)
-      real(wp), intent(in), optional :: cn(:)
-      real(wp), intent(in), optional :: qloc(:)
-      real(wp), intent(in), optional :: cmat(:, :)
+      real(wp), intent(in) :: cn(:)
+      real(wp), intent(in) :: qloc(:)
+      real(wp), intent(in) :: cmat(:, :)
 
       integer :: iat, jat, izp, jzp
       real(wp) :: vec(3), r2, gam2, tmp, norm_cn, radi, radj
@@ -295,7 +297,7 @@ contains
       amat(:, :) = 0.0_wp
 
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp reduction(+:amat) shared(mol, self, cn, qloc, cache) &
+      !$omp reduction(+:amat) shared(mol, self, cn, qloc, cmat) &
       !$omp private(iat, izp, jat, jzp, gam2, vec, r2, tmp, norm_cn, radi, radj)
       do iat = 1, mol%nat
          izp = mol%id(iat)
@@ -311,13 +313,13 @@ contains
             radj = self%rad(jzp)*(1.0_wp - self%kcnrad*norm_cn)
             ! Coulomb interaction of Gaussian charges
             gam2 = 1.0_wp/(radi**2 + radj**2)
-            tmp = erf(sqrt(r2*gam2))/(sqrt(r2)*self%dielectric)*cache%cmat(jat, iat)
+            tmp = erf(sqrt(r2*gam2))/(sqrt(r2)*self%dielectric)*cmat(jat, iat)
             amat(jat, iat) = amat(jat, iat) + tmp
             amat(iat, jat) = amat(iat, jat) + tmp
          end do
          ! Effective hardness
          tmp = self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi !
-         amat(iat, iat) = amat(iat, iat) + tmp*cache%cmat(iat, iat) + 1.0_wp
+         amat(iat, iat) = amat(iat, iat) + tmp*cmat(iat, iat) + 1.0_wp
       end do
 
       amat(mol%nat + 1, 1:mol%nat + 1) = 1.0_wp
@@ -326,12 +328,13 @@ contains
 
    end subroutine get_amat_0d
 
-   subroutine get_amat_3d(self, mol, wsc, alpha, amat)
+   subroutine get_amat_3d(self, mol, wsc, alpha, amat, cmat_diag)
       class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
       type(wignerseitz_cell_type), intent(in) :: wsc
       real(wp), intent(in) :: alpha
       real(wp), intent(out) :: amat(:, :)
+      real(wp), intent(out) :: cmat_diag(:, :)
 
       integer :: iat, jat, izp, jzp, img
       real(wp) :: vec(3), gam, wsw, dtmp, rtmp, vol, ctmp
@@ -344,7 +347,7 @@ contains
       call get_rec_trans(mol%lattice, rtrans)
 
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp reduction(+:amat) shared(mol, self, cache, wsc, dtrans, rtrans, alpha, vol) &
+      !$omp reduction(+:amat) shared(mol, self, wsc, dtrans, rtrans, alpha, vol, cmat_diag) &
       !$omp private(iat, izp, jat, jzp, gam, wsw, vec, dtmp, rtmp, ctmp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
@@ -367,11 +370,11 @@ contains
             wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
             do img = 1, wsc%nimg(jat, iat)
                vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
-               call get_cmat_pair(mol, self%kbc, tmp, vec, rvdw, capi, capj)
+               call get_cmat_pair(mol, self%kbc, ctmp, vec, rvdw, capi, capj)
                call get_amat_dir_3d(vec, gam, alpha, dtrans, dtmp)
                call get_amat_rec_3d(vec, vol, alpha, rtrans, rtmp)
-               amat(jat, iat) = amat(jat, iat) + tmp*(dtmp + rtmp)*wsw
-               amat(iat, jat) = amat(iat, jat) + tmp*(dtmp + rtmp)*wsw
+               amat(jat, iat) = amat(jat, iat) + ctmp*(dtmp + rtmp)*wsw
+               amat(iat, jat) = amat(iat, jat) + ctmp*(dtmp + rtmp)*wsw
             end do
          end do
          rvdw = self%rvdw(iat, iat)
@@ -381,14 +384,14 @@ contains
          wsw = 1.0_wp/real(wsc%nimg(iat, iat), wp)
          do img = 1, wsc%nimg(iat, iat)
             vec = wsc%trans(:, wsc%tridx(img, iat, iat))
-            ctmp = cache%cmat_diag(iat, img)
+            ctmp = cmat_diag(iat, img)
             call get_amat_dir_3d(vec, gam, alpha, dtrans, dtmp)
             call get_amat_rec_3d(vec, vol, alpha, rtrans, rtmp)
             amat(iat, iat) = amat(iat, iat) + ctmp*(dtmp + rtmp)*wsw
          end do
          ! Effective hardness (T=0 contribution)
          tmp = self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi
-         amat(iat, iat) = amat(iat, iat) + cache%cmat_diag(iat, wsc%nimg_max + 1)*tmp + 1.0_wp
+         amat(iat, iat) = amat(iat, iat) + cmat_diag(iat, wsc%nimg_max + 1)*tmp + 1.0_wp
       end do
 
       amat(mol%nat + 1, 1:mol%nat + 1) = 1.0_wp
@@ -442,10 +445,13 @@ contains
 
    end subroutine get_amat_rec_3d
 
-   subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
+   subroutine get_damat_0d(self, mol, cmat, dcdr, dcdL, cn, qloc, qvec, dcndr, dcndL, &
          & dqlocdr, dqlocdL, dadr, dadL, atrace)
       class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
+      real(wp), intent(in) :: cmat(:, :)
+      real(wp), intent(in) :: dcdr(:, :, :)
+      real(wp), intent(in) :: dcdL(:, :, :)
       real(wp), intent(in) :: cn(:)
       real(wp), intent(in) :: qloc(:)
       real(wp), intent(in) :: qvec(:)
@@ -470,7 +476,7 @@ contains
 
       !$omp parallel do default(none) schedule(runtime) &
       !$omp reduction(+:atrace, dadr, dadL) shared(self, mol, cn, qloc, qvec) &
-      !$omp shared (cache, dcndr, dcndL, dqlocdr, dqlocdL) &
+      !$omp shared (cmat, dcndr, dcndL, dqlocdr, dqlocdL) &
       !$omp private(iat, izp, jat, jzp, gam, vec, r2, dtmp, norm_cn, arg) &
       !$omp private(radi, radj, dradi, dradj, dgamdr, dgamdL, dG, dS)
       do iat = 1, mol%nat
@@ -501,50 +507,50 @@ contains
                & - erf(sqrt(arg))/(r2*sqrt(r2)*self%dielectric)
             dG(:) = -dtmp*vec ! questionable sign
             dS(:, :) = spread(dG, 1, 3)*spread(vec, 2, 3)
-            atrace(:, iat) = +dG*qvec(jat)*cache%cmat(iat, jat) + atrace(:, iat)
-            atrace(:, jat) = -dG*qvec(iat)*cache%cmat(jat, iat) + atrace(:, jat)
-            dadr(:, iat, jat) = +dG*qvec(iat)*cache%cmat(iat, jat)
-            dadr(:, jat, iat) = -dG*qvec(jat)*cache%cmat(jat, iat)
-            dadL(:, :, jat) = +dS*qvec(iat)*cache%cmat(iat, jat) + dadL(:, :, jat)
-            dadL(:, :, iat) = +dS*qvec(jat)*cache%cmat(jat, iat) + dadL(:, :, iat)
+            atrace(:, iat) = +dG*qvec(jat)*cmat(iat, jat) + atrace(:, iat)
+            atrace(:, jat) = -dG*qvec(iat)*cmat(jat, iat) + atrace(:, jat)
+            dadr(:, iat, jat) = +dG*qvec(iat)*cmat(iat, jat)
+            dadr(:, jat, iat) = -dG*qvec(jat)*cmat(jat, iat)
+            dadL(:, :, jat) = +dS*qvec(iat)*cmat(iat, jat) + dadL(:, :, jat)
+            dadL(:, :, iat) = +dS*qvec(jat)*cmat(jat, iat) + dadL(:, :, iat)
 
             ! Effective charge width derivative
             dtmp = 2.0_wp*exp(-arg)/(sqrtpi*self%dielectric)
-            atrace(:, iat) = +dtmp*qvec(jat)*dgamdr(:, jat)*cache%cmat(iat, jat) + atrace(:, iat)
-            atrace(:, jat) = +dtmp*qvec(iat)*dgamdr(:, iat)*cache%cmat(jat, iat) + atrace(:, jat)
-            dadr(:, iat, jat) = +dtmp*qvec(iat)*dgamdr(:, iat)*cache%cmat(iat, jat) + dadr(:, iat, jat)
-            dadr(:, jat, iat) = +dtmp*qvec(jat)*dgamdr(:, jat)*cache%cmat(jat, iat) + dadr(:, jat, iat)
-            dadL(:, :, jat) = +dtmp*qvec(iat)*dgamdL(:, :)*cache%cmat(iat, jat) + dadL(:, :, jat)
-            dadL(:, :, iat) = +dtmp*qvec(jat)*dgamdL(:, :)*cache%cmat(jat, iat) + dadL(:, :, iat)
+            atrace(:, iat) = +dtmp*qvec(jat)*dgamdr(:, jat)*cmat(iat, jat) + atrace(:, iat)
+            atrace(:, jat) = +dtmp*qvec(iat)*dgamdr(:, iat)*cmat(jat, iat) + atrace(:, jat)
+            dadr(:, iat, jat) = +dtmp*qvec(iat)*dgamdr(:, iat)*cmat(iat, jat) + dadr(:, iat, jat)
+            dadr(:, jat, iat) = +dtmp*qvec(jat)*dgamdr(:, jat)*cmat(jat, iat) + dadr(:, jat, iat)
+            dadL(:, :, jat) = +dtmp*qvec(iat)*dgamdL(:, :)*cmat(iat, jat) + dadL(:, :, jat)
+            dadL(:, :, iat) = +dtmp*qvec(jat)*dgamdL(:, :)*cmat(jat, iat) + dadL(:, :, iat)
 
             ! Capacitance derivative
             dtmp = erf(sqrt(r2)*gam)/(sqrt(r2)*self%dielectric)
             ! potentially switch indices for dcdr
-            atrace(:, iat) = +dtmp*qvec(jat)*cache%dcdr(:, jat, iat) + atrace(:, iat)
-            atrace(:, jat) = +dtmp*qvec(iat)*cache%dcdr(:, iat, jat) + atrace(:, jat)
-            dadr(:, iat, jat) = +dtmp*qvec(iat)*cache%dcdr(:, iat, jat) + dadr(:, iat, jat)
-            dadr(:, jat, iat) = +dtmp*qvec(jat)*cache%dcdr(:, jat, iat) + dadr(:, jat, iat)
-            dadL(:, :, jat) = +dtmp*qvec(iat)*cache%dcdL(:, :, iat) + dadL(:, :, jat)
-            dadL(:, :, iat) = +dtmp*qvec(jat)*cache%dcdL(:, :, jat) + dadL(:, :, iat)
+            atrace(:, iat) = +dtmp*qvec(jat)*dcdr(:, jat, iat) + atrace(:, iat)
+            atrace(:, jat) = +dtmp*qvec(iat)*dcdr(:, iat, jat) + atrace(:, jat)
+            dadr(:, iat, jat) = +dtmp*qvec(iat)*dcdr(:, iat, jat) + dadr(:, iat, jat)
+            dadr(:, jat, iat) = +dtmp*qvec(jat)*dcdr(:, jat, iat) + dadr(:, jat, iat)
+            dadL(:, :, jat) = +dtmp*qvec(iat)*dcdL(:, :, iat) + dadL(:, :, jat)
+            dadL(:, :, iat) = +dtmp*qvec(jat)*dcdL(:, :, jat) + dadL(:, :, iat)
          end do
 
          ! Hardness derivative
-         dtmp = self%kqeta(izp)*qvec(iat)*cache%cmat(iat, iat)
+         dtmp = self%kqeta(izp)*qvec(iat)*cmat(iat, iat)
          atrace(:, iat) = +dtmp*dqlocdr(:, iat, iat) + atrace(:, iat)
          dadr(:, iat, iat) = +dtmp*dqlocdr(:, iat, iat) + dadr(:, iat, iat)
          dadL(:, :, iat) = +dtmp*dqlocdL(:, :, iat) + dadL(:, :, iat)
 
          ! Effective charge width derivative
-         dtmp = -sqrt2pi*dradi/(radi**2)*qvec(iat)*cache%cmat(iat, iat)
+         dtmp = -sqrt2pi*dradi/(radi**2)*qvec(iat)*cmat(iat, iat)
          atrace(:, iat) = +dtmp*dcndr(:, iat, iat) + atrace(:, iat)
          dadr(:, iat, iat) = +dtmp*dcndr(:, iat, iat) + dadr(:, iat, iat)
          dadL(:, :, iat) = +dtmp*dcndL(:, :, iat) + dadL(:, :, iat)
 
          ! Capacitance derivative
          dtmp = (self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi)*qvec(iat)
-         atrace(:, iat) = +dtmp*cache%dcdr(:, iat, iat) + atrace(:, iat)
-         dadr(:, iat, iat) = +dtmp*cache%dcdr(:, iat, iat) + dadr(:, iat, iat)
-         dadL(:, :, iat) = +dtmp*cache%dcdL(:, :, iat) + dadL(:, :, iat)
+         atrace(:, iat) = +dtmp*dcdr(:, iat, iat) + atrace(:, iat)
+         dadr(:, iat, iat) = +dtmp*dcdr(:, iat, iat) + dadr(:, iat, iat)
+         dadL(:, :, iat) = +dtmp*dcdL(:, :, iat) + dadL(:, :, iat)
 
       end do
 
