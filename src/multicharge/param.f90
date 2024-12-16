@@ -93,13 +93,18 @@ subroutine new_eeqbc2024_model(mol, model, dielectric)
    en = get_pauling_en(mol%num)
    en = merge(en, 1.30_wp, mol%num < 90)
    en = merge(0.80_wp, en, mol%num == 87)
+   en = merge(1.00_wp, en, mol%num == 89)
+   en = merge(1.10_wp, en, mol%num == 90 .or. mol%num == 91 &
+      &.or. mol%num == 92 .or. mol%num == 95)
+   en = merge(1.20_wp, en, mol%num == 93 .or. mol%num == 94 &
+      &.or. mol%num == 97 .or. mol%num == 103)
    en = en/3.98_wp
 
    allocate(eeqbc)
    call new_eeqbc_model(eeqbc, mol=mol, chi=chi, rad=rad, eta=eta, &
-      & kcnchi=kcnchi, kqchi=kqchi, kqeta=kqeta, kcnrad=0.145_wp, &
-      & cap=cap, avg_cn=avg_cn, kbc=0.65_wp, cutoff=25.0_wp, & 
-      & cn_exp=2.0_wp, rcov=rcov, en=en, norm_exp=0.8_wp, &
+      & kcnchi=kcnchi, kqchi=kqchi, kqeta=kqeta, kcnrad=0.14_wp, &
+      & cap=cap, avg_cn=avg_cn, kbc=0.60_wp, cutoff=25.0_wp, &
+      & cn_exp=2.0_wp, rcov=rcov, en=en, norm_exp=0.75_wp, &
       & dielectric=dielectric)
    call move_alloc(eeqbc, model)
 
