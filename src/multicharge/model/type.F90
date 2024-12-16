@@ -283,7 +283,7 @@ subroutine solve(self, mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
    end if
 
    if (present(energy)) then
-      call symv(amat(:, :mol%nat), vrhs(:mol%nat), xvec(:mol%nat), alpha=0.5_wp, beta=-1.0_wp, uplo='l')
+      call symv(amat(:mol%nat, :mol%nat), vrhs(:mol%nat), xvec(:mol%nat), alpha=0.5_wp, beta=-1.0_wp, uplo='l')
       energy(:) = energy(:) + vrhs(:mol%nat) * xvec(:mol%nat)
    end if
 
@@ -293,14 +293,14 @@ subroutine solve(self, mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
          call self%get_damat_3d(mol, cache, wsc, alpha, vrhs, dadr, dadL, atrace)
       else
          call self%get_damat_0d(mol, cache, cn, qloc, vrhs, dcndr, dcndL, &
-         & dqlocdr, dqlocdL, dadr, dadL, atrace)
+            & dqlocdr, dqlocdL, dadr, dadL, atrace)
       end if
    end if
 
    if (grad) then
       gradient = 0.0_wp
-      call gemv(dadr, vrhs, gradient, beta=1.0_wp)
-      call gemv(dxdr, vrhs, gradient, beta=1.0_wp, alpha=-1.0_wp)
+      call gemv(dadr(:, :, :mol%nat), vrhs(:mol%nat), gradient, beta=1.0_wp)!, alpha=0.5_wp)
+      call gemv(dxdr(:, :, :mol%nat), vrhs(:mol%nat), gradient, beta=1.0_wp, alpha=-1.0_wp)
       call gemv(dadL, vrhs, sigma, beta=1.0_wp, alpha=0.5_wp)
       call gemv(dxdL, vrhs, sigma, beta=1.0_wp, alpha=-1.0_wp)
    end if

@@ -32,7 +32,7 @@ module multicharge_model_eeqbc
    use multicharge_model_cache, only : mchrg_cache
    use multicharge_wignerseitz, only : wignerseitz_cell_type
    use multicharge_model_type, only : mchrg_model_type, get_dir_trans, get_rec_trans
-   use multicharge_blas, only : gemv
+   use multicharge_blas, only : gemv, gemm
    implicit none
    private
 
@@ -202,39 +202,43 @@ subroutine get_vrhs(self, mol, cache, cn, qloc, xvec, dcndr, dcndL, &
    
    integer :: iat, izp, jat, jzp
    real(wp) :: tmpdcn, tmpdqloc
-   real(wp), allocatable :: tmp(:)
+   real(wp), allocatable :: tmp(:), dtmpdr(:, :, :), dtmpdL(:, :, :)
 
    allocate(tmp(mol%nat+1))
    if (present(dxdr) .and. present(dxdL) &
       & .and. present(dcndr) .and. present(dcndL) &
       & .and. present(dqlocdr) .and. present(dqlocdL)) then
+      allocate(dtmpdr(3, mol%nat, mol%nat+1), dtmpdL(3, 3, mol%nat+1))
+
       dxdr(:, :, :) = 0.0_wp
       dxdL(:, :, :) = 0.0_wp
-
+      dtmpdr(:, :, :) = 0.0_wp
+      dtmpdL(:, :, :) = 0.0_wp
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(self, mol, tmp, cn, qloc) private(iat, izp)
+      !$omp shared(cn, dcndr, dcndL, qloc, dqlocdr, dqlocdL) &
+      !$omp shared(self, mol, tmp, dtmpdr, dtmpdL) private(iat, izp) 
       do iat = 1, mol%nat
          izp = mol%id(iat)
          tmp(iat) = -self%chi(izp) + self%kcnchi(izp)*cn(iat) &
             & + self%kqchi(izp)*qloc(iat)
+
+         ! CN and effective charge derivative
+         dtmpdr(:, :, iat) = self%kcnchi(izp) * dcndr(:, :, iat) + dtmpdr(:, :, iat)
+         dtmpdL(:, :, iat) = self%kcnchi(izp) * dcndL(:, :, iat) + dtmpdL(:, :, iat)
+         dtmpdr(:, :, iat) = self%kqchi(izp) * dqlocdr(:, :, iat) + dtmpdr(:, :, iat)
+         dtmpdL(:, :, iat) = self%kqchi(izp) * dqlocdL(:, :, iat) + dtmpdL(:, :, iat)
       end do
+
+      call gemm(dtmpdr(:, :, :mol%nat), cache%cmat(:mol%nat, :mol%nat), dxdr)
+      call gemm(dtmpdL(:, :, :mol%nat), cache%cmat(:mol%nat, :mol%nat), dxdL)
+      !call gemv(cache%dcdr(:, :, :mol%nat), tmp(:mol%nat), xvec)
+
 
       !$omp parallel do default(none) schedule(runtime) &
       !$omp reduction(+:dxdr, dxdL) shared(self, mol, cache, tmp) &
-      !$omp shared(cn, dcndr, dcndL, qloc, dqlocdr, dqlocdL) &
-      !$omp private(iat, izp, jat, jzp, tmpdcn, tmpdqloc)
+      !$omp private(iat, jat)
       do iat = 1, mol%nat
-         izp = mol%id(iat)
          do jat = 1, mol%nat
-            jzp = mol%id(jat)
-            tmpdcn = cache%cmat(iat, jat) * self%kcnchi(jzp)
-            tmpdqloc = cache%cmat(iat, jat) * self%kqchi(jzp)
-            ! CN and effective charge derivative
-            dxdr(:, :, iat) = tmpdcn * dcndr(:, :, jat) + dxdr(:, :, iat)
-            dxdL(:, :, iat) = tmpdcn * dcndL(:, :, jat) + dxdL(:, :, iat)
-            dxdr(:, :, iat) = tmpdqloc * dqlocdr(:, :, jat) + dxdr(:, :, iat)
-            dxdL(:, :, iat) = tmpdqloc * dqlocdL(:, :, jat) + dxdL(:, :, iat)
-            ! Capacitance derivative
             dxdr(:, iat, iat) = tmp(jat) * cache%dcdr(:, iat, jat) + dxdr(:, iat, iat)
             dxdr(:, iat, jat) = (tmp(iat) - tmp(jat)) * cache%dcdr(:, iat, jat) &
                & + dxdr(:, iat, jat)
@@ -250,6 +254,7 @@ subroutine get_vrhs(self, mol, cache, cn, qloc, xvec, dcndr, dcndL, &
       end do
    end if
    tmp(mol%nat+1) = mol%charge
+   ! xvec = tmp
    call gemv(cache%cmat, tmp, xvec)
 
 end subroutine get_vrhs
@@ -460,17 +465,17 @@ subroutine get_damat_0d(self, mol, cache, cn, qloc, qvec, dcndr, dcndL, &
             & - erf(sqrt(arg))/(r2*sqrt(r2)*self%dielectric)
          dG(:) = -dtmp * vec ! questionable sign
          dS(:, :) = spread(dG, 1, 3) * spread(vec, 2, 3)
-         atrace(:, iat)    = +dG*qvec(jat)*cache%cmat(iat, jat) + atrace(:, iat)
-         atrace(:, jat)    = -dG*qvec(iat)*cache%cmat(jat, iat) + atrace(:, jat)
-         dadr(:, iat, jat) = +dG*qvec(iat)*cache%cmat(iat, jat)
-         dadr(:, jat, iat) = -dG*qvec(jat)*cache%cmat(jat, iat)
+         atrace(:, iat)    = +dG*qvec(jat)*cache%cmat(jat, iat) + atrace(:, iat)
+         atrace(:, jat)    = -dG*qvec(iat)*cache%cmat(iat, jat) + atrace(:, jat)
+         dadr(:, iat, jat) = +dG*qvec(iat)*cache%cmat(iat, jat) + dadr(:, iat, jat)
+         dadr(:, jat, iat) = -dG*qvec(jat)*cache%cmat(jat, iat) + dadr(:, jat, iat)
          dadL(:, :, jat)   = +dS*qvec(iat)*cache%cmat(iat, jat) + dadL(:, :, jat)
          dadL(:, :, iat)   = +dS*qvec(jat)*cache%cmat(jat, iat) + dadL(:, :, iat)
 
          ! Effective charge width derivative 
          dtmp = 2.0_wp*exp(-arg)/(sqrtpi*self%dielectric)
-         atrace(:, iat)    = +dtmp*qvec(jat)*dgamdr(:, jat)*cache%cmat(iat, jat) + atrace(:, iat)
-         atrace(:, jat)    = +dtmp*qvec(iat)*dgamdr(:, iat)*cache%cmat(jat, iat) + atrace(:, jat)
+         atrace(:, iat)    = +dtmp*qvec(jat)*dgamdr(:, jat)*cache%cmat(jat, iat) + atrace(:, iat)
+         atrace(:, jat)    = +dtmp*qvec(iat)*dgamdr(:, iat)*cache%cmat(iat, jat) + atrace(:, jat)
          dadr(:, iat, jat) = +dtmp*qvec(iat)*dgamdr(:, iat)*cache%cmat(iat, jat) + dadr(:, iat, jat)
          dadr(:, jat, iat) = +dtmp*qvec(jat)*dgamdr(:, jat)*cache%cmat(jat, iat) + dadr(:, jat, iat)
          dadL(:, :, jat)   = +dtmp*qvec(iat)*dgamdL(:, :)*cache%cmat(iat, jat)   + dadL(:, :, jat)
@@ -489,24 +494,24 @@ subroutine get_damat_0d(self, mol, cache, cn, qloc, qvec, dcndr, dcndL, &
 
       ! Hardness derivative
       dtmp = self%kqeta(izp) * qvec(iat) * cache%cmat(iat, iat)
-      atrace(:, iat)    = +dtmp*dqlocdr(:, iat, iat) + atrace(:, iat)
+      !atrace(:, iat)    = -dtmp*dqlocdr(:, iat, iat) + atrace(:, iat)
       dadr(:, iat, iat) = +dtmp*dqlocdr(:, iat, iat) + dadr(:, iat, iat) 
       dadL(:, :, iat)   = +dtmp*dqlocdL(:, :, iat)   + dadL(:, :, iat)
 
       ! Effective charge width derivative 
       dtmp = -sqrt2pi*dradi/(radi**2) * qvec(iat) * cache%cmat(iat, iat)
-      atrace(:, iat)    = +dtmp*dcndr(:, iat, iat) + atrace(:, iat)
+      !atrace(:, iat)    = -dtmp*dcndr(:, iat, iat) + atrace(:, iat)
       dadr(:, iat, iat) = +dtmp*dcndr(:, iat, iat) + dadr(:, iat, iat)
       dadL(:, :, iat)   = +dtmp*dcndL(:, :, iat)   + dadL(:, :, iat)
 
       ! Capacitance derivative 
       dtmp = (self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi) * qvec(iat)
-      atrace(:, iat)    = +dtmp*cache%dcdr(:, iat, iat) + atrace(:, iat)
+      !atrace(:, iat)    = -dtmp*cache%dcdr(:, iat, iat) + atrace(:, iat)
       dadr(:, iat, iat) = +dtmp*cache%dcdr(:, iat, iat) + dadr(:, iat, iat)
       dadL(:, :, iat)   = +dtmp*cache%dcdL(:, :, iat)   + dadL(:, :, iat)
 
    end do
-
+   
 end subroutine get_damat_0d
 
 subroutine get_damat_3d(self, mol, cache, wsc, alpha, qvec, dadr, dadL, atrace)

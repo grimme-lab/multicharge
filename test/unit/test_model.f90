@@ -299,6 +299,8 @@ subroutine test_dbdr(error, mol, model)
       & xvecr(mol%nat+1), xvecl(mol%nat+1), numgrad(3, mol%nat, mol%nat+1), &
       & dbdr(3, mol%nat, mol%nat+1), dbdL(3, 3, mol%nat+1))
    
+   call model%update(mol, .false., cache)
+
    lp: do iat = 1, mol%nat
       do ic = 1, 3
          ! Right-hand side
@@ -479,8 +481,8 @@ subroutine test_numgrad(error, mol, model)
    gradient(:, :) = 0.0_wp
    sigma(:, :) = 0.0_wp
 
-   ! call model%ncoord%get_coordination_number(mol, trans, cn)
-   ! call model%local_charge(mol, trans, qloc)
+   call model%ncoord%get_coordination_number(mol, trans, cn)
+   call model%local_charge(mol, trans, qloc)
 
    lp: do iat = 1, mol%nat
       do ic = 1, 3
@@ -631,6 +633,9 @@ subroutine test_numdqdr(error, mol, model)
       & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
       & ql(mol%nat), qr(mol%nat), dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat), &
       & numdr(3, mol%nat, mol%nat))
+
+   call model%ncoord%get_coordination_number(mol, trans, cn)
+   call model%local_charge(mol, trans, qloc)
 
    lp: do iat = 1, mol%nat
       do ic = 1, 3
