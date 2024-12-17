@@ -42,28 +42,28 @@ contains
       type(unittest_type), allocatable, intent(out) :: testsuite(:)
 
       testsuite = [ &
-         !& new_unittest("eeq-dadr-mb01", test_eeq_dadr_mb01), &
-         !!& new_unittest("eeq-dadL-mb01", test_eeq_dadL_mb01), &
-         !& new_unittest("eeq-dbdr-mb01", test_eeq_dbdr_mb01), &
-         !& new_unittest("eeq-charges-mb01", test_eeq_q_mb01), &
-         !& new_unittest("eeq-charges-mb02", test_eeq_q_mb02), &
-         !& new_unittest("eeq-charges-actinides", test_eeq_q_actinides), &
-         !& new_unittest("eeq-energy-mb03", test_eeq_e_mb03), &
-         !& new_unittest("eeq-energy-mb04", test_eeq_e_mb04), &
-         !& new_unittest("eeq-gradient-mb05", test_eeq_g_mb05), &
-         !& new_unittest("eeq-gradient-mb06", test_eeq_g_mb06), &
-         !& new_unittest("eeq-sigma-mb07", test_eeq_s_mb07), &
-         !& new_unittest("eeq-sigma-mb08", test_eeq_s_mb08), &
-         !& new_unittest("eeq-dqdr-mb09", test_eeq_dqdr_mb09), &
-         !& new_unittest("eeq-dqdr-mb10", test_eeq_dqdr_mb10), &
-         !& new_unittest("eeq-dqdL-mb11", test_eeq_dqdL_mb11), &
-         !& new_unittest("eeq-dqdL-mb12", test_eeq_dqdL_mb12), &
-         !& new_unittest("gradient-h2plus", test_g_h2plus), &
-         !& new_unittest("eeq-dadr-znooh", test_eeq_dadr_znooh), &
-         !& new_unittest("eeq-dbdr-znooh", test_eeq_dbdr_znooh), &
-         !& new_unittest("gradient-znooh", test_g_znooh), &
-         !& new_unittest("dqdr-znooh", test_dqdr_znooh), &
-         !& new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), &
+         & new_unittest("eeq-dadr-mb01", test_eeq_dadr_mb01), &
+         !& new_unittest("eeq-dadL-mb01", test_eeq_dadL_mb01), &
+         & new_unittest("eeq-dbdr-mb01", test_eeq_dbdr_mb01), &
+         & new_unittest("eeq-charges-mb01", test_eeq_q_mb01), &
+         & new_unittest("eeq-charges-mb02", test_eeq_q_mb02), &
+         & new_unittest("eeq-charges-actinides", test_eeq_q_actinides), &
+         & new_unittest("eeq-energy-mb03", test_eeq_e_mb03), &
+         & new_unittest("eeq-energy-mb04", test_eeq_e_mb04), &
+         & new_unittest("eeq-gradient-mb05", test_eeq_g_mb05), &
+         & new_unittest("eeq-gradient-mb06", test_eeq_g_mb06), &
+         & new_unittest("eeq-sigma-mb07", test_eeq_s_mb07), &
+         & new_unittest("eeq-sigma-mb08", test_eeq_s_mb08), &
+         & new_unittest("eeq-dqdr-mb09", test_eeq_dqdr_mb09), &
+         & new_unittest("eeq-dqdr-mb10", test_eeq_dqdr_mb10), &
+         & new_unittest("eeq-dqdL-mb11", test_eeq_dqdL_mb11), &
+         & new_unittest("eeq-dqdL-mb12", test_eeq_dqdL_mb12), &
+         & new_unittest("gradient-h2plus", test_g_h2plus), &
+         & new_unittest("eeq-dadr-znooh", test_eeq_dadr_znooh), &
+         & new_unittest("eeq-dbdr-znooh", test_eeq_dbdr_znooh), &
+         & new_unittest("gradient-znooh", test_g_znooh), &
+         & new_unittest("dqdr-znooh", test_dqdr_znooh), &
+         & new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), &
          !& new_unittest("eeqbc-dadL-mb01", test_eeqbc_dadL_mb01), &
          & new_unittest("eeqbc-dbdr-mb01", test_eeqbc_dbdr_mb01), &
          & new_unittest("eeqbc-dadr-mb05", test_eeqbc_dadr_mb05), &
@@ -75,12 +75,12 @@ contains
          & new_unittest("eeqbc-energy-mb04", test_eeqbc_e_mb04), &
          & new_unittest("eeqbc-gradient-mb05", test_eeqbc_g_mb05), &
          & new_unittest("eeqbc-gradient-mb06", test_eeqbc_g_mb06) &
-         !& new_unittest("eeqbc-sigma-mb07", test_eeqbc_s_mb07), &
-         !& new_unittest("eeqbc-sigma-mb08", test_eeqbc_s_mb08), &
-         !& new_unittest("eeqbc-dqdr-mb09", test_eeqbc_dqdr_mb09), &
-         !& new_unittest("eeqbc-dqdr-mb10", test_eeqbc_dqdr_mb10), &
-         !& new_unittest("eeqbc-dqdL-mb11", test_eeqbc_dqdL_mb11), &
-         !& new_unittest("eeqbc-dqdL-mb12", test_eeqbc_dqdL_mb12) &
+         & new_unittest("eeqbc-sigma-mb07", test_eeqbc_s_mb07), &
+         & new_unittest("eeqbc-sigma-mb08", test_eeqbc_s_mb08), &
+         & new_unittest("eeqbc-dqdr-mb09", test_eeqbc_dqdr_mb09), &
+         & new_unittest("eeqbc-dqdr-mb10", test_eeqbc_dqdr_mb10), &
+         & new_unittest("eeqbc-dqdL-mb11", test_eeqbc_dqdL_mb11), &
+         & new_unittest("eeqbc-dqdL-mb12", test_eeqbc_dqdL_mb12) &
          & ]
 
    end subroutine collect_model
