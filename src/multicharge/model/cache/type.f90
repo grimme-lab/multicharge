@@ -26,18 +26,11 @@ module multicharge_model_cache
 
    !> Cache for the charge model
    type, abstract, public :: mchrg_cache
-      !> Store tmp array from xvec calculation for reuse
-      real(wp), allocatable :: tmp(:)
-      !> Pointers to CN and local charge arrays
-      ! NOTE: we use pointers here since cn and qloc are intent(out) for solve
-      ! and if would make no sense to put the into the cache
-      real(wp), pointer :: cn(:) => null()
-      real(wp), pointer :: qloc(:) => null()
+      !> CN array
+      real(wp), allocatable :: cn(:)
       !> Gradients
       real(wp), allocatable :: dcndr(:, :, :)
       real(wp), allocatable :: dcndL(:, :, :)
-      real(wp), allocatable :: dqlocdr(:, :, :)
-      real(wp), allocatable :: dqlocdL(:, :, :)
       real(wp) :: alpha
       type(wignerseitz_cell_type) :: wsc
    contains
@@ -46,11 +39,10 @@ module multicharge_model_cache
    end type mchrg_cache
 
    abstract interface
-      subroutine update(self, mol, grad)
+      subroutine update(self, mol)
          import mchrg_cache, structure_type
          class(mchrg_cache), intent(inout) :: self
          type(structure_type), intent(in) :: mol
-         logical, intent(in) :: grad
       end subroutine update
 
    end interface

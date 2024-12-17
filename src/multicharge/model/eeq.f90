@@ -97,20 +97,27 @@ contains
 
    end subroutine new_eeq_model
 
-   subroutine update(self, mol, cache, cn, qloc, grad)
+   subroutine update(self, mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
       class(eeq_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
       class(mchrg_cache), allocatable, intent(out) :: cache
-      real(wp), intent(in), target :: cn(:), qloc(:)
-      logical, intent(in) :: grad
+      real(wp), intent(in) :: cn(:)
+      real(wp), intent(in), optional :: qloc(:)
+      real(wp), intent(in), optional :: dcndr(:, :, :)
+      real(wp), intent(in), optional :: dcndL(:, :, :)
+      real(wp), intent(in), optional :: dqlocdr(:, :, :)
+      real(wp), intent(in), optional :: dqlocdL(:, :, :)
 
       allocate (eeq_cache :: cache)
 
-      call cache%update(mol, grad)
+      call cache%update(mol)
 
-      !> Refer CN and local charge arrays in cache
-      cache%cn => cn
-      cache%qloc => qloc
+      !> Refer CN arrays in cache
+      cache%cn = cn
+      if (present(dcndr) .and. present(dcndL)) then
+         cache%dcndr = dcndr
+         cache%dcndL = dcndL
+      end if
    end subroutine update
 
    subroutine get_xvec(self, mol, cache, xvec)
@@ -123,15 +130,12 @@ contains
       integer :: iat, izp
       real(wp) :: tmp
 
-      type(eeq_cache), pointer :: ccache
-      ccache => cast_cache(cache)
-
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(mol, self, xvec, ccache) private(iat, izp, tmp)
+      !$omp shared(mol, self, xvec, cache) private(iat, izp, tmp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
-         tmp = self%kcnchi(izp)/sqrt(ccache%cn(iat) + reg)
-         xvec(iat) = -self%chi(izp) + tmp*ccache%cn(iat)
+         tmp = self%kcnchi(izp)/sqrt(cache%cn(iat) + reg)
+         xvec(iat) = -self%chi(izp) + tmp*cache%cn(iat)
       end do
       xvec(mol%nat + 1) = mol%charge
 
@@ -148,20 +152,17 @@ contains
       integer :: iat, izp
       real(wp) :: tmp
 
-      type(eeq_cache), pointer :: ccache
-      ccache => cast_cache(cache)
-
       dxdr(:, :, :) = 0.0_wp
       dxdL(:, :, :) = 0.0_wp
 
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(mol, self, ccache, dxdr, dxdL) &
+      !$omp shared(mol, self, cache, dxdr, dxdL) &
       !$omp private(iat, izp, tmp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
-         tmp = self%kcnchi(izp)/sqrt(ccache%cn(iat) + reg)
-         dxdr(:, :, iat) = 0.5_wp*tmp*ccache%dcndr(:, :, iat) + dxdr(:, :, iat)
-         dxdL(:, :, iat) = 0.5_wp*tmp*ccache%dcndL(:, :, iat) + dxdL(:, :, iat)
+         tmp = self%kcnchi(izp)/sqrt(cache%cn(iat) + reg)
+         dxdr(:, :, iat) = 0.5_wp*tmp*cache%dcndr(:, :, iat) + dxdr(:, :, iat)
+         dxdL(:, :, iat) = 0.5_wp*tmp*cache%dcndL(:, :, iat) + dxdL(:, :, iat)
       end do
    end subroutine get_xvec_derivs
 
@@ -171,11 +172,8 @@ contains
       class(mchrg_cache), intent(inout) :: cache
       real(wp), intent(out) :: amat(:, :)
 
-      type(eeq_cache), pointer :: ccache
-      ccache => cast_cache(cache)
-
       if (any(mol%periodic)) then
-         call self%get_amat_3d(mol, ccache%wsc, ccache%alpha, amat)
+         call self%get_amat_3d(mol, cache%wsc, cache%alpha, amat)
       else
          call self%get_amat_0d(mol, amat)
       end if
@@ -188,14 +186,10 @@ contains
       real(wp), intent(in) :: vrhs(:)
       real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
 
-      type(eeq_cache), pointer :: ccache
-      ccache => cast_cache(cache)
-
       if (any(mol%periodic)) then
-         call self%get_damat_3d(mol, ccache%wsc, ccache%alpha, vrhs, dadr, dadL, atrace)
+         call self%get_damat_3d(mol, cache%wsc, cache%alpha, vrhs, dadr, dadL, atrace)
       else
-         call self%get_damat_0d(mol, ccache%cn, ccache%qloc, vrhs, ccache%dcndr, ccache%dcndL, &
-         & ccache%dqlocdr, ccache%dqlocdL, dadr, dadL, atrace)
+         call self%get_damat_0d(mol, vrhs, dadr, dadL, atrace)
       end if
    end subroutine get_coulomb_derivs
 
@@ -332,17 +326,10 @@ contains
 
    end subroutine get_amat_rec_3d
 
-   subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
-      & dqlocdr, dqlocdL, dadr, dadL, atrace)
+   subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
       class(eeq_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      real(wp), intent(in) :: cn(:)
-      real(wp), intent(in) :: qloc(:)
       real(wp), intent(in) :: qvec(:)
-      real(wp), intent(in) :: dcndr(:, :, :)
-      real(wp), intent(in) :: dcndL(:, :, :)
-      real(wp), intent(in) :: dqlocdr(:, :, :)
-      real(wp), intent(in) :: dqlocdL(:, :, :)
       real(wp), intent(out) :: dadr(:, :, :)
       real(wp), intent(out) :: dadL(:, :, :)
       real(wp), intent(out) :: atrace(:, :)
@@ -377,7 +364,6 @@ contains
             dadL(:, :, iat) = +dS*qvec(jat) + dadL(:, :, iat)
          end do
       end do
-
    end subroutine get_damat_0d
 
    subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
@@ -511,12 +497,12 @@ contains
       class(mchrg_cache), intent(in) :: cache
       type(eeq_cache), pointer :: ccache
 
-      select type(cache)
+      select type (cache)
       type is (eeq_cache)
          ccache => cache
-      class default 
+      class default
          ccache => null()
-         error stop "invalid cache type (eeqbc)"
+         error stop "invalid cache type (eeq)"
       end select
    end function
 

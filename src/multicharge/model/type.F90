@@ -81,13 +81,17 @@ module multicharge_model_type
    end type mchrg_model_type
 
    abstract interface
-      subroutine update(self, mol, cache, cn, qloc, grad)
+      subroutine update(self, mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
          import :: mchrg_model_type, structure_type, mchrg_cache, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
          class(mchrg_cache), allocatable, intent(out) :: cache
-         real(wp), intent(in), target :: cn(:), qloc(:)
-         logical, intent(in) :: grad
+         real(wp), intent(in) :: cn(:)
+         real(wp), intent(in), optional :: qloc(:)
+         real(wp), intent(in), optional :: dcndr(:, :, :)
+         real(wp), intent(in), optional :: dcndL(:, :, :)
+         real(wp), intent(in), optional :: dqlocdr(:, :, :)
+         real(wp), intent(in), optional :: dqlocdL(:, :, :)
       end subroutine update
 
       subroutine get_coulomb_matrix(self, mol, cache, amat)
@@ -202,11 +206,16 @@ contains
 
    end subroutine get_rec_trans
 
-   subroutine solve(self, mol, cn, qloc, energy, gradient, sigma, qvec, dqdr, dqdL)
+   subroutine solve(self, mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
+      & energy, gradient, sigma, qvec, dqdr, dqdL)
       class(mchrg_model_type), intent(in) :: self
       type(structure_type), intent(in) :: mol
       real(wp), intent(inout), contiguous :: cn(:)
       real(wp), intent(inout), contiguous :: qloc(:)
+      real(wp), intent(in), contiguous, optional :: dcndr(:, :, :)
+      real(wp), intent(in), contiguous, optional :: dcndL(:, :, :)
+      real(wp), intent(in), contiguous, optional :: dqlocdr(:, :, :)
+      real(wp), intent(in), contiguous, optional :: dqlocdL(:, :, :)
       real(wp), intent(out), contiguous, optional :: qvec(:)
       real(wp), intent(inout), contiguous, optional :: energy(:)
       real(wp), intent(inout), contiguous, optional :: gradient(:, :)
@@ -229,27 +238,16 @@ contains
       real(wp), allocatable :: trans(:, :)
 
       !> Calculate gradient if the respective arrays are present
-      grad = present(gradient) .and. present(sigma)
-      ! dcn = present(dcndr) .and. present(dcndL)
-      ! grad = present(gradient) .and. present(sigma) .and. dcn
-      ! cpq = present(dqdr) .and. present(dqdL) .and. dcn
+      dcn = present(dcndr) .and. present(dcndL)
+      grad = present(gradient) .and. present(sigma) .and. dcn
+      cpq = present(dqdr) .and. present(dqdL) .and. dcn
 
       !> Update cache
-      ! NOTE: only stores pointers to cn, qloc
-      call self%update(mol, cache, cn, qloc, grad)
+      call self%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
 
       !> Get lattice points
       if (any(mol%periodic)) then
          call get_dir_trans(mol%lattice, trans)
-      end if
-
-      !> Get CNs and local charges
-      if (grad) then
-         call self%ncoord%get_coordination_number(mol, trans, cn)
-         call self%local_charge(mol, trans, qloc)
-      else
-         call self%ncoord%get_coordination_number(mol, trans, cn, cache%dcndr, cache%dcndL)
-         call self%local_charge(mol, trans, qloc, cache%dqlocdr, cache%dqlocdL)
       end if
 
       !> Get amat
@@ -287,29 +285,30 @@ contains
          qvec(:) = vrhs(:mol%nat)
       end if
 
-      !> Solve
       if (present(energy)) then
-         call symv(amat(:, :mol%nat), vrhs(:mol%nat), xvec(:mol%nat), alpha=0.5_wp, beta=-1.0_wp, uplo='l')
+         call symv(amat(:mol%nat, :mol%nat), vrhs(:mol%nat), xvec(:mol%nat), alpha=0.5_wp, beta=-1.0_wp, uplo='l')
          energy(:) = energy(:) + vrhs(:mol%nat)*xvec(:mol%nat)
       end if
 
       !> Allocate and get amat derivatives
-      if (grad) then ! .or. cpq
+      if (grad .or. cpq) then
          allocate (dadr(3, mol%nat, ndim), dadL(3, 3, ndim), atrace(3, mol%nat))
          allocate (dxdr(3, mol%nat, ndim), dxdL(3, 3, ndim))
          call self%get_xvec_derivs(mol, cache, dxdr, dxdL)
-         call self%get_coulomb_derivs(mol, cache, xvec, dadr, dadL, atrace)
-         !end if
+         call self%get_coulomb_derivs(mol, cache, vrhs, dadr, dadL, atrace)
+         print'(a)', "atrace:"
+         print'(3es21.14)', atrace
+      end if
 
-         !if (grad) then
+      if (grad) then
          gradient = 0.0_wp
-         call gemv(dadr, vrhs, gradient, beta=1.0_wp)
-         call gemv(dxdr, vrhs, gradient, beta=1.0_wp, alpha=-1.0_wp)
+         call gemv(dadr(:, :, :mol%nat), vrhs(:mol%nat), gradient, beta=1.0_wp)!, alpha=0.5_wp)
+         call gemv(dxdr(:, :, :mol%nat), vrhs(:mol%nat), gradient, beta=1.0_wp, alpha=-1.0_wp)
          call gemv(dadL, vrhs, sigma, beta=1.0_wp, alpha=0.5_wp)
          call gemv(dxdL, vrhs, sigma, beta=1.0_wp, alpha=-1.0_wp)
-         !end if
+      end if
 
-         !if (cpq) then
+      if (cpq) then
          do iat = 1, mol%nat
             dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
             dadr(:, :, iat) = -dxdr(:, :, iat) + dadr(:, :, iat)
@@ -319,7 +318,6 @@ contains
          call gemm(dadr, ainv(:, :mol%nat), dqdr, alpha=-1.0_wp)
          call gemm(dadL, ainv(:, :mol%nat), dqdL, alpha=-1.0_wp)
       end if
-
    end subroutine solve
 
    subroutine local_charge(self, mol, trans, qloc, dqlocdr, dqlocdL)

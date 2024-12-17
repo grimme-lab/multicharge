@@ -35,6 +35,7 @@ program main
    real(wp), parameter :: cn_max = 8.0_wp, cutoff = 25.0_wp
    real(wp), allocatable :: cn(:), rcov(:)
    real(wp), allocatable :: qloc(:)
+   real(wp), allocatable :: dcndr(:, :, :), dcndL(:, :, :), dqlocdr(:, :, :), dqlocdL(:, :, :)
    real(wp), allocatable :: energy(:), gradient(:, :), sigma(:, :)
    real(wp), allocatable :: qvec(:)
    real(wp), allocatable :: charge, dielectric
@@ -90,15 +91,21 @@ program main
 
    allocate (energy(mol%nat), qvec(mol%nat))
    energy(:) = 0.0_wp
+   allocate (cn(mol%nat), qloc(mol%nat))
    if (grad) then
+      allocate (dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat))
+      allocate (dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat))
+      call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
+      call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
       allocate (gradient(3, mol%nat), sigma(3, 3))
       gradient(:, :) = 0.0_wp
       sigma(:, :) = 0.0_wp
+      call model%solve(mol, cn, dcndr, dcndL, qloc, dqlocdr, dqlocdL, energy, gradient, sigma, qvec)
+   else
+      call model%ncoord%get_coordination_number(mol, trans, cn)
+      call model%local_charge(mol, trans, qloc)
+      call model%solve(mol, cn, qloc, energy=energy, qvec=qvec)
    end if
-
-   allocate (cn(mol%nat), qloc(mol%nat))
-
-   call model%solve(mol, cn, qloc, energy, gradient, sigma, qvec)
 
    call write_ascii_properties(output_unit, mol, model, cn, qvec)
    call write_ascii_results(output_unit, mol, energy, gradient, sigma)

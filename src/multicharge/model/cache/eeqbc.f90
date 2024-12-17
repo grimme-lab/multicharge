@@ -21,13 +21,17 @@ module multicharge_eeqbc_cache
    use mctc_env, only: wp
    use mctc_io, only: structure_type
    use multicharge_model_cache, only: mchrg_cache
-   use multicharge_wignerseitz, only: new_wignerseitz_cell, wignerseitz_cell_type
    use multicharge_ewald, only: get_alpha
+   use multicharge_wignerseitz, only: new_wignerseitz_cell
    implicit none
    private
 
    !> Cache for the EEQ-BC charge model
    type, extends(mchrg_cache), public :: eeqbc_cache
+      !> Local charge arrays
+      real(wp), allocatable :: qloc(:)
+      real(wp), allocatable :: dqlocdr(:, :, :)
+      real(wp), allocatable :: dqlocdL(:, :, :)
       !> Full constraint matrix for 0d case
       real(wp), allocatable :: cmat(:, :)
       !> Contributions for every WSC image for diagonal elements of constraint matrix
@@ -36,15 +40,15 @@ module multicharge_eeqbc_cache
       real(wp), allocatable :: dcdr(:, :, :)
       !> Derivative of constraint matrix w.r.t lattice vectors
       real(wp), allocatable :: dcdL(:, :, :)
+      !> Store tmp array from xvec calculation for reuse
       real(wp), allocatable :: xtmp(:)
    contains
-      !>
+      !> Allocation of arrays, WSC creation
       procedure :: update
    end type eeqbc_cache
 
 contains
-   subroutine update(self, mol, grad)
-      logical, intent(in) :: grad
+   subroutine update(self, mol)
       class(eeqbc_cache), intent(inout) :: self
       type(structure_type), intent(in) :: mol
 
@@ -52,23 +56,8 @@ contains
       if (any(mol%periodic)) then
          call new_wignerseitz_cell(self%wsc, mol)
          call get_alpha(mol%lattice, self%alpha)
-         !> Allocate cmat diagonal WSC image contributions
-         ! NOTE: one additional dimension for T=0
-         allocate (self%cmat_diag(mol%nat, self%wsc%nimg_max + 1))
-      else
-         !> Allocate cmat
-         allocate (self%cmat(mol%nat + 1, mol%nat + 1))
       end if
 
-      !> Allocate (for get_xvec and xvec_derivs)
-      allocate (self%xtmp(mol%nat + 1))
-
-      if (grad) then
-         allocate (self%dcndr(3, mol%nat, mol%nat), self%dcndL(3, 3, mol%nat))
-         allocate (self%dqlocdr(3, mol%nat, mol%nat), self%dqlocdL(3, 3, mol%nat))
-      end if
-
-      !> Setup cmat
    end subroutine update
 
 end module multicharge_eeqbc_cache

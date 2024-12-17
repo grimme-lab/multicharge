@@ -81,8 +81,6 @@ contains
          & rvdw(:, :)
       type(eeqbc_model), allocatable :: eeqbc
 
-      integer :: iat, jat, isp, jsp
-
       chi = get_eeqbc_chi(mol%num)
       eta = get_eeqbc_eta(mol%num)
       rad = get_eeqbc_rad(mol%num)
@@ -97,22 +95,8 @@ contains
       en = get_pauling_en(mol%num)
       en = merge(en, 1.30_wp, mol%num < 90)
       en = merge(0.80_wp, en, mol%num == 87)
-      en = merge(1.00_wp, en, mol%num == 89)
-      en = merge(1.10_wp, en, mol%num == 90 .or. mol%num == 91 &
-         &.or. mol%num == 92 .or. mol%num == 95)
-      en = merge(1.20_wp, en, mol%num == 93 .or. mol%num == 94 &
-         &.or. mol%num == 97 .or. mol%num == 103)
       en = en/3.98_wp
-      !> Collect vdw radii moved here
-      allocate (rvdw(mol%nat, mol%nat))
-      do iat = 1, mol%nat
-         isp = mol%num(iat)
-         do jat = 1, iat - 1
-            jsp = mol%num(jat)
-            rvdw(iat, jat) = get_vdw_rad(isp, jsp)*autoaa
-            rvdw(jat, iat) = rvdw(iat, jat)
-         end do
-      end do
+      rvdw = get_vdw_rad(spread(mol%num(mol%id), 2, mol%nat), spread(mol%num(mol%id), 1, mol%nat))*autoaa
 
       allocate (eeqbc)
       call new_eeqbc_model(eeqbc, mol=mol, chi=chi, rad=rad, eta=eta, &

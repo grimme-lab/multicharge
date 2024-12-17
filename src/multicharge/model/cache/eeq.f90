@@ -21,21 +21,20 @@ module multicharge_eeq_cache
    use mctc_env, only: wp
    use mctc_io, only: structure_type
    use multicharge_model_cache, only: mchrg_cache
-   use multicharge_wignerseitz, only: new_wignerseitz_cell, wignerseitz_cell_type
    use multicharge_ewald, only: get_alpha
+   use multicharge_wignerseitz, only: new_wignerseitz_cell
    implicit none
    private
 
    !> Cache for the EEQ charge model
    type, extends(mchrg_cache), public :: eeq_cache
    contains
-      !>
+      !> WSC creation
       procedure :: update
    end type eeq_cache
 
 contains
-   subroutine update(self, mol, grad)
-      logical, intent(in) :: grad
+   subroutine update(self, mol)
       class(eeq_cache), intent(inout) :: self
       type(structure_type), intent(in) :: mol
 
@@ -45,12 +44,6 @@ contains
          call get_alpha(mol%lattice, self%alpha)
       end if
 
-      if (grad) then
-         allocate (self%dcndr(3, mol%nat, mol%nat), self%dcndL(3, 3, mol%nat))
-         allocate (self%dqlocdr(3, mol%nat, mol%nat), self%dqlocdL(3, 3, mol%nat))
-      end if
-
-      !> Setup cmat
    end subroutine update
 
 end module multicharge_eeq_cache
