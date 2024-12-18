@@ -35,7 +35,7 @@ module multicharge_model_type
    use multicharge_ewald, only: get_alpha
    use multicharge_lapack, only: sytrf, sytrs, sytri
    use multicharge_wignerseitz, only: wignerseitz_cell_type, new_wignerseitz_cell
-   use multicharge_model_cache, only: mchrg_cache
+   use multicharge_model_cache, only: model_cache, cache_container
    implicit none
    private
 
@@ -82,10 +82,10 @@ module multicharge_model_type
 
    abstract interface
       subroutine update(self, mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
-         import :: mchrg_model_type, structure_type, mchrg_cache, wp
+         import :: mchrg_model_type, structure_type, cache_container, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
-         class(mchrg_cache), allocatable, intent(out) :: cache
+         type(cache_container), intent(inout) :: cache
          real(wp), intent(in) :: cn(:)
          real(wp), intent(in), optional :: qloc(:)
          real(wp), intent(in), optional :: dcndr(:, :, :)
@@ -95,41 +95,41 @@ module multicharge_model_type
       end subroutine update
 
       subroutine get_coulomb_matrix(self, mol, cache, amat)
-         import :: mchrg_model_type, structure_type, mchrg_cache, wp
+         import :: mchrg_model_type, structure_type, cache_container, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
-         class(mchrg_cache), intent(inout) :: cache
+         type(cache_container), intent(inout) :: cache
          real(wp), intent(out) :: amat(:, :)
       end subroutine get_coulomb_matrix
 
       subroutine get_coulomb_derivs(self, mol, cache, vrhs, dadr, dadL, atrace)
-         import :: mchrg_model_type, structure_type, mchrg_cache, wp
+         import :: mchrg_model_type, structure_type, cache_container, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
-         class(mchrg_cache), intent(inout) :: cache
+         type(cache_container), intent(inout) :: cache
          real(wp), intent(in) :: vrhs(:)
          real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
       end subroutine get_coulomb_derivs
 
       subroutine get_xvec(self, mol, cache, xvec)
-         import :: mchrg_model_type, mchrg_cache, structure_type, wp
+         import :: mchrg_model_type, cache_container, structure_type, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
-         class(mchrg_cache), intent(inout) :: cache
+         type(cache_container), intent(inout) :: cache
          real(wp), intent(out) :: xvec(:)
       end subroutine get_xvec
 
       subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
-         import :: mchrg_model_type, structure_type, mchrg_cache, wp
+         import :: mchrg_model_type, structure_type, cache_container, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
-         class(mchrg_cache), intent(inout) :: cache
+         type(cache_container), intent(inout) :: cache
          real(wp), intent(out) :: dxdr(:, :, :)
          real(wp), intent(out) :: dxdL(:, :, :)
       end subroutine get_xvec_derivs
 
       !subroutine get_amat_0d(self, mol, amat, cn, qloc, cmat)
-      !   import :: mchrg_model_type, mchrg_cache, structure_type, wp
+      !   import :: mchrg_model_type, cache_container, structure_type, wp
       !   class(mchrg_model_type), intent(in) :: self
       !   type(structure_type), intent(in) :: mol
       !   real(wp), intent(out) :: amat(:, :)
@@ -139,11 +139,11 @@ module multicharge_model_type
       !end subroutine get_amat_0d
 
       !subroutine get_amat_3d(self, mol, cache, wsc, alpha, amat)
-      !   import :: mchrg_model_type, mchrg_cache, structure_type, &
+      !   import :: mchrg_model_type, cache_container, structure_type, &
       !      & wignerseitz_cell_type, wp
       !   class(mchrg_model_type), intent(in) :: self
       !   type(structure_type), intent(in) :: mol
-      !   class(mchrg_cache), intent(inout) :: cache
+      !   type(cache_container), intent(inout) :: cache
       !   type(wignerseitz_cell_type), intent(in) :: wsc
       !   real(wp), intent(in) :: alpha
       !   real(wp), intent(out) :: amat(:, :)
@@ -234,7 +234,7 @@ contains
       !> Gradients
       real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
       real(wp), allocatable :: dxdr(:, :, :), dxdL(:, :, :)
-      class(mchrg_cache), allocatable :: cache
+      type(cache_container), allocatable :: cache
       real(wp), allocatable :: trans(:, :)
 
       !> Calculate gradient if the respective arrays are present
@@ -243,6 +243,7 @@ contains
       cpq = present(dqdr) .and. present(dqdL) .and. dcn
 
       !> Update cache
+      allocate (cache)
       call self%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
 
       !> Get lattice points

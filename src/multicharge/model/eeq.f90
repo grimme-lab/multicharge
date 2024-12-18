@@ -25,12 +25,14 @@ module multicharge_model_eeq
    use mctc_ncoord, only: new_ncoord
    use multicharge_wignerseitz, only: wignerseitz_cell_type
    use multicharge_model_type, only: mchrg_model_type, get_dir_trans, get_rec_trans
-   use multicharge_model_cache, only: mchrg_cache
-   use multicharge_eeq_cache, only: eeq_cache
+   use multicharge_model_cache, only: cache_container, model_cache
    implicit none
    private
 
    public :: eeq_model, new_eeq_model
+
+   type, extends(model_cache), public :: eeq_cache
+   end type eeq_cache
 
    type, extends(mchrg_model_type) :: eeq_model
    contains
@@ -100,7 +102,7 @@ contains
    subroutine update(self, mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
       class(eeq_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), allocatable, intent(out) :: cache
+      type(cache_container), intent(inout) :: cache
       real(wp), intent(in) :: cn(:)
       real(wp), intent(in), optional :: qloc(:)
       real(wp), intent(in), optional :: dcndr(:, :, :)
@@ -108,34 +110,39 @@ contains
       real(wp), intent(in), optional :: dqlocdr(:, :, :)
       real(wp), intent(in), optional :: dqlocdL(:, :, :)
 
-      allocate (eeq_cache :: cache)
+      type(eeq_cache), pointer :: ptr
 
-      call cache%update(mol)
+      call taint(cache, ptr)
+      call ptr%update(mol)
 
       !> Refer CN arrays in cache
-      cache%cn = cn
+      ptr%cn = cn
       if (present(dcndr) .and. present(dcndL)) then
-         cache%dcndr = dcndr
-         cache%dcndL = dcndL
+         ptr%dcndr = dcndr
+         ptr%dcndL = dcndL
       end if
    end subroutine update
 
    subroutine get_xvec(self, mol, cache, xvec)
       class(eeq_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), intent(inout) :: cache
+      type(cache_container), intent(inout) :: cache
       real(wp), intent(out) :: xvec(:)
       real(wp), parameter :: reg = 1.0e-14_wp
 
       integer :: iat, izp
       real(wp) :: tmp
 
+      type(eeq_cache), pointer :: ptr
+
+      call view(cache, ptr)
+
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(mol, self, xvec, cache) private(iat, izp, tmp)
+      !$omp shared(mol, self, xvec, ptr) private(iat, izp, tmp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
-         tmp = self%kcnchi(izp)/sqrt(cache%cn(iat) + reg)
-         xvec(iat) = -self%chi(izp) + tmp*cache%cn(iat)
+         tmp = self%kcnchi(izp)/sqrt(ptr%cn(iat) + reg)
+         xvec(iat) = -self%chi(izp) + tmp*ptr%cn(iat)
       end do
       xvec(mol%nat + 1) = mol%charge
 
@@ -144,7 +151,7 @@ contains
    subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
       class(eeq_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), intent(inout) :: cache
+      type(cache_container), intent(inout) :: cache
       real(wp), intent(out) :: dxdr(:, :, :)
       real(wp), intent(out) :: dxdL(:, :, :)
       real(wp), parameter :: reg = 1.0e-14_wp
@@ -152,28 +159,36 @@ contains
       integer :: iat, izp
       real(wp) :: tmp
 
+      type(eeq_cache), pointer :: ptr
+
+      call view(cache, ptr)
+
       dxdr(:, :, :) = 0.0_wp
       dxdL(:, :, :) = 0.0_wp
 
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(mol, self, cache, dxdr, dxdL) &
+      !$omp shared(mol, self, ptr, dxdr, dxdL) &
       !$omp private(iat, izp, tmp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
-         tmp = self%kcnchi(izp)/sqrt(cache%cn(iat) + reg)
-         dxdr(:, :, iat) = 0.5_wp*tmp*cache%dcndr(:, :, iat) + dxdr(:, :, iat)
-         dxdL(:, :, iat) = 0.5_wp*tmp*cache%dcndL(:, :, iat) + dxdL(:, :, iat)
+         tmp = self%kcnchi(izp)/sqrt(ptr%cn(iat) + reg)
+         dxdr(:, :, iat) = 0.5_wp*tmp*ptr%dcndr(:, :, iat) + dxdr(:, :, iat)
+         dxdL(:, :, iat) = 0.5_wp*tmp*ptr%dcndL(:, :, iat) + dxdL(:, :, iat)
       end do
    end subroutine get_xvec_derivs
 
    subroutine get_coulomb_matrix(self, mol, cache, amat)
       class(eeq_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), intent(inout) :: cache
+      type(cache_container), intent(inout) :: cache
       real(wp), intent(out) :: amat(:, :)
 
+      type(eeq_cache), pointer :: ptr
+
+      call view(cache, ptr)
+
       if (any(mol%periodic)) then
-         call self%get_amat_3d(mol, cache%wsc, cache%alpha, amat)
+         call self%get_amat_3d(mol, ptr%wsc, ptr%alpha, amat)
       else
          call self%get_amat_0d(mol, amat)
       end if
@@ -182,12 +197,16 @@ contains
    subroutine get_coulomb_derivs(self, mol, cache, vrhs, dadr, dadL, atrace)
       class(eeq_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), intent(inout) :: cache
+      type(cache_container), intent(inout) :: cache
       real(wp), intent(in) :: vrhs(:)
       real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
 
+      type(eeq_cache), pointer :: ptr
+
+      call view(cache, ptr)
+
       if (any(mol%periodic)) then
-         call self%get_damat_3d(mol, cache%wsc, cache%alpha, vrhs, dadr, dadL, atrace)
+         call self%get_damat_3d(mol, ptr%wsc, ptr%alpha, vrhs, dadr, dadL, atrace)
       else
          call self%get_damat_0d(mol, vrhs, dadr, dadL, atrace)
       end if
@@ -493,17 +512,43 @@ contains
 
    end subroutine get_damat_rec_3d
 
-   function cast_cache(cache) result(ccache)
-      class(mchrg_cache), intent(in) :: cache
-      type(eeq_cache), pointer :: ccache
+   ! NOTE: the following is basically identical to tblite versions of this pattern
 
-      select type (cache)
+   !> Inspect cache and reallocate it in case of type mismatch
+   subroutine taint(cache, ptr)
+      !> Instance of the cache
+      type(cache_container), target, intent(inout) :: cache
+      !> Reference to the cache
+      type(eeq_cache), pointer, intent(out) :: ptr
+
+      if (allocated(cache%raw)) then
+         call view(cache, ptr)
+         if (associated(ptr)) return
+         deallocate (cache%raw)
+      end if
+
+      if (.not. allocated(cache%raw)) then
+         block
+            type(eeq_cache), allocatable :: tmp
+            allocate (tmp)
+            call move_alloc(tmp, cache%raw)
+         end block
+      end if
+
+      call view(cache, ptr)
+   end subroutine taint
+
+   !> Return reference to cache after resolving its type
+   subroutine view(cache, ptr)
+      !> Instance of the cache
+      type(cache_container), target, intent(inout) :: cache
+      !> Reference to the cache
+      type(eeq_cache), pointer, intent(out) :: ptr
+      nullify (ptr)
+      select type (target => cache%raw)
       type is (eeq_cache)
-         ccache => cache
-      class default
-         ccache => null()
-         error stop "invalid cache type (eeq)"
+         ptr => target
       end select
-   end function
+   end subroutine view
 
 end module multicharge_model_eeq

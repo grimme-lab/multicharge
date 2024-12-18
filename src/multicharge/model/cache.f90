@@ -13,29 +13,40 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
-!> @file multicharge/model/cache/eeq.f90
-!> Contains the cache class for the EEQ charge model
+!> @file multicharge/model/cache.f90
+!> Contains the cache baseclass for the charge models and a container for mutable cache data
 
-!> Cache for the EEQ charge model
-module multicharge_eeq_cache
+!> Cache for charge models
+module multicharge_model_cache
    use mctc_env, only: wp
    use mctc_io, only: structure_type
-   use multicharge_model_cache, only: mchrg_cache
+   use multicharge_wignerseitz, only: wignerseitz_cell_type, new_wignerseitz_cell
    use multicharge_ewald, only: get_alpha
-   use multicharge_wignerseitz, only: new_wignerseitz_cell
    implicit none
    private
 
-   !> Cache for the EEQ charge model
-   type, extends(mchrg_cache), public :: eeq_cache
+   type, public :: cache_container
+      !> Mutable data attribute
+      class(*), allocatable :: raw
+   end type cache_container
+
+   !> Cache for the charge model
+   type, abstract, public :: model_cache
+      !> CN array
+      real(wp), allocatable :: cn(:)
+      !> Gradients
+      real(wp), allocatable :: dcndr(:, :, :)
+      real(wp), allocatable :: dcndL(:, :, :)
+      real(wp) :: alpha
+      type(wignerseitz_cell_type) :: wsc
    contains
-      !> WSC creation
+      !> Create WSC
       procedure :: update
-   end type eeq_cache
+   end type model_cache
 
 contains
    subroutine update(self, mol)
-      class(eeq_cache), intent(inout) :: self
+      class(model_cache), intent(inout) :: self
       type(structure_type), intent(in) :: mol
 
       !> Create WSC
@@ -46,4 +57,4 @@ contains
 
    end subroutine update
 
-end module multicharge_eeq_cache
+end module multicharge_model_cache

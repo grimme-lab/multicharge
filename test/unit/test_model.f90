@@ -23,7 +23,7 @@ module test_model
    use mstore, only: get_structure
    use multicharge_model, only: mchrg_model_type
    use multicharge_param, only: new_eeq2019_model, new_eeqbc2024_model
-   use multicharge_model_cache, only: mchrg_cache
+   use multicharge_model_cache, only: cache_container
    use multicharge_blas, only: gemv
    implicit none
    private
@@ -74,7 +74,7 @@ contains
          & new_unittest("eeqbc-energy-mb03", test_eeqbc_e_mb03), &
          & new_unittest("eeqbc-energy-mb04", test_eeqbc_e_mb04), &
          & new_unittest("eeqbc-gradient-mb05", test_eeqbc_g_mb05), &
-         & new_unittest("eeqbc-gradient-mb06", test_eeqbc_g_mb06) &
+         & new_unittest("eeqbc-gradient-mb06", test_eeqbc_g_mb06), &
          & new_unittest("eeqbc-sigma-mb07", test_eeqbc_s_mb07), &
          & new_unittest("eeqbc-sigma-mb08", test_eeqbc_s_mb08), &
          & new_unittest("eeqbc-dqdr-mb09", test_eeqbc_dqdr_mb09), &
@@ -104,7 +104,8 @@ contains
       real(wp), allocatable :: dcndr(:, :, :), dcndL(:, :, :), dqlocdr(:, :, :), dqlocdL(:, :, :)
       real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
       real(wp), allocatable :: qvec(:), numgrad(:, :, :), amatr(:, :), amatl(:, :)
-      class(mchrg_cache), allocatable :: cache
+      type(cache_container), allocatable :: cache
+      allocate (cache)
 
       allocate (cn(mol%nat), qloc(mol%nat), amatr(mol%nat + 1, mol%nat + 1), amatl(mol%nat + 1, mol%nat + 1), &
          & dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), dqlocdr(3, mol%nat, mol%nat), &
@@ -176,7 +177,8 @@ contains
       real(wp), allocatable :: lattr(:, :), xyz(:, :)
       real(wp), allocatable :: qvec(:), numsigma(:, :, :), amatr(:, :), amatl(:, :)
       real(wp) :: eps(3, 3)
-      class(mchrg_cache), allocatable :: cache
+      type(cache_container), allocatable :: cache
+      allocate (cache)
 
       allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
          & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
@@ -225,14 +227,14 @@ contains
       end do lp
       if (allocated(error)) return
 
-      !call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
-      !call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
-      !call model%update(mol, .true., cache)
+      call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
+      call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
+      call model%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
 
-      dcndr(:, :, :) = 0.0_wp
-      dcndL(:, :, :) = 0.0_wp
-      dqlocdr(:, :, :) = 0.0_wp
-      dqlocdL(:, :, :) = 0.0_wp
+      ! dcndr(:, :, :) = 0.0_wp
+      ! dcndL(:, :, :) = 0.0_wp
+      ! dqlocdr(:, :, :) = 0.0_wp
+      ! dqlocdL(:, :, :) = 0.0_wp
 
       call model%get_coulomb_derivs(mol, cache, qvec, dadr, dadL, atrace)
       if (allocated(error)) return
@@ -279,7 +281,8 @@ contains
       real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
       real(wp), allocatable :: dbdr(:, :, :), dbdL(:, :, :)
       real(wp), allocatable :: numgrad(:, :, :), xvecr(:), xvecl(:)
-      class(mchrg_cache), allocatable :: cache
+      type(cache_container), allocatable :: cache
+      allocate (cache)
 
       allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
          & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &

@@ -13,12 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory("cache")
 
 set(dir "${CMAKE_CURRENT_SOURCE_DIR}")
 
 list(
   APPEND srcs
+  "${dir}/cache.f90"
   "${dir}/eeq.f90"
   "${dir}/eeqbc.f90"
   "${dir}/type.F90"

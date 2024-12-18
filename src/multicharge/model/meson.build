@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-subdir('cache')
 
 srcs += files(
+  'cache.f90',
   'eeq.f90',
   'eeqbc.f90',
   'type.F90',

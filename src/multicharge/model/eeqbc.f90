@@ -30,12 +30,29 @@ module multicharge_model_eeqbc
    use multicharge_wignerseitz, only: wignerseitz_cell_type
    use multicharge_model_type, only: mchrg_model_type, get_dir_trans, get_rec_trans
    use multicharge_blas, only: gemv, gemm
-   use multicharge_model_cache, only: mchrg_cache
-   use multicharge_eeqbc_cache, only: eeqbc_cache
+   use multicharge_model_cache, only: cache_container, model_cache
    implicit none
    private
 
-   public :: eeqbc_model, new_eeqbc_model, get_cmat_pair
+   public :: eeqbc_model, new_eeqbc_model
+
+   !> Cache for the EEQ-BC charge model
+   type, extends(model_cache) :: eeqbc_cache
+      !> Local charge arrays
+      real(wp), allocatable :: qloc(:)
+      real(wp), allocatable :: dqlocdr(:, :, :)
+      real(wp), allocatable :: dqlocdL(:, :, :)
+      !> Full constraint matrix for 0d case
+      real(wp), allocatable :: cmat(:, :)
+      !> Contributions for every WSC image for diagonal elements of constraint matrix
+      real(wp), allocatable :: cmat_diag(:, :)
+      !> Derivative of constraint matrix w.r.t positions
+      real(wp), allocatable :: dcdr(:, :, :)
+      !> Derivative of constraint matrix w.r.t lattice vectors
+      real(wp), allocatable :: dcdL(:, :, :)
+      !> Store tmp array from xvec calculation for reuse
+      real(wp), allocatable :: xtmp(:)
+   end type eeqbc_cache
 
    type, extends(mchrg_model_type) :: eeqbc_model
       !> Bond capacitance
@@ -166,7 +183,7 @@ contains
    subroutine update(self, mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
       class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), allocatable, intent(out) :: cache
+      type(cache_container), intent(inout) :: cache
       real(wp), intent(in) :: cn(:)
       real(wp), intent(in), optional :: qloc(:)
       real(wp), intent(in), optional :: dcndr(:, :, :)
@@ -175,49 +192,50 @@ contains
       real(wp), intent(in), optional :: dqlocdL(:, :, :)
 
       logical :: grad
-      type(eeqbc_cache), pointer :: ccache
 
-      allocate (eeqbc_cache :: cache)
-      ccache => cast_cache(cache)
+      type(eeqbc_cache), pointer :: ptr
 
-      call ccache%update(mol)
+      call taint(cache, ptr)
+      call ptr%update(mol)
+
       grad = present(dcndr) .and. present(dcndL) .and. present(dqlocdr) .and. present(dqlocdL)
 
-      !> Refer CN and local charge arrays in ccache
-      ccache%cn = cn
-      ccache%qloc = qloc
+      !> Refer CN and local charge arrays in cache
+      ptr%cn = cn
+      ptr%qloc = qloc
       if (grad) then
-         ccache%dcndr = dcndr
-         ccache%dcndL = dcndL
-         ccache%dqlocdr = dqlocdr
-         ccache%dqlocdL = dqlocdL
+         ptr%dcndr = dcndr
+         ptr%dcndL = dcndL
+         ptr%dqlocdr = dqlocdr
+         ptr%dqlocdL = dqlocdL
       end if
 
       !> Allocate (for get_xvec and xvec_derivs)
-      if (.not. allocated(ccache%xtmp)) then
-         allocate (ccache%xtmp(mol%nat + 1))
+      if (.not. allocated(ptr%xtmp)) then
+         allocate (ptr%xtmp(mol%nat + 1))
       end if
 
       if (any(mol%periodic)) then
          !> Allocate cmat diagonal WSC image contributions
-         if (.not. allocated(ccache%cmat_diag)) then
-            allocate (ccache%cmat_diag(mol%nat, ccache%wsc%nimg_max))
+         if (.not. allocated(ptr%cmat_diag)) then
+            allocate (ptr%cmat_diag(mol%nat, ptr%wsc%nimg_max))
          end if
          !> Get cmat diagonal contributions for all WSC images
-         call self%get_cmat_diag_3d(mol, ccache%wsc, ccache%cmat_diag)
+         call self%get_cmat_diag_3d(mol, ptr%wsc, ptr%cmat_diag)
          ! if (grad) then
          ! call self%get_dcmat_3d()
          ! end if
       else
          !> Allocate cmat
-         if (.not. allocated(ccache%cmat)) then
-            allocate (ccache%cmat(mol%nat + 1, mol%nat + 1))
+         if (.not. allocated(ptr%cmat)) then
+            allocate (ptr%cmat(mol%nat + 1, mol%nat + 1))
          end if
-         call self%get_cmat_0d(mol, ccache%cmat)
+         call self%get_cmat_0d(mol, ptr%cmat)
 
+         !> cmat gradients
          if (grad) then
-            allocate (ccache%dcdr(3, mol%nat, mol%nat + 1), ccache%dcdL(3, 3, mol%nat + 1))
-            call self%get_dcmat_0d(mol, ccache%dcdr, ccache%dcdL)
+            allocate (ptr%dcdr(3, mol%nat, mol%nat + 1), ptr%dcdL(3, 3, mol%nat + 1))
+            call self%get_dcmat_0d(mol, ptr%dcdr, ptr%dcdL)
          end if
       end if
 
@@ -226,41 +244,41 @@ contains
    subroutine get_xvec(self, mol, cache, xvec)
       class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), intent(inout) :: cache
+      type(cache_container), intent(inout) :: cache
       real(wp), intent(out) :: xvec(:)
 
-      type(eeqbc_cache), pointer :: ccache
+      type(eeqbc_cache), pointer :: ptr
 
       integer :: iat, izp
 
-      ccache => cast_cache(cache)
+      call view(cache, ptr)
 
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(mol, self, ccache) private(iat, izp)
+      !$omp shared(mol, self, ptr) private(iat, izp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
-         ccache%xtmp(iat) = -self%chi(izp) + self%kcnchi(izp)*ccache%cn(iat) &
-            & + self%kqchi(izp)*ccache%qloc(iat)
+         ptr%xtmp(iat) = -self%chi(izp) + self%kcnchi(izp)*ptr%cn(iat) &
+            & + self%kqchi(izp)*ptr%qloc(iat)
       end do
-      ccache%xtmp(mol%nat + 1) = mol%charge
-      call gemv(ccache%cmat, ccache%xtmp, xvec)
+      ptr%xtmp(mol%nat + 1) = mol%charge
+      call gemv(ptr%cmat, ptr%xtmp, xvec)
 
    end subroutine get_xvec
 
    subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
       class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), intent(inout) :: cache
+      type(cache_container), intent(inout) :: cache
       real(wp), intent(out) :: dxdr(:, :, :)
       real(wp), intent(out) :: dxdL(:, :, :)
 
-      type(eeqbc_cache), pointer :: ccache
+      type(eeqbc_cache), pointer :: ptr
 
       integer :: iat, izp, jat
       real(wp) :: tmpdcn, tmpdqloc
       real(wp), allocatable :: dtmpdr(:, :, :), dtmpdL(:, :, :)
 
-      ccache => cast_cache(cache)
+      call view(cache, ptr)
       allocate (dtmpdr(3, mol%nat, mol%nat + 1), dtmpdL(3, 3, mol%nat + 1))
 
       dxdr(:, :, :) = 0.0_wp
@@ -268,28 +286,28 @@ contains
       dtmpdr(:, :, :) = 0.0_wp
       dtmpdL(:, :, :) = 0.0_wp
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(ccache, self, mol, dtmpdr, dtmpdL) &
+      !$omp shared(ptr, self, mol, dtmpdr, dtmpdL) &
       !$omp private(iat, izp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
          ! CN and effective charge derivative
-         dtmpdr(:, :, iat) = self%kcnchi(izp)*ccache%dcndr(:, :, iat) + dtmpdr(:, :, iat)
-         dtmpdL(:, :, iat) = self%kcnchi(izp)*ccache%dcndL(:, :, iat) + dtmpdL(:, :, iat)
-         dtmpdr(:, :, iat) = self%kqchi(izp)*ccache%dqlocdr(:, :, iat) + dtmpdr(:, :, iat)
-         dtmpdL(:, :, iat) = self%kqchi(izp)*ccache%dqlocdL(:, :, iat) + dtmpdL(:, :, iat)
+         dtmpdr(:, :, iat) = self%kcnchi(izp)*ptr%dcndr(:, :, iat) + dtmpdr(:, :, iat)
+         dtmpdL(:, :, iat) = self%kcnchi(izp)*ptr%dcndL(:, :, iat) + dtmpdL(:, :, iat)
+         dtmpdr(:, :, iat) = self%kqchi(izp)*ptr%dqlocdr(:, :, iat) + dtmpdr(:, :, iat)
+         dtmpdL(:, :, iat) = self%kqchi(izp)*ptr%dqlocdL(:, :, iat) + dtmpdL(:, :, iat)
       end do
 
-      call gemm(dtmpdr(:, :, :mol%nat), ccache%cmat(:mol%nat, :mol%nat), dxdr)
-      call gemm(dtmpdL(:, :, :mol%nat), ccache%cmat(:mol%nat, :mol%nat), dxdL)
+      call gemm(dtmpdr(:, :, :mol%nat), ptr%cmat(:mol%nat, :mol%nat), dxdr)
+      call gemm(dtmpdL(:, :, :mol%nat), ptr%cmat(:mol%nat, :mol%nat), dxdL)
       !call gemv(cache%dcdr(:, :, :mol%nat), tmp(:mol%nat), xvec)
 
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp reduction(+:dxdr, dxdL) shared(self, mol, ccache) &
+      !$omp reduction(+:dxdr, dxdL) shared(self, mol, ptr) &
       !$omp private(iat, jat)
       do iat = 1, mol%nat
          do jat = 1, mol%nat
-            dxdr(:, iat, iat) = ccache%xtmp(jat)*ccache%dcdr(:, iat, jat) + dxdr(:, iat, iat)
-            dxdr(:, iat, jat) = (ccache%xtmp(iat) - ccache%xtmp(jat))*ccache%dcdr(:, iat, jat) &
+            dxdr(:, iat, iat) = ptr%xtmp(jat)*ptr%dcdr(:, iat, jat) + dxdr(:, iat, iat)
+            dxdr(:, iat, jat) = (ptr%xtmp(iat) - ptr%xtmp(jat))*ptr%dcdr(:, iat, jat) &
                & + dxdr(:, iat, jat)
          end do
       end do
@@ -298,36 +316,36 @@ contains
    subroutine get_coulomb_derivs(self, mol, cache, vrhs, dadr, dadL, atrace)
       class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), intent(inout) :: cache
+      type(cache_container), intent(inout) :: cache
       real(wp), intent(in) :: vrhs(:)
       real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
 
-      type(eeqbc_cache), pointer :: ccache
-      ccache => cast_cache(cache)
+      type(eeqbc_cache), pointer :: ptr
+      call view(cache, ptr)
 
       if (any(mol%periodic)) then
-         call self%get_damat_3d(mol, ccache%wsc, ccache%alpha, vrhs, dadr, dadL, atrace)
+         call self%get_damat_3d(mol, ptr%wsc, ptr%alpha, vrhs, dadr, dadL, atrace)
       else
-         call self%get_damat_0d(mol, ccache%cn, &
-         & ccache%qloc, vrhs, ccache%dcndr, ccache%dcndL, ccache%dqlocdr, &
-         & ccache%dqlocdL, ccache%cmat, ccache%dcdr, ccache%dcdL, dadr, dadL, atrace)
+         call self%get_damat_0d(mol, ptr%cn, &
+         & ptr%qloc, vrhs, ptr%dcndr, ptr%dcndL, ptr%dqlocdr, &
+         & ptr%dqlocdL, ptr%cmat, ptr%dcdr, ptr%dcdL, dadr, dadL, atrace)
       end if
    end subroutine get_coulomb_derivs
 
    subroutine get_coulomb_matrix(self, mol, cache, amat)
       class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      class(mchrg_cache), intent(inout) :: cache
+      type(cache_container), intent(inout) :: cache
       real(wp), intent(out) :: amat(:, :)
 
-      type(eeqbc_cache), pointer :: ccache
-      ccache => cast_cache(cache)
+      type(eeqbc_cache), pointer :: ptr
+      call view(cache, ptr)
 
       if (any(mol%periodic)) then
-         call self%get_amat_3d(mol, ccache%wsc, ccache%alpha, ccache%cn, &
-         & ccache%qloc, amat, ccache%cmat_diag)
+         call self%get_amat_3d(mol, ptr%wsc, ptr%alpha, ptr%cn, &
+         & ptr%qloc, amat, ptr%cmat_diag)
       else
-         call self%get_amat_0d(mol, amat, ccache%cn, ccache%qloc, ccache%cmat)
+         call self%get_amat_0d(mol, amat, ptr%cn, ptr%qloc, ptr%cmat)
       end if
    end subroutine get_coulomb_matrix
 
@@ -902,17 +920,43 @@ contains
 
    end subroutine write_2d_matrix
 
-   function cast_cache(cache) result(ccache)
-      class(mchrg_cache), intent(in) :: cache
-      type(eeqbc_cache), pointer :: ccache
+   ! NOTE: the following is basically identical to tblite versions of this pattern
 
-      select type (cache)
+   !> Inspect cache and reallocate it in case of type mismatch
+   subroutine taint(cache, ptr)
+      !> Instance of the cache
+      type(cache_container), target, intent(inout) :: cache
+      !> Reference to the cache
+      type(eeqbc_cache), pointer, intent(out) :: ptr
+
+      if (allocated(cache%raw)) then
+         call view(cache, ptr)
+         if (associated(ptr)) return
+         deallocate (cache%raw)
+      end if
+
+      if (.not. allocated(cache%raw)) then
+         block
+            type(eeqbc_cache), allocatable :: tmp
+            allocate (tmp)
+            call move_alloc(tmp, cache%raw)
+         end block
+      end if
+
+      call view(cache, ptr)
+   end subroutine taint
+
+   !> Return reference to cache after resolving its type
+   subroutine view(cache, ptr)
+      !> Instance of the cache
+      type(cache_container), target, intent(inout) :: cache
+      !> Reference to the cache
+      type(eeqbc_cache), pointer, intent(out) :: ptr
+      nullify (ptr)
+      select type (target => cache%raw)
       type is (eeqbc_cache)
-         ccache => cache
-      class default
-         ccache => null()
-         error stop "invalid cache type (eeqbc)"
+         ptr => target
       end select
-   end function
+   end subroutine view
 
 end module multicharge_model_eeqbc
