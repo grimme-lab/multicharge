@@ -102,12 +102,12 @@ module multicharge_model_type
          real(wp), intent(out) :: amat(:, :)
       end subroutine get_coulomb_matrix
 
-      subroutine get_coulomb_derivs(self, mol, cache, vrhs, dadr, dadL, atrace)
+      subroutine get_coulomb_derivs(self, mol, cache, qvec, dadr, dadL, atrace)
          import :: mchrg_model_type, structure_type, cache_container, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
          type(cache_container), intent(inout) :: cache
-         real(wp), intent(in) :: vrhs(:)
+         real(wp), intent(in) :: qvec(:)
          real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
       end subroutine get_coulomb_derivs
 
@@ -210,8 +210,8 @@ contains
       & energy, gradient, sigma, qvec, dqdr, dqdL)
       class(mchrg_model_type), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      real(wp), intent(inout), contiguous :: cn(:)
-      real(wp), intent(inout), contiguous :: qloc(:)
+      real(wp), intent(in), contiguous :: cn(:)
+      real(wp), intent(in), contiguous :: qloc(:)
       real(wp), intent(in), contiguous, optional :: dcndr(:, :, :)
       real(wp), intent(in), contiguous, optional :: dcndL(:, :, :)
       real(wp), intent(in), contiguous, optional :: dqlocdr(:, :, :)
@@ -228,35 +228,35 @@ contains
       integer(ik) :: info
       integer(ik), allocatable :: ipiv(:)
 
-      !> Variables for solving ES equation
+      ! Variables for solving ES equation
       real(wp), allocatable :: xvec(:), vrhs(:), amat(:, :)
       real(wp), allocatable :: ainv(:, :)
-      !> Gradients
+      ! Gradients
       real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
       real(wp), allocatable :: dxdr(:, :, :), dxdL(:, :, :)
       type(cache_container), allocatable :: cache
       real(wp), allocatable :: trans(:, :)
 
-      !> Calculate gradient if the respective arrays are present
+      ! Calculate gradient if the respective arrays are present
       dcn = present(dcndr) .and. present(dcndL)
       grad = present(gradient) .and. present(sigma) .and. dcn
       cpq = present(dqdr) .and. present(dqdL) .and. dcn
 
-      !> Update cache
+      ! Update cache
       allocate (cache)
       call self%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
 
-      !> Get lattice points
+      ! Get lattice points
       if (any(mol%periodic)) then
          call get_dir_trans(mol%lattice, trans)
       end if
 
-      !> Get amat
+      ! Get amat
       ndim = mol%nat + 1
       allocate (amat(ndim, ndim))
       call self%get_coulomb_matrix(mol, cache, amat)
 
-      !> Get RHS of ES equation
+      ! Get RHS of ES equation
       allocate (xvec(ndim))
       call self%get_xvec(mol, cache, xvec)
 
@@ -291,7 +291,7 @@ contains
          energy(:) = energy(:) + vrhs(:mol%nat)*xvec(:mol%nat)
       end if
 
-      !> Allocate and get amat derivatives
+      ! Allocate and get amat derivatives
       if (grad .or. cpq) then
          allocate (dadr(3, mol%nat, ndim), dadL(3, 3, ndim), atrace(3, mol%nat))
          allocate (dxdr(3, mol%nat, ndim), dxdL(3, 3, ndim))

@@ -36,11 +36,15 @@ module multicharge_model_eeq
 
    type, extends(mchrg_model_type) :: eeq_model
    contains
+      !> Update and allocate cache
       procedure :: update
+      !> Calculate Coulomb matrix
       procedure :: get_coulomb_matrix
+      !> Calculate derivatives of Coulomb matrix
       procedure :: get_coulomb_derivs
-      !> Calculate right-hand side (electronegativity)
+      !> Calculate right-hand side (electronegativity vector)
       procedure :: get_xvec
+      !> Calculate EN vector derivatives
       procedure :: get_xvec_derivs
       !> Calculate Coulomb matrix
       procedure :: get_amat_0d
@@ -115,7 +119,7 @@ contains
       call taint(cache, ptr)
       call ptr%update(mol)
 
-      !> Refer CN arrays in cache
+      ! Refer CN arrays in cache
       ptr%cn = cn
       if (present(dcndr) .and. present(dcndL)) then
          ptr%dcndr = dcndr
@@ -193,24 +197,6 @@ contains
          call self%get_amat_0d(mol, amat)
       end if
    end subroutine get_coulomb_matrix
-
-   subroutine get_coulomb_derivs(self, mol, cache, vrhs, dadr, dadL, atrace)
-      class(eeq_model), intent(in) :: self
-      type(structure_type), intent(in) :: mol
-      type(cache_container), intent(inout) :: cache
-      real(wp), intent(in) :: vrhs(:)
-      real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
-
-      type(eeq_cache), pointer :: ptr
-
-      call view(cache, ptr)
-
-      if (any(mol%periodic)) then
-         call self%get_damat_3d(mol, ptr%wsc, ptr%alpha, vrhs, dadr, dadL, atrace)
-      else
-         call self%get_damat_0d(mol, vrhs, dadr, dadL, atrace)
-      end if
-   end subroutine get_coulomb_derivs
 
    subroutine get_amat_0d(self, mol, amat)
       class(eeq_model), intent(in) :: self
@@ -344,6 +330,24 @@ contains
       end do
 
    end subroutine get_amat_rec_3d
+
+   subroutine get_coulomb_derivs(self, mol, cache, qvec, dadr, dadL, atrace)
+      class(eeq_model), intent(in) :: self
+      type(structure_type), intent(in) :: mol
+      type(cache_container), intent(inout) :: cache
+      real(wp), intent(in) :: qvec(:)
+      real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
+
+      type(eeq_cache), pointer :: ptr
+
+      call view(cache, ptr)
+
+      if (any(mol%periodic)) then
+         call self%get_damat_3d(mol, ptr%wsc, ptr%alpha, qvec, dadr, dadL, atrace)
+      else
+         call self%get_damat_0d(mol, qvec, dadr, dadL, atrace)
+      end if
+   end subroutine get_coulomb_derivs
 
    subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
       class(eeq_model), intent(in) :: self

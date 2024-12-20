@@ -34,9 +34,11 @@ module multicharge_model_cache
    type, abstract, public :: model_cache
       !> CN array
       real(wp), allocatable :: cn(:)
-      !> Gradients
+      !> CN dr gradient
       real(wp), allocatable :: dcndr(:, :, :)
+      !> CN dL gradient
       real(wp), allocatable :: dcndL(:, :, :)
+      !> Ewald separation parameter
       real(wp) :: alpha
       type(wignerseitz_cell_type) :: wsc
    contains
@@ -49,7 +51,7 @@ contains
       class(model_cache), intent(inout) :: self
       type(structure_type), intent(in) :: mol
 
-      !> Create WSC
+      ! Create WSC
       if (any(mol%periodic)) then
          call new_wignerseitz_cell(self%wsc, mol)
          call get_alpha(mol%lattice, self%alpha)

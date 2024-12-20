@@ -38,9 +38,11 @@ module multicharge_model_eeqbc
 
    !> Cache for the EEQ-BC charge model
    type, extends(model_cache) :: eeqbc_cache
-      !> Local charge arrays
+      !> Local charges
       real(wp), allocatable :: qloc(:)
+      !> Local charge dr derivative
       real(wp), allocatable :: dqlocdr(:, :, :)
+      !> Local charge dL derivative
       real(wp), allocatable :: dqlocdL(:, :, :)
       !> Full constraint matrix for 0d case
       real(wp), allocatable :: cmat(:, :)
@@ -66,11 +68,15 @@ module multicharge_model_eeqbc
       !> vdW radii
       real(wp), allocatable :: rvdw(:, :)
    contains
+      !> Update and allocate cache
       procedure :: update
+      !> Calculate Coulomb matrix
       procedure :: get_coulomb_matrix
+      !> Calculate derivatives of Coulomb matrix
       procedure :: get_coulomb_derivs
-      !> Calculate right-hand side (electronegativity)
+      !> Calculate right-hand side (electronegativity vector)
       procedure :: get_xvec
+      !> Calculate derivatives of EN vector
       procedure :: get_xvec_derivs
       !> Calculate Coulomb matrix
       procedure :: get_amat_0d
@@ -80,9 +86,11 @@ module multicharge_model_eeqbc
       procedure :: get_damat_0d
       !> Calculate Coulomb matrix derivative periodic
       procedure :: get_damat_3d
-      !> Calculate constraint matrix
+      !> Calculate constraint matrix (molecular case)
       procedure :: get_cmat_0d
+      !> Calculate diagonal contributions (periodic case)
       procedure :: get_cmat_diag_3d
+      !> Calculate constraint matrix derivatives (molecular)
       procedure :: get_dcmat_0d
       ! procedure :: get_dcmat_3d
    end type eeqbc_model
@@ -200,9 +208,14 @@ contains
 
       grad = present(dcndr) .and. present(dcndL) .and. present(dqlocdr) .and. present(dqlocdL)
 
-      !> Refer CN and local charge arrays in cache
+      ! Refer CN and local charge arrays in cache
       ptr%cn = cn
-      ptr%qloc = qloc
+      if (present(qloc)) then
+         ptr%qloc = qloc
+      else
+         error stop "qloc required for eeqbc"
+      end if
+
       if (grad) then
          ptr%dcndr = dcndr
          ptr%dcndL = dcndL
@@ -210,31 +223,33 @@ contains
          ptr%dqlocdL = dqlocdL
       end if
 
-      !> Allocate (for get_xvec and xvec_derivs)
+      ! Allocate (for get_xvec and xvec_derivs)
       if (.not. allocated(ptr%xtmp)) then
          allocate (ptr%xtmp(mol%nat + 1))
       end if
 
       if (any(mol%periodic)) then
-         !> Allocate cmat diagonal WSC image contributions
+         ! Allocate cmat diagonal WSC image contributions
          if (.not. allocated(ptr%cmat_diag)) then
             allocate (ptr%cmat_diag(mol%nat, ptr%wsc%nimg_max))
          end if
-         !> Get cmat diagonal contributions for all WSC images
+         ! Get cmat diagonal contributions for all WSC images
          call self%get_cmat_diag_3d(mol, ptr%wsc, ptr%cmat_diag)
          ! if (grad) then
          ! call self%get_dcmat_3d()
          ! end if
       else
-         !> Allocate cmat
+         ! Allocate cmat
          if (.not. allocated(ptr%cmat)) then
             allocate (ptr%cmat(mol%nat + 1, mol%nat + 1))
          end if
          call self%get_cmat_0d(mol, ptr%cmat)
 
-         !> cmat gradients
+         ! cmat gradients
          if (grad) then
-            allocate (ptr%dcdr(3, mol%nat, mol%nat + 1), ptr%dcdL(3, 3, mol%nat + 1))
+            if (.not. allocated(ptr%dcdr) .and. .not. allocated(ptr%dcdL)) then
+               allocate (ptr%dcdr(3, mol%nat, mol%nat + 1), ptr%dcdL(3, 3, mol%nat + 1))
+            end if
             call self%get_dcmat_0d(mol, ptr%dcdr, ptr%dcdL)
          end if
       end if
@@ -313,25 +328,6 @@ contains
       end do
    end subroutine get_xvec_derivs
 
-   subroutine get_coulomb_derivs(self, mol, cache, vrhs, dadr, dadL, atrace)
-      class(eeqbc_model), intent(in) :: self
-      type(structure_type), intent(in) :: mol
-      type(cache_container), intent(inout) :: cache
-      real(wp), intent(in) :: vrhs(:)
-      real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
-
-      type(eeqbc_cache), pointer :: ptr
-      call view(cache, ptr)
-
-      if (any(mol%periodic)) then
-         call self%get_damat_3d(mol, ptr%wsc, ptr%alpha, vrhs, dadr, dadL, atrace)
-      else
-         call self%get_damat_0d(mol, ptr%cn, &
-         & ptr%qloc, vrhs, ptr%dcndr, ptr%dcndL, ptr%dqlocdr, &
-         & ptr%dqlocdL, ptr%cmat, ptr%dcdr, ptr%dcdL, dadr, dadL, atrace)
-      end if
-   end subroutine get_coulomb_derivs
-
    subroutine get_coulomb_matrix(self, mol, cache, amat)
       class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
@@ -345,17 +341,17 @@ contains
          call self%get_amat_3d(mol, ptr%wsc, ptr%alpha, ptr%cn, &
          & ptr%qloc, amat, ptr%cmat_diag)
       else
-         call self%get_amat_0d(mol, amat, ptr%cn, ptr%qloc, ptr%cmat)
+         call self%get_amat_0d(mol, ptr%cn, ptr%qloc, ptr%cmat, amat)
       end if
    end subroutine get_coulomb_matrix
 
-   subroutine get_amat_0d(self, mol, amat, cn, qloc, cmat)
+   subroutine get_amat_0d(self, mol, cn, qloc, cmat, amat)
       class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
-      real(wp), intent(out) :: amat(:, :)
       real(wp), intent(in) :: cn(:)
       real(wp), intent(in) :: qloc(:)
       real(wp), intent(in) :: cmat(:, :)
+      real(wp), intent(out) :: amat(:, :)
 
       integer :: iat, jat, izp, jzp
       real(wp) :: vec(3), r2, gam2, tmp, norm_cn, radi, radj
@@ -447,7 +443,7 @@ contains
             end do
          end do
 
-         !> WSC image contributions
+         ! WSC image contributions
          gam = 1.0_wp/sqrt(2.0_wp*self%rad(izp)**2)
          wsw = 1.0_wp/real(wsc%nimg(iat, iat), wp)
          do img = 1, wsc%nimg(iat, iat)
@@ -512,6 +508,25 @@ contains
       end do
 
    end subroutine get_amat_rec_3d
+
+   subroutine get_coulomb_derivs(self, mol, cache, qvec, dadr, dadL, atrace)
+      class(eeqbc_model), intent(in) :: self
+      type(structure_type), intent(in) :: mol
+      real(wp), intent(in) :: qvec(:)
+      type(cache_container), intent(inout) :: cache
+      real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
+
+      type(eeqbc_cache), pointer :: ptr
+      call view(cache, ptr)
+
+      if (any(mol%periodic)) then
+         call self%get_damat_3d(mol, ptr%wsc, ptr%alpha, qvec, dadr, dadL, atrace)
+      else
+         call self%get_damat_0d(mol, ptr%cn, &
+         & ptr%qloc, qvec, ptr%dcndr, ptr%dcndL, ptr%dqlocdr, &
+         & ptr%dqlocdL, ptr%cmat, ptr%dcdr, ptr%dcdL, dadr, dadL, atrace)
+      end if
+   end subroutine get_coulomb_derivs
 
    subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
          & dqlocdr, dqlocdL, cmat, dcdr, dcdL, dadr, dadL, atrace)
