@@ -177,8 +177,7 @@ subroutine test_numgrad(error, mol, model)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
    energy(:) = 0.0_wp
-   call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
-      & energy, gradient, sigma)
+   call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, energy, gradient, sigma)
    if (allocated(error)) return
 
    if (any(abs(gradient(:, :) - numgrad(:, :)) > thr2)) then
@@ -259,8 +258,7 @@ subroutine test_numsigma(error, mol, model)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
    energy(:) = 0.0_wp
-   call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
-      & energy, gradient, sigma)
+   call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, energy, gradient, sigma)
    if (allocated(error)) return
 
    if (any(abs(sigma(:, :) - numsigma(:, :)) > thr2)) then
@@ -319,8 +317,7 @@ subroutine test_numdqdr(error, mol, model)
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
-   call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
-      & dqdr=dqdr, dqdL=dqdL)
+   call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, dqdr=dqdr, dqdL=dqdL)
    if (allocated(error)) return
 
    if (any(abs(dqdr(:, :, :) - numdr(:, :, :)) > thr2)) then
@@ -394,8 +391,7 @@ subroutine test_numdqdL(error, mol, model)
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
-   call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
-      & dqdr=dqdr, dqdL=dqdL)
+   call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, dqdr=dqdr, dqdL=dqdL)
    if (allocated(error)) return
 
    if (any(abs(dqdL(:, :, :) - numdL(:, :, :)) > thr2)) then
