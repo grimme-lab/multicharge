@@ -283,6 +283,10 @@ contains
       end if
 
       if (present(qvec)) then
+         print'(a)', 'vrhs:'
+         print'(3es21.14)', vrhs
+         print'(a)', 'amat:'
+         print'(3es21.14)', amat
          qvec(:) = vrhs(:mol%nat)
       end if
 
@@ -297,8 +301,6 @@ contains
          allocate (dxdr(3, mol%nat, ndim), dxdL(3, 3, ndim))
          call self%get_xvec_derivs(mol, cache, dxdr, dxdL)
          call self%get_coulomb_derivs(mol, cache, vrhs, dadr, dadL, atrace)
-         print'(a)', "atrace:"
-         print'(3es21.14)', atrace
       end if
 
       if (grad) then

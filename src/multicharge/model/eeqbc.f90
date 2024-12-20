@@ -315,6 +315,8 @@ contains
       call gemm(dtmpdr(:, :, :mol%nat), ptr%cmat(:mol%nat, :mol%nat), dxdr)
       call gemm(dtmpdL(:, :, :mol%nat), ptr%cmat(:mol%nat, :mol%nat), dxdL)
       !call gemv(cache%dcdr(:, :, :mol%nat), tmp(:mol%nat), xvec)
+      print'(a)', 'xtmp:'
+      print'(3es21.14)', ptr%xtmp
 
       !$omp parallel do default(none) schedule(runtime) &
       !$omp reduction(+:dxdr, dxdL) shared(self, mol, ptr) &
@@ -782,12 +784,12 @@ contains
       do iat = 1, mol%nat
          izp = mol%id(iat)
          isp = mol%num(izp)
+         capi = self%cap(izp)
          do jat = 1, iat - 1
             jzp = mol%id(jat)
             jsp = mol%num(jzp)
             vec = mol%xyz(:, jat) - mol%xyz(:, iat)
             rvdw = self%rvdw(iat, jat)
-            capi = self%cap(izp)
             capj = self%cap(jzp)
             call get_cmat_pair(mol, self%kbc, tmp, vec, rvdw, capi, capj)
             ! Off-diagonal elements
@@ -832,11 +834,11 @@ contains
       do iat = 1, mol%nat
          izp = mol%id(iat)
          isp = mol%num(izp)
+         capi = self%cap(isp)
          do jat = 1, iat - 1
             jzp = mol%id(jat)
             jsp = mol%num(jzp)
             rvdw = self%rvdw(iat, jat)
-            capi = self%cap(isp)
             capj = self%cap(jsp)
             do img = 1, wsc%nimg(jat, iat)
                vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
@@ -855,25 +857,27 @@ contains
       real(wp), intent(out) :: dcdL(:, :, :)
 
       integer :: iat, jat, izp, jzp
-      real(wp) :: vec(3), r2, rvdw, dtmp, arg, dG(3), dS(3, 3)
+      real(wp) :: vec(3), r2, rvdw, dtmp, arg, dG(3), dS(3, 3), capi, capj
 
       dcdr(:, :, :) = 0.0_wp
       dcdL(:, :, :) = 0.0_wp
       !$omp parallel do default(none) schedule(runtime) &
       !$omp reduction(+:dcdr, dcdL) shared(mol, self) &
       !$omp private(iat, izp, jat, jzp, r2) &
-      !$omp private(vec, rvdw, dG, dS, dtmp, arg)
+      !$omp private(vec, rvdw, dG, dS, dtmp, arg, capi, capj)
       do iat = 1, mol%nat
          izp = mol%id(iat)
+         capi = self%cap(izp)
          do jat = 1, iat - 1
             jzp = mol%id(jat)
+            capj = self%cap(jzp)
             vec = mol%xyz(:, jat) - mol%xyz(:, iat)
             r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
             rvdw = self%rvdw(iat, jat)
 
             ! Capacitance of bond between atom i and j
             arg = -(self%kbc*(sqrt(r2) - rvdw)/rvdw)**2
-            dtmp = sqrt(self%cap(izp)*self%cap(jzp))* &
+            dtmp = sqrt(capi*capj)* &
                & self%kbc*exp(arg)/(sqrtpi*rvdw)
             dG = dtmp*vec/sqrt(r2)
             dS = spread(dG, 1, 3)*spread(vec, 2, 3)

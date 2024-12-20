@@ -38,6 +38,7 @@ program main
    real(wp), allocatable :: dcndr(:, :, :), dcndL(:, :, :), dqlocdr(:, :, :), dqlocdL(:, :, :)
    real(wp), allocatable :: energy(:), gradient(:, :), sigma(:, :)
    real(wp), allocatable :: qvec(:)
+   real(wp), allocatable :: dqdr(:, :, :), dqdL(:, :, :)
    real(wp), allocatable :: charge, dielectric
 
    call get_arguments(input, model_id, input_format, grad, charge, json, dielectric, error)
@@ -98,13 +99,18 @@ program main
       gradient(:, :) = 0.0_wp
       sigma(:, :) = 0.0_wp
 
+      allocate (dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat))
+      dqdr(:, :, :) = 0.0_wp
+      dqdL(:, :, :) = 0.0_wp
+
       allocate (dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat))
       allocate (dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat))
    end if
 
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
-   call model%solve(mol, cn, dcndr, dcndL, qloc, dqlocdr, dqlocdL, energy, gradient, sigma, qvec)
+   call model%solve(mol, cn, dcndr, dcndL, qloc, dqlocdr, dqlocdL, energy, gradient, sigma, qvec, dqdr, dqdL)
+   ! TODO: write_ascii for dqdr, dqdL
 
    call write_ascii_properties(output_unit, mol, model, cn, qvec)
    call write_ascii_results(output_unit, mol, energy, gradient, sigma)

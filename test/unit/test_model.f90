@@ -35,7 +35,7 @@ module test_model
 
 contains
 
-!> Collect all exported unit tests
+   !> Collect all exported unit tests
    subroutine collect_model(testsuite)
 
       !> Collection of tests
