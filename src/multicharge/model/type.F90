@@ -283,10 +283,6 @@ contains
       end if
 
       if (present(qvec)) then
-         print'(a)', 'vrhs:'
-         print'(3es21.14)', vrhs
-         print'(a)', 'amat:'
-         print'(3es21.14)', amat
          qvec(:) = vrhs(:mol%nat)
       end if
 

@@ -315,8 +315,6 @@ contains
       call gemm(dtmpdr(:, :, :mol%nat), ptr%cmat(:mol%nat, :mol%nat), dxdr)
       call gemm(dtmpdL(:, :, :mol%nat), ptr%cmat(:mol%nat, :mol%nat), dxdL)
       !call gemv(cache%dcdr(:, :, :mol%nat), tmp(:mol%nat), xvec)
-      print'(a)', 'xtmp:'
-      print'(3es21.14)', ptr%xtmp
 
       !$omp parallel do default(none) schedule(runtime) &
       !$omp reduction(+:dxdr, dxdL) shared(self, mol, ptr) &
