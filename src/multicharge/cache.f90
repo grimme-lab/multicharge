@@ -13,7 +13,7 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
-!> @file multicharge/model/cache.f90
+!> @file multicharge/cache.f90
 !> Contains the cache baseclass for the charge models and a container for mutable cache data
 
 !> Cache for charge models
