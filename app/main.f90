@@ -33,7 +33,7 @@ program main
    class(mchrg_model_type), allocatable :: model
    logical :: grad, json, exist
    real(wp), parameter :: cn_max = 8.0_wp, cutoff = 25.0_wp
-   real(wp), allocatable :: cn(:), rcov(:)
+   real(wp), allocatable :: cn(:), rcov(:), trans(:, :)
    real(wp), allocatable :: qloc(:)
    real(wp), allocatable :: dcndr(:, :, :), dcndL(:, :, :), dqlocdr(:, :, :), dqlocdL(:, :, :)
    real(wp), allocatable :: energy(:), gradient(:, :), sigma(:, :)
@@ -109,7 +109,7 @@ program main
 
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
-   call model%solve(mol, cn, dcndr, dcndL, qloc, dqlocdr, dqlocdL, energy, gradient, sigma, qvec, dqdr, dqdL)
+   call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, energy, gradient, sigma, qvec, dqdr, dqdL)
    ! TODO: write_ascii for dqdr, dqdL
 
    call write_ascii_properties(output_unit, mol, model, cn, qvec)
