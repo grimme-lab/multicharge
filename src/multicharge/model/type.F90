@@ -287,7 +287,8 @@ contains
       end if
 
       if (present(energy)) then
-         call symv(amat(:mol%nat, :mol%nat), vrhs(:mol%nat), xvec(:mol%nat), alpha=0.5_wp, beta=-1.0_wp, uplo='l')
+         call symv(amat(:mol%nat, :mol%nat), vrhs(:mol%nat), xvec(:mol%nat), &
+            & alpha=0.5_wp, beta=-1.0_wp, uplo='l')
          energy(:) = energy(:) + vrhs(:mol%nat)*xvec(:mol%nat)
       end if
 
@@ -297,11 +298,14 @@ contains
          allocate (dxdr(3, mol%nat, ndim), dxdL(3, 3, ndim))
          call self%get_xvec_derivs(mol, cache, dxdr, dxdL)
          call self%get_coulomb_derivs(mol, cache, vrhs, dadr, dadL, atrace)
+         do iat = 1, mol%nat
+            dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
+         end do   
       end if
 
       if (grad) then
          gradient = 0.0_wp
-         call gemv(dadr(:, :, :mol%nat), vrhs(:mol%nat), gradient, beta=1.0_wp)!, alpha=0.5_wp)
+         call gemv(dadr(:, :, :mol%nat), vrhs(:mol%nat), gradient, beta=1.0_wp, alpha=0.5_wp)
          call gemv(dxdr(:, :, :mol%nat), vrhs(:mol%nat), gradient, beta=1.0_wp, alpha=-1.0_wp)
          call gemv(dadL, vrhs, sigma, beta=1.0_wp, alpha=0.5_wp)
          call gemv(dxdL, vrhs, sigma, beta=1.0_wp, alpha=-1.0_wp)
@@ -309,7 +313,6 @@ contains
 
       if (cpq) then
          do iat = 1, mol%nat
-            dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
             dadr(:, :, iat) = -dxdr(:, :, iat) + dadr(:, :, iat)
             dadL(:, :, iat) = -dxdL(:, :, iat) + dadL(:, :, iat)
          end do
