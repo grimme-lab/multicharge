@@ -98,6 +98,7 @@ jobs:
           --install /usr/bin/gcc gcc /usr/bin/gcc-${{ env.GCC_V }} 100 \
           --slave /usr/bin/gfortran gfortran /usr/bin/gfortran-${{ env.GCC_V }} \
           --slave /usr/bin/gcov gcov /usr/bin/gcov-${{ env.GCC_V }}
+        sudo apt-get install -y liblapack-dev
 
     - name: Install GCC (Windows)
       if: ${{ contains(matrix.os, 'windows') && matrix.compiler == 'msys' }}
@@ -282,4 +283,4 @@ jobs:
 
     - name: Upload coverage report
       if: ${{ matrix.build == 'meson' && matrix.build-type == 'coverage' }}
-      uses: codecov/codecov-action@v1
+      uses: codecov/codecov-action@v5

@@ -16,7 +16,7 @@
 project(
   'multicharge',
   'fortran',
-  version: '0.3.0',
+  version: '0.3.1',
   license: 'Apache-2.0',
   meson_version: '>=0.55',
   default_options: [
@@ -25,6 +25,7 @@ project(
   ],
 )
 install = not (meson.is_subproject() and get_option('default_library') == 'static')
+has_cc = add_languages('c', required: false, native: false)
 
 # General configuration information
 inc_dirs = []
