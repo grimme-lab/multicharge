@@ -230,7 +230,7 @@ contains
 
       ! Variables for solving ES equation
       real(wp), allocatable :: xvec(:), vrhs(:), amat(:, :)
-      real(wp), allocatable :: ainv(:, :)
+      real(wp), allocatable :: ainv(:, :), jmat(:, :)
       ! Gradients
       real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
       real(wp), allocatable :: dxdr(:, :, :), dxdL(:, :, :)
@@ -287,7 +287,10 @@ contains
       end if
 
       if (present(energy)) then
-         call symv(amat(:mol%nat, :mol%nat), vrhs(:mol%nat), xvec(:mol%nat), &
+         ! Extract only the Coulomb matrix without the constraints
+         allocate(jmat(mol%nat, mol%nat))
+         jmat = amat(:mol%nat, :mol%nat)
+         call symv(jmat, vrhs(:mol%nat), xvec(:mol%nat), &
             & alpha=0.5_wp, beta=-1.0_wp, uplo='l')
          energy(:) = energy(:) + vrhs(:mol%nat)*xvec(:mol%nat)
       end if

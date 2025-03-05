@@ -209,7 +209,7 @@ contains
       amat(:, :) = 0.0_wp
 
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp reduction(+:amat) shared(mol, self) &
+      !$omp shared(amat, mol, self) &
       !$omp private(iat, izp, jat, jzp, gam, vec, r2, tmp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
@@ -219,10 +219,13 @@ contains
             r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
             gam = 1.0_wp/(self%rad(izp)**2 + self%rad(jzp)**2)
             tmp = erf(sqrt(r2*gam))/(sqrt(r2)*self%dielectric)
+            !$omp atomic
             amat(jat, iat) = amat(jat, iat) + tmp
+            !$omp atomic
             amat(iat, jat) = amat(iat, jat) + tmp
          end do
          tmp = self%eta(izp) + sqrt2pi/self%rad(izp)
+         !$omp atomic
          amat(iat, iat) = amat(iat, iat) + tmp
       end do
 

@@ -359,7 +359,7 @@ contains
       amat(:, :) = 0.0_wp
 
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp reduction(+:amat) shared(mol, self, cn, qloc, cmat) &
+      !$omp shared(amat, mol, self, cn, qloc, cmat) &
       !$omp private(iat, izp, jat, jzp, gam2, vec, r2, tmp, norm_cn, radi, radj)
       do iat = 1, mol%nat
          izp = mol%id(iat)
@@ -376,11 +376,14 @@ contains
             ! Coulomb interaction of Gaussian charges
             gam2 = 1.0_wp/(radi**2 + radj**2)
             tmp = erf(sqrt(r2*gam2))/(sqrt(r2)*self%dielectric)*cmat(jat, iat)
+            !$omp atomic
             amat(jat, iat) = amat(jat, iat) + tmp
+            !$omp atomic
             amat(iat, jat) = amat(iat, jat) + tmp
          end do
          ! Effective hardness
          tmp = self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi
+         !$omp atomic
          amat(iat, iat) = amat(iat, iat) + tmp*cmat(iat, iat) + 1.0_wp
       end do
 
@@ -782,7 +785,7 @@ contains
 
       cmat(:, :) = 0.0_wp
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp reduction(+:cmat) shared(mol, self) &
+      !$omp shared(cmat, mol, self) &
       !$omp private(iat, izp, isp, jat, jzp, jsp) &
       !$omp private(vec, rvdw, tmp, capi, capj)
       do iat = 1, mol%nat
@@ -800,7 +803,9 @@ contains
             cmat(jat, iat) = -tmp
             cmat(iat, jat) = -tmp
             ! Diagonal elements
+            !$omp atomic
             cmat(iat, iat) = cmat(iat, iat) + tmp
+            !$omp atomic
             cmat(jat, jat) = cmat(jat, jat) + tmp
          end do
       end do
