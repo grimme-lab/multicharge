@@ -464,7 +464,7 @@ contains
          end do
          ! Effective hardness
          dtmp = self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi
-         amat(iat, iat) = amat(iat, iat) + cdiag(iat, 1)*dtmp + 1.0_wp
+         amat(iat, iat) = amat(iat, iat) + cdiag(iat, 1)*dtmp + 1.0_wp - 2*alpha/sqrtpi
       end do
 
       amat(mol%nat + 1, 1:mol%nat + 1) = 1.0_wp
