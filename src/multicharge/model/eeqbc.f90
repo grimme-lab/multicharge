@@ -416,7 +416,6 @@ contains
 
       vol = abs(matdet_3x3(mol%lattice))
       call get_dir_trans(mol%lattice, dtrans)
-      call get_rec_trans(mol%lattice, rtrans)
 
       !$omp parallel do default(none) schedule(runtime) &
       !$omp reduction(+:amat) shared(mol, self, wsc, dtrans, rtrans, alpha, vol, cdiag) &
@@ -446,9 +445,8 @@ contains
                vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
                call get_cpair(mol, self%kbc, ctmp, vec, rvdw, capi, capj)
                call get_amat_dir_3d(vec, gam, alpha, dtrans, ctmp, dtmp)
-               call get_amat_rec_3d(vec, vol, alpha, rtrans, rtmp)
-               amat(jat, iat) = amat(jat, iat) + (dtmp + rtmp)*wsw
-               amat(iat, jat) = amat(iat, jat) + (dtmp + rtmp)*wsw
+               amat(jat, iat) = amat(jat, iat) + dtmp*wsw
+               amat(iat, jat) = amat(iat, jat) + dtmp*wsw
             end do
          end do
 
@@ -459,12 +457,11 @@ contains
             vec = wsc%trans(:, wsc%tridx(img, iat, iat))
             ctmp = cdiag(iat, img)
             call get_amat_dir_3d(vec, gam, alpha, dtrans, ctmp, dtmp)
-            call get_amat_rec_3d(vec, vol, alpha, rtrans, rtmp)
-            amat(iat, iat) = amat(iat, iat) + (dtmp + rtmp)*wsw
+            amat(iat, iat) = amat(iat, iat) + dtmp*wsw
          end do
          ! Effective hardness
          dtmp = self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi
-         amat(iat, iat) = amat(iat, iat) + cdiag(iat, 1)*dtmp + 1.0_wp - 2*alpha/sqrtpi
+         amat(iat, iat) = amat(iat, iat) + cdiag(iat, 1)*dtmp + 1.0_wp
       end do
 
       amat(mol%nat + 1, 1:mol%nat + 1) = 1.0_wp
