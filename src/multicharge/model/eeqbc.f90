@@ -409,7 +409,7 @@ contains
       real(wp), intent(out) :: amat(:, :)
 
       integer :: iat, jat, isp, jsp, izp, jzp, img
-      real(wp) :: vec(3), gam, wsw, dtmp, rtmp, vol, ctmp, capi, capj, radi, radj, norm_cn, rvdw
+      real(wp) :: vec(3), gam, dtmp, rtmp, vol, ctmp, capi, capj, radi, radj, norm_cn, rvdw, r1
       real(wp), allocatable :: dtrans(:, :), rtrans(:, :)
 
       amat(:, :) = 0.0_wp
@@ -420,8 +420,8 @@ contains
       !$omp parallel do default(none) schedule(runtime) &
       !$omp reduction(+:amat) shared(mol, self, wsc, dtrans, rtrans, alpha, vol, cdiag) &
       !$omp shared(cn, qloc) &
-      !$omp private(iat, izp, jat, jzp, gam, wsw, vec, dtmp, rtmp, ctmp, norm_cn) &
-      !$omp private(isp, jsp, radi, radj, capi, capj, rvdw)
+      !$omp private(iat, izp, jat, jzp, gam, vec, dtmp, rtmp, ctmp, norm_cn) &
+      !$omp private(isp, jsp, radi, radj, capi, capj, rvdw, r1)
       do iat = 1, mol%nat
          izp = mol%id(iat)
          isp = mol%num(izp)
@@ -440,24 +440,26 @@ contains
             capj = self%cap(jsp)
             ! Coulomb interaction of Gaussian charges
             gam = 1.0_wp/sqrt(radi**2 + radj**2)
-            wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
-            do img = 1, wsc%nimg(jat, iat)
-               vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
+            do img = 1, size(dtrans, 2)
+               vec = mol%xyz(:, iat) - mol%xyz(:, jat) - dtrans(:, img)
+               r1 = norm2(vec)
+               if (r1 < eps) cycle
                call get_cpair(mol, self%kbc, ctmp, vec, rvdw, capi, capj)
-               call get_amat_dir_3d(vec, gam, alpha, dtrans, ctmp, dtmp)
-               amat(jat, iat) = amat(jat, iat) + dtmp*wsw
-               amat(iat, jat) = amat(iat, jat) + dtmp*wsw
+               dtmp = ctmp*erf(gam*r1)/r1
+               amat(jat, iat) = amat(jat, iat) + dtmp
+               amat(iat, jat) = amat(iat, jat) + dtmp
             end do
          end do
 
          ! WSC image contributions
          gam = 1.0_wp/sqrt(2.0_wp*self%rad(izp)**2)
-         wsw = 1.0_wp/real(wsc%nimg(iat, iat), wp)
-         do img = 1, wsc%nimg(iat, iat)
-            vec = wsc%trans(:, wsc%tridx(img, iat, iat))
+         do img = 1, size(dtrans, 2)
+            vec = dtrans(:, img)
+            r1 = norm2(vec)
+            if (r1 < eps) cycle
             ctmp = cdiag(iat, img)
-            call get_amat_dir_3d(vec, gam, alpha, dtrans, ctmp, dtmp)
-            amat(iat, iat) = amat(iat, iat) + dtmp*wsw
+            dtmp = ctmp*erf(gam*r1)/r1
+            amat(iat, iat) = amat(iat, iat) + dtmp
          end do
          ! Effective hardness
          dtmp = self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi
@@ -487,7 +489,7 @@ contains
          vec(:) = rij + trans(:, itr)
          r1 = norm2(vec)
          if (r1 < eps) cycle
-         tmp = cmat*erf(gam*r1)/r1 - erf(alp*r1)/r1
+         tmp = cmat*erf(gam*r1)/r1
          amat = amat + tmp
       end do
 
@@ -824,7 +826,7 @@ contains
       real(wp), intent(out) :: cmat(:, :)
 
       integer :: iat, jat, izp, jzp, isp, jsp, img
-      real(wp) :: vec(3), rvdw, tmp, capi, capj, wsw
+      real(wp) :: vec(3), rvdw, tmp, capi, capj
       real(wp), allocatable :: dtrans(:, :), rtrans(:, :)
 
       call get_dir_trans(mol%lattice, dtrans)
@@ -832,9 +834,9 @@ contains
 
       cmat(:, :) = 0.0_wp
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(cmat, mol, self, wsc) &
+      !$omp shared(cmat, mol, self, wsc, dtrans) &
       !$omp private(iat, izp, isp, jat, jzp, jsp) &
-      !$omp private(vec, rvdw, tmp, capi, capj, wsw, img)
+      !$omp private(vec, rvdw, tmp, capi, capj, img)
       do iat = 1, mol%nat
          izp = mol%id(iat)
          isp = mol%num(izp)
@@ -844,9 +846,8 @@ contains
             jsp = mol%num(jzp)
             rvdw = self%rvdw(iat, jat)
             capj = self%cap(jzp)
-            wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
-            do img = 1, wsc%nimg(jat, iat)
-               vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
+            do img = 1, size(dtrans, 2)
+               vec = mol%xyz(:, iat) - mol%xyz(:, jat) - dtrans(:, img)
                call get_cpair(mol, self%kbc, tmp, vec, rvdw, capi, capj)
                ! Off-diagonal elements
                cmat(jat, iat) = cmat(jat, iat) - tmp
@@ -884,10 +885,13 @@ contains
 
       integer :: iat, jat, izp, jzp, isp, jsp, img
       real(wp) :: vec(3), rvdw, capi, capj, tmp
+      real(wp), allocatable :: dtrans(:, :)
+
+      call get_dir_trans(mol%lattice, dtrans)
 
       cdiag(:, :) = 0.0_wp
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp reduction(+:cdiag) shared(mol, self, wsc) &
+      !$omp reduction(+:cdiag) shared(mol, self, wsc, dtrans) &
       !$omp private(iat, izp, isp, jat, jzp, jsp, img) &
       !$omp private(vec, rvdw, tmp, capi, capj)
       do iat = 1, mol%nat
@@ -899,8 +903,8 @@ contains
             jsp = mol%num(jzp)
             rvdw = self%rvdw(iat, jat)
             capj = self%cap(jsp)
-            do img = 1, wsc%nimg(jat, iat)
-               vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
+            do img = 1, size(dtrans, 2)
+               vec = mol%xyz(:, iat) - mol%xyz(:, jat) - dtrans(:, img)
                call get_cpair(mol, self%kbc, tmp, vec, rvdw, capi, capj)
                cdiag(iat, img) = cdiag(iat, img) + tmp
                cdiag(jat, img) = cdiag(jat, img) + tmp
