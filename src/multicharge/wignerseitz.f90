@@ -52,7 +52,6 @@ contains
 
       call get_lattice_points(mol%periodic, mol%lattice, thr, trans)
       ntr = size(trans, 2)
-      print'(i0)', ntr
       allocate (self%nimg(mol%nat, mol%nat), self%tridx(ntr, mol%nat, mol%nat), &
          & tridx(ntr))
 
@@ -63,7 +62,6 @@ contains
          do jat = 1, mol%nat
             vec(:) = mol%xyz(:, iat) - mol%xyz(:, jat)
             call get_pairs(nimg, trans, vec, tridx)
-            print'(i0)', nimg
             self%nimg(jat, iat) = nimg
             self%tridx(:, jat, iat) = tridx
             self%nimg_max = max(nimg, self%nimg_max)
@@ -110,7 +108,6 @@ contains
 
       do
          pos = minloc(dist(:img), dim=1, mask=mask(:img))
-         print'(3es21.14)', abs(dist(pos) - r2)
          if (abs(dist(pos) - r2) > tol) exit
          mask(pos) = .false.
          iws = iws + 1

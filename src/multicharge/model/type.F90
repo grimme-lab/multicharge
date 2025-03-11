@@ -288,7 +288,7 @@ contains
 
       if (present(energy)) then
          ! Extract only the Coulomb matrix without the constraints
-         allocate(jmat(mol%nat, mol%nat))
+         allocate (jmat(mol%nat, mol%nat))
          jmat = amat(:mol%nat, :mol%nat)
          call symv(jmat, vrhs(:mol%nat), xvec(:mol%nat), &
             & alpha=0.5_wp, beta=-1.0_wp, uplo='l')
@@ -303,7 +303,7 @@ contains
          call self%get_coulomb_derivs(mol, cache, vrhs, dadr, dadL, atrace)
          do iat = 1, mol%nat
             dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
-         end do   
+         end do
       end if
 
       if (grad) then

@@ -23,7 +23,8 @@ module multicharge_model_eeq
    use mctc_io_constants, only: pi
    use mctc_io_math, only: matdet_3x3
    use mctc_ncoord, only: new_ncoord
-   use multicharge_wignerseitz, only: wignerseitz_cell_type
+   use multicharge_wignerseitz, only: wignerseitz_cell_type, new_wignerseitz_cell
+   use multicharge_ewald, only: get_alpha
    use multicharge_model_type, only: mchrg_model_type, get_dir_trans, get_rec_trans
    use multicharge_model_cache, only: cache_container, model_cache
    implicit none
@@ -32,6 +33,10 @@ module multicharge_model_eeq
    public :: eeq_model, new_eeq_model
 
    type, extends(model_cache), public :: eeq_cache
+      !> Ewald separation parameter
+      real(wp) :: alpha
+      !> Wigner-Seitz cell
+      type(wignerseitz_cell_type) :: wsc
    end type eeq_cache
 
    type, extends(mchrg_model_type) :: eeq_model
@@ -117,7 +122,6 @@ contains
       type(eeq_cache), pointer :: ptr
 
       call taint(cache, ptr)
-      call ptr%update(mol)
 
       ! Refer CN arrays in cache
       ptr%cn = cn
@@ -125,6 +129,13 @@ contains
          ptr%dcndr = dcndr
          ptr%dcndL = dcndL
       end if
+
+      ! Create WSC
+      if (any(mol%periodic)) then
+         call new_wignerseitz_cell(ptr%wsc, mol)
+         call get_alpha(mol%lattice, ptr%alpha)
+      end if
+
    end subroutine update
 
    subroutine get_xvec(self, mol, cache, xvec)
