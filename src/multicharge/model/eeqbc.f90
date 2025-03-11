@@ -787,21 +787,19 @@ contains
       type(structure_type), intent(in) :: mol
       real(wp), intent(out) :: cmat(:, :)
 
-      integer :: iat, jat, izp, jzp, isp, jsp
+      integer :: iat, jat, izp, jzp
       real(wp) :: vec(3), rvdw, tmp, capi, capj
 
       cmat(:, :) = 0.0_wp
       !$omp parallel do default(none) schedule(runtime) &
       !$omp shared(cmat, mol, self) &
-      !$omp private(iat, izp, isp, jat, jzp, jsp) &
+      !$omp private(iat, izp, jat, jzp) &
       !$omp private(vec, rvdw, tmp, capi, capj)
       do iat = 1, mol%nat
          izp = mol%id(iat)
-         isp = mol%num(izp)
          capi = self%cap(izp)
          do jat = 1, iat - 1
             jzp = mol%id(jat)
-            jsp = mol%num(jzp)
             vec = mol%xyz(:, jat) - mol%xyz(:, iat)
             rvdw = self%rvdw(iat, jat)
             capj = self%cap(jzp)
@@ -826,7 +824,7 @@ contains
       type(wignerseitz_cell_type), intent(in) :: wsc
       real(wp), intent(out) :: cmat(:, :)
 
-      integer :: iat, jat, izp, jzp, isp, jsp, img
+      integer :: iat, jat, izp, jzp, img
       real(wp) :: vec(3), rvdw, tmp, capi, capj, wsw
       real(wp), allocatable :: dtrans(:, :), rtrans(:, :)
 
@@ -836,15 +834,13 @@ contains
       cmat(:, :) = 0.0_wp
       !$omp parallel do default(none) schedule(runtime) &
       !$omp shared(cmat, mol, self, wsc) &
-      !$omp private(iat, izp, isp, jat, jzp, jsp) &
-      !$omp private(vec, rvdw, tmp, capi, capj, wsw, img)
+      !$omp private(iat, izp, jat, jzp, img) &
+      !$omp private(vec, rvdw, tmp, capi, capj, wsw)
       do iat = 1, mol%nat
          izp = mol%id(iat)
-         isp = mol%num(izp)
          capi = self%cap(izp)
          do jat = 1, iat - 1
             jzp = mol%id(jat)
-            jsp = mol%num(jzp)
             rvdw = self%rvdw(iat, jat)
             capj = self%cap(jzp)
             wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
@@ -885,23 +881,21 @@ contains
       type(wignerseitz_cell_type), intent(in) :: wsc
       real(wp), intent(out) :: cdiag(:, :)
 
-      integer :: iat, jat, izp, jzp, isp, jsp, img
+      integer :: iat, jat, izp, jzp, img
       real(wp) :: vec(3), rvdw, capi, capj, tmp
 
       cdiag(:, :) = 0.0_wp
       !$omp parallel do default(none) schedule(runtime) &
       !$omp reduction(+:cdiag) shared(mol, self, wsc) &
-      !$omp private(iat, izp, isp, jat, jzp, jsp, img) &
+      !$omp private(iat, izp, jat, jzp, img) &
       !$omp private(vec, rvdw, tmp, capi, capj)
       do iat = 1, mol%nat
          izp = mol%id(iat)
-         isp = mol%num(izp)
-         capi = self%cap(isp)
+         capi = self%cap(izp)
          do jat = 1, iat - 1
             jzp = mol%id(jat)
-            jsp = mol%num(jzp)
             rvdw = self%rvdw(iat, jat)
-            capj = self%cap(jsp)
+            capj = self%cap(jzp)
             do img = 1, wsc%nimg(jat, iat)
                vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
                call get_cpair(mol, self%kbc, tmp, vec, rvdw, capi, capj)
