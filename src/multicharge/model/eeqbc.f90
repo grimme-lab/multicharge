@@ -408,7 +408,7 @@ contains
       real(wp), intent(in) :: cdiag(:, :)
       real(wp), intent(out) :: amat(:, :)
 
-      integer :: iat, jat, isp, jsp, izp, jzp, img
+      integer :: iat, jat, izp, jzp, img
       real(wp) :: vec(3), gam, wsw, dtmp, rtmp, vol, ctmp, capi, capj, radi, radj, norm_cn, rvdw
       real(wp), allocatable :: dtrans(:, :), rtrans(:, :)
 
@@ -422,23 +422,21 @@ contains
       !$omp reduction(+:amat) shared(mol, self, wsc, dtrans, rtrans, alpha, vol, cdiag) &
       !$omp shared(cn, qloc) &
       !$omp private(iat, izp, jat, jzp, gam, wsw, vec, dtmp, rtmp, ctmp, norm_cn) &
-      !$omp private(isp, jsp, radi, radj, capi, capj, rvdw)
+      !$omp private(radi, radj, capi, capj, rvdw)
       do iat = 1, mol%nat
          izp = mol%id(iat)
-         isp = mol%num(izp)
          ! Effective charge width of i
          norm_cn = 1.0_wp/self%avg_cn(izp)**self%norm_exp
          radi = self%rad(izp)*(1.0_wp - self%kcnrad*cn(iat)*norm_cn)
-         capi = self%cap(isp)
+         capi = self%cap(izp)
          do jat = 1, iat - 1
             jzp = mol%id(jat)
-            jsp = mol%num(jzp)
             ! vdw distance in Angstrom (approximate factor 2)
             rvdw = self%rvdw(iat, jat)
             ! Effective charge width of j
             norm_cn = cn(jat)/self%avg_cn(jzp)**self%norm_exp
             radj = self%rad(jzp)*(1.0_wp - self%kcnrad*norm_cn)
-            capj = self%cap(jsp)
+            capj = self%cap(jzp)
             ! Coulomb interaction of Gaussian charges
             gam = 1.0_wp/sqrt(radi**2 + radj**2)
             wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
