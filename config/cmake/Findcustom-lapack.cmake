@@ -19,10 +19,26 @@ endif()
 
 if(WITH_ILP64)
   set(BLA_SIZEOF_INTEGER 8)
+  set(_nvpl_int "_ilp64")
+else()
+  set(_nvpl_int "_lp64")
 endif()
 
 if(NOT LAPACK_FOUND)
-  find_package("LAPACK" REQUIRED)
+  if(BLA_VENDOR STREQUAL "NVPL")
+    find_package("nvpl_lapack" REQUIRED)
+
+    if((BLA_THREAD STREQUAL "OMP") OR (BLA_THREAD STREQUAL "ANY"))
+      set(_nvpl_thread "_omp")
+    else()
+      set(_nvpl_thread "_seq")
+    endif()
+
+    add_library("LAPACK::LAPACK" INTERFACE IMPORTED)
+    target_link_libraries("LAPACK::LAPACK" INTERFACE "nvpl::lapack${_nvpl_int}${_nvpl_thread}")
+  else()
+    find_package("LAPACK" REQUIRED)
+  endif()
 
   if(NOT TARGET "BLAS::BLAS")
     find_package("custom-blas" REQUIRED)
