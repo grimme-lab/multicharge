@@ -162,7 +162,7 @@ subroutine get_amat_0d(self, mol, amat)
    amat(:, :) = 0.0_wp
 
    !$omp parallel do default(none) schedule(runtime) &
-   !$omp reduction(+:amat) shared(mol, self) &
+   !$omp shared(amat, mol, self) &
    !$omp private(iat, izp, jat, jzp, gam, vec, r2, tmp)
    do iat = 1, mol%nat
       izp = mol%id(iat)
@@ -172,10 +172,13 @@ subroutine get_amat_0d(self, mol, amat)
          r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
          gam = 1.0_wp / (self%rad(izp)**2 + self%rad(jzp)**2)
          tmp = erf(sqrt(r2*gam))/sqrt(r2)
+         !$omp atomic
          amat(jat, iat) = amat(jat, iat) + tmp
+         !$omp atomic
          amat(iat, jat) = amat(iat, jat) + tmp
       end do
       tmp = self%eta(izp) + sqrt2pi / self%rad(izp)
+      !$omp atomic
       amat(iat, iat) = amat(iat, iat) + tmp
    end do
 
@@ -203,7 +206,7 @@ subroutine get_amat_3d(self, mol, wsc, alpha, amat)
    call get_rec_trans(mol%lattice, rtrans)
 
    !$omp parallel do default(none) schedule(runtime) &
-   !$omp reduction(+:amat) shared(mol, self, wsc, dtrans, rtrans, alpha, vol) &
+   !$omp shared(amat, mol, self, wsc, dtrans, rtrans, alpha, vol) &
    !$omp private(iat, izp, jat, jzp, gam, wsw, vec, dtmp, rtmp)
    do iat = 1, mol%nat
       izp = mol%id(iat)
@@ -215,7 +218,9 @@ subroutine get_amat_3d(self, mol, wsc, alpha, amat)
             vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
             call get_amat_dir_3d(vec, gam, alpha, dtrans, dtmp)
             call get_amat_rec_3d(vec, vol, alpha, rtrans, rtmp)
+            !$omp atomic
             amat(jat, iat) = amat(jat, iat) + (dtmp + rtmp) * wsw
+            !$omp atomic
             amat(iat, jat) = amat(iat, jat) + (dtmp + rtmp) * wsw
          end do
       end do
@@ -226,10 +231,12 @@ subroutine get_amat_3d(self, mol, wsc, alpha, amat)
          vec = wsc%trans(:, wsc%tridx(img, iat, iat))
          call get_amat_dir_3d(vec, gam, alpha, dtrans, dtmp)
          call get_amat_rec_3d(vec, vol, alpha, rtrans, rtmp)
+         !$omp atomic
          amat(iat, iat) = amat(iat, iat) + (dtmp + rtmp) * wsw
       end do
 
       dtmp = self%eta(izp) + sqrt2pi / self%rad(izp) - 2 * alpha / sqrtpi
+      !$omp atomic
       amat(iat, iat) = amat(iat, iat) + dtmp
    end do
 
