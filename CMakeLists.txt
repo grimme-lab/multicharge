@@ -37,8 +37,8 @@ if(WITH_ILP64)
   message(STATUS "Using LAPACK/BLAS ILP64 interface")
 endif()
 
-if(NOT TARGET "LAPACK::LAPACK")
-  find_package("custom-lapack" REQUIRED)
+if(NOT TARGET "multicharge::LAPACK")
+  find_package("multicharge-lapack" REQUIRED)
 endif()
 
 # Collect subprojects
@@ -77,8 +77,8 @@ target_link_libraries(
   "${PROJECT_NAME}-lib"
   PUBLIC
   "${lib-deps}"
-  "LAPACK::LAPACK"
-  "$<$<VERSION_LESS:${CMAKE_VERSION},3.20>:BLAS::BLAS>"
+  "multicharge::LAPACK"
+  "$<$<VERSION_LESS:${CMAKE_VERSION},3.20>:multicharge::BLAS>"
 )
 if(WITH_OpenMP)
   target_link_libraries(
@@ -138,6 +138,12 @@ install(
   FILES
   "LICENSE"
   DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/${PROJECT_NAME}"
+)
+install(
+  DIRECTORY ${PROJECT_SOURCE_DIR}/config/cmake/
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+  FILES_MATCHING
+  PATTERN "Find*.cmake"
 )
 
 # add the testsuite

@@ -12,8 +12,8 @@ if(NOT TARGET "@PROJECT_NAME@::@PROJECT_NAME@")
     find_dependency("OpenMP")
   endif()
 
-  if(NOT TARGET "LAPACK::LAPACK")
-    find_dependency("custom-lapack")
+  if(NOT TARGET "multicharge::LAPACK")
+    find_dependency("multicharge-lapack")
   endif()
 
   if(NOT TARGET "mctc-lib::mctc-lib")
