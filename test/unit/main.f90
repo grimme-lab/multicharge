@@ -20,7 +20,6 @@ program tester
    use mctc_env_testing, only : run_testsuite, new_testsuite, testsuite_type, &
       & select_suite, run_selected
    use test_model, only : collect_model
-   use test_ncoord, only : collect_ncoord
    use test_pbc, only : collect_pbc
    use test_wignerseitz, only : collect_wignerseitz
    implicit none
@@ -33,7 +32,6 @@ program tester
 
    testsuites = [ &
       & new_testsuite("model", collect_model), &
-      & new_testsuite("ncoord", collect_ncoord), &
       & new_testsuite("pbc", collect_pbc), &
       & new_testsuite("wignerseitz", collect_wignerseitz) &
       & ]

@@ -16,6 +16,7 @@
 module multicharge_param
    use mctc_env, only : wp
    use mctc_io, only : structure_type
+   use mctc_data, only: get_covalent_rad
    use multicharge_model, only : mchrg_model_type, new_mchrg_model
    use multicharge_param_eeq2019, only : get_eeq_chi, get_eeq_eta, &
       & get_eeq_rad, get_eeq_kcn
@@ -32,14 +33,16 @@ subroutine new_eeq2019_model(mol, model)
    !> Electronegativity equilibration model
    type(mchrg_model_type), intent(out) :: model
 
-   real(wp), allocatable :: chi(:), eta(:), kcn(:), rad(:)
+   real(wp), allocatable :: chi(:), eta(:), kcn(:), rad(:), rcov(:)
 
    chi = get_eeq_chi(mol%num)
    eta = get_eeq_eta(mol%num)
    kcn = get_eeq_kcn(mol%num)
    rad = get_eeq_rad(mol%num)
+   rcov = get_covalent_rad(mol%num)
 
-   call new_mchrg_model(model, chi=chi, rad=rad, eta=eta, kcn=kcn)
+   call new_mchrg_model(model, mol, chi=chi, rad=rad, eta=eta, kcn=kcn, &
+      & cutoff=25.0_wp, cn_exp=7.5_wp, rcov=rcov, cn_max=8.0_wp)
 
 end subroutine new_eeq2019_model
 

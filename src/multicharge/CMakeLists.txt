@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory("data")
 add_subdirectory("param")
 
 set(dir "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -22,11 +21,9 @@ list(
   APPEND srcs
   "${dir}/blas.F90"
   "${dir}/cutoff.f90"
-  "${dir}/data.f90"
   "${dir}/ewald.f90"
   "${dir}/lapack.F90"
   "${dir}/model.F90"
-  "${dir}/ncoord.f90"
   "${dir}/output.f90"
   "${dir}/param.f90"
   "${dir}/version.f90"

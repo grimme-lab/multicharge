@@ -19,7 +19,6 @@ program main
    use mctc_io, only : structure_type, read_structure, filetype, get_filetype
    use multicharge, only : mchrg_model_type, new_eeq2019_model, &
       & write_ascii_model, write_ascii_properties, write_ascii_results, &
-      & get_coordination_number, get_covalent_rad, get_lattice_points, &
       & get_multicharge_version
    use multicharge_output, only : json_results
    implicit none
@@ -34,7 +33,7 @@ program main
    type(mchrg_model_type) :: model
    logical :: grad, json, exist
    real(wp), parameter :: cn_max = 8.0_wp, cutoff = 25.0_wp
-   real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), rcov(:), trans(:, :)
+   real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :)
    real(wp), allocatable :: energy(:), gradient(:, :), sigma(:, :)
    real(wp), allocatable :: qvec(:), dqdr(:, :, :), dqdL(:, :, :)
    real(wp), allocatable :: charge
@@ -78,7 +77,6 @@ program main
    end if
 
    call new_eeq2019_model(mol, model)
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
    call write_ascii_model(output_unit, mol, model)
 
@@ -87,8 +85,7 @@ program main
       allocate(dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat))
    end if
 
-   rcov = get_covalent_rad(mol%num)
-   call get_coordination_number(mol, trans, cutoff, rcov, cn, dcndr, dcndL, cut=cn_max)
+   call model%ncoord%get_cn(mol, cn, dcndr, dcndL)
 
    allocate(energy(mol%nat), qvec(mol%nat))
    energy(:) = 0.0_wp
