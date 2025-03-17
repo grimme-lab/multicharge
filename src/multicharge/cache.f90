@@ -20,6 +20,7 @@
 module multicharge_model_cache
    use mctc_env, only: wp
    use mctc_io, only: structure_type
+   use multicharge_wignerseitz, only: wignerseitz_cell_type
    implicit none
    private
 
@@ -36,6 +37,10 @@ module multicharge_model_cache
       real(wp), allocatable :: dcndr(:, :, :)
       !> CN dL gradient
       real(wp), allocatable :: dcndL(:, :, :)
+      !> Ewald separation parameter
+      real(wp) :: alpha
+      !> Wigner-Seitz cell
+      type(wignerseitz_cell_type) :: wsc
    end type model_cache
 
 end module multicharge_model_cache

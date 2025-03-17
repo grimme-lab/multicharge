@@ -33,10 +33,6 @@ module multicharge_model_eeq
    public :: eeq_model, new_eeq_model
 
    type, extends(model_cache), public :: eeq_cache
-      !> Ewald separation parameter
-      real(wp) :: alpha
-      !> Wigner-Seitz cell
-      type(wignerseitz_cell_type) :: wsc
    end type eeq_cache
 
    type, extends(mchrg_model_type) :: eeq_model
@@ -128,12 +124,6 @@ contains
       if (present(dcndr) .and. present(dcndL)) then
          ptr%dcndr = dcndr
          ptr%dcndL = dcndL
-      end if
-
-      ! Create WSC
-      if (any(mol%periodic)) then
-         call new_wignerseitz_cell(ptr%wsc, mol)
-         call get_alpha(mol%lattice, ptr%alpha)
       end if
 
    end subroutine update
