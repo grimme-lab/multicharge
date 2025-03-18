@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if ((BLA_VENDOR MATCHES ^Intel) OR (DEFINED ENV{MKLROOT}))
+if ((MULTICHARGE_BLAS MATCHES ^Intel) OR (DEFINED ENV{MKLROOT}))
   enable_language("C")
 endif()
 
@@ -29,7 +29,7 @@ if(NOT TARGET "multicharge::BLAS")
 endif()
 
 if(NOT MULTICHARGE_LAPACK_FOUND)
-  if(BLA_VENDOR STREQUAL "NVPL")
+  if(MULTICHARGE_BLAS STREQUAL "NVPL")
     find_package("nvpl_lapack" REQUIRED)
     set(MULTICHARGE_LAPACK_FOUND TRUE)
 

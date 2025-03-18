@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.18)
 get_directory_property(is-subproject PARENT_DIRECTORY)
 
 project(
