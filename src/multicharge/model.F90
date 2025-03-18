@@ -24,7 +24,7 @@ module multicharge_model
    use mctc_io_math, only : matdet_3x3, matinv_3x3
    use multicharge_blas, only : gemv, symv, gemm
    use multicharge_cutoff, only : get_lattice_points
-   use mctc_ncoord, only: ncoord_type, new_ncoord
+   use mctc_ncoord, only: ncoord_type, new_ncoord, cn_count
    use multicharge_ewald, only : get_alpha
    use multicharge_lapack, only : sytrf, sytrs, sytri
    use multicharge_wignerseitz, only : wignerseitz_cell_type, new_wignerseitz_cell
@@ -87,7 +87,7 @@ subroutine new_mchrg_model(self, mol, chi, rad, eta, kcn, &
    self%eta = eta
    self%kcn = kcn
 
-   call new_ncoord(self%ncoord, mol, "erf", cutoff=cutoff, &
+   call new_ncoord(self%ncoord, mol, cn_count%erf, cutoff=cutoff, &
       & kcn=cn_exp, rcov=rcov, cut=cn_max)
 
 end subroutine new_mchrg_model

@@ -33,6 +33,8 @@ subroutine new_eeq2019_model(mol, model)
    !> Electronegativity equilibration model
    type(mchrg_model_type), intent(out) :: model
 
+   real(wp), parameter :: cutoff = 25.0_wp, cn_exp = 7.5_wp, cn_max = 8.0_wp
+
    real(wp), allocatable :: chi(:), eta(:), kcn(:), rad(:), rcov(:)
 
    chi = get_eeq_chi(mol%num)
@@ -42,7 +44,7 @@ subroutine new_eeq2019_model(mol, model)
    rcov = get_covalent_rad(mol%num)
 
    call new_mchrg_model(model, mol, chi=chi, rad=rad, eta=eta, kcn=kcn, &
-      & cutoff=25.0_wp, cn_exp=7.5_wp, rcov=rcov, cn_max=8.0_wp)
+      & cutoff=cutoff, cn_exp=cn_exp, rcov=rcov, cn_max=cn_max)
 
 end subroutine new_eeq2019_model
 
