@@ -22,6 +22,7 @@ if(WITH_ILP64)
   set(_nvpl_int "_ilp64")
 else()
   set(_nvpl_int "_lp64")
+  set(BLA_SIZEOF_INTEGER 4)
 endif()
 
 if(NOT MULTICHARGE_BLAS_FOUND)
