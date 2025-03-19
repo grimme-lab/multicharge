@@ -46,8 +46,6 @@ module multicharge_model_eeqbc
       real(wp), allocatable :: dqlocdL(:, :, :)
       !> Full Maxwell capacitance matrix for 0d case
       real(wp), allocatable :: cmat(:, :)
-      !> Diagonal elements of Maxwell capacitance matrix for every WSC image
-      real(wp), allocatable :: cdiag(:, :)
       !> Derivative of Maxwell capacitance matrix w.r.t positions
       real(wp), allocatable :: dcdr(:, :, :)
       !> Derivative of Maxwell capacitance matrix w.r.t lattice vectors
@@ -90,8 +88,6 @@ module multicharge_model_eeqbc
       procedure :: get_cmat_0d
       !> Calculate full WSC image summed constraint matrix (periodic case)
       procedure :: get_cmat_3d
-      !> Calculate diagonal contributions (periodic case)
-      procedure :: get_cdiag_3d
       !> Calculate constraint matrix derivatives (molecular)
       procedure :: get_dcmat_0d
       ! procedure :: get_dcmat_3d
@@ -292,7 +288,6 @@ contains
       type(eeqbc_cache), pointer :: ptr
 
       integer :: iat, izp, jat
-      real(wp) :: tmpdcn, tmpdqloc
       real(wp), allocatable :: dtmpdr(:, :, :), dtmpdL(:, :, :)
 
       call view(cache, ptr)
@@ -409,7 +404,7 @@ contains
 
       amat(:, :) = 0.0_wp
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp reduction(+:amat) shared(mol, self, dtrans, cdiag, wsc) &
+      !$omp reduction(+:amat) shared(mol, self, dtrans, wsc) &
       !$omp shared(cn, qloc) &
       !$omp private(iat, izp, jat, jzp, gam, vec, dtmp, ctmp, norm_cn) &
       !$omp private(radi, radj, capi, capj, rvdw, r1, wsw)
@@ -439,16 +434,31 @@ contains
          end do
 
          ! WSC image contributions
+         ! TODO: self-interaction for cmat yes/no? also how to handle self-interaction here?
          gam = 1.0_wp/sqrt(2.0_wp*self%rad(izp)**2)
+         rvdw = self%rvdw(iat, iat)
          wsw = 1.0_wp/real(wsc%nimg(iat, iat), wp)
          do img = 1, wsc%nimg(iat, iat)
             vec = wsc%trans(:, wsc%tridx(img, iat, iat))
-            call get_amat_dir_diag_3d(vec, gam, dtrans, self%kbc, rvdw, capi, capi, dtmp)
+            call get_amat_dir_3d(vec, gam, dtrans, self%kbc, rvdw, capi, capi, dtmp)
             amat(iat, iat) = amat(iat, iat) + dtmp*wsw
          end do
+
          ! Effective hardness
          dtmp = self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi
-         amat(iat, iat) = amat(iat, iat) + cdiag(iat, 1)*dtmp + 1.0_wp
+         do jat = 1, mol%nat
+            if (iat .eq. jat) cycle
+            jzp = mol%id(jat)
+            ! vdw distance in Angstrom (approximate factor 2)
+            rvdw = self%rvdw(iat, jat)
+            ! Effective charge width of j
+            capj = self%cap(jzp)
+            vec = mol%xyz(:, jat) - mol%xyz(:, iat)
+            r1 = norm2(vec)
+            call get_cpair(self%kbc, ctmp, r1, rvdw, capi, capj)
+            amat(iat, iat) = amat(iat, iat) + ctmp*dtmp
+         end do
+         amat(iat, iat) = amat(iat, iat) + 1.0_wp
       end do
 
       amat(mol%nat + 1, 1:mol%nat + 1) = 1.0_wp
@@ -476,33 +486,7 @@ contains
          vec(:) = rij + trans(:, itr)
          r1 = norm2(vec)
          if (r1 < eps) cycle
-         call get_cpair(kbc, ctmp, r1*r1, rvdw, capi, capj)
-         tmp = -ctmp*erf(gam*r1)/r1
-         amat = amat + tmp
-      end do
-
-   end subroutine get_amat_dir_3d
-
-   subroutine get_amat_dir_diag_3d(rij, gam, trans, kbc, rvdw, capi, capj, amat)
-      real(wp), intent(in) :: rij(3)
-      real(wp), intent(in) :: gam
-      real(wp), intent(in) :: kbc
-      real(wp), intent(in) :: rvdw
-      real(wp), intent(in) :: capi
-      real(wp), intent(in) :: capj
-      real(wp), intent(in) :: trans(:, :)
-      real(wp), intent(out) :: amat
-
-      integer :: itr
-      real(wp) :: vec(3), r1, tmp, ctmp
-
-      amat = 0.0_wp
-
-      do itr = 1, size(trans, 2)
-         vec(:) = rij + trans(:, itr)
-         r1 = norm2(vec)
-         if (r1 < eps) cycle
-         call get_cdiag(kbc, ctmp)
+         call get_cpair(kbc, ctmp, r1, rvdw, capi, capj)
          tmp = -ctmp*erf(gam*r1)/r1
          amat = amat + tmp
       end do
@@ -711,7 +695,7 @@ contains
                              & *gam**3.0_wp
 
                ! Explicit derivative
-               call get_cpair(self%kbc, ctmp, r2, rvdw, capi, capj)
+               call get_cpair(self%kbc, ctmp, sqrt(r2), rvdw, capi, capj)
                arg = gam*gam*r2
                dtmp = 2.0_wp*gam*exp(-arg)/(sqrtpi*r2*self%dielectric) &
                   & - erf(sqrt(arg))/(r2*sqrt(r2)*self%dielectric)
@@ -734,7 +718,7 @@ contains
                dadL(:, :, iat) = +dtmp*qvec(jat)*dgamdL(:, :)*ctmp + dadL(:, :, iat)
 
                ! Capacitance derivative off-diagonal
-               call get_dcpair(mol, self%kbc, dG, dS, vec, rvdw, capi, capj)
+               call get_dcpair(self%kbc, dG, dS, vec, rvdw, capi, capj)
                dtmp = erf(sqrt(r2)*gam)/(sqrt(r2)*self%dielectric)
                ! potentially switch indices for dcdr (now this means reversing signs)
                atrace(:, iat) = -dtmp*qvec(jat)*dG + atrace(:, iat)
@@ -806,24 +790,24 @@ contains
       real(wp), intent(out) :: cmat(:, :)
 
       integer :: iat, jat, izp, jzp
-      real(wp) :: vec(3), rvdw, tmp, capi, capj, r2
+      real(wp) :: vec(3), rvdw, tmp, capi, capj, r1
 
       cmat(:, :) = 0.0_wp
       !$omp parallel do default(none) schedule(runtime) &
       !$omp shared(cmat, mol, self) &
       !$omp private(iat, izp, jat, jzp) &
-      !$omp private(vec, r2, rvdw, tmp, capi, capj)
+      !$omp private(vec, r1, rvdw, tmp, capi, capj)
       do iat = 1, mol%nat
          izp = mol%id(iat)
          capi = self%cap(izp)
          do jat = 1, iat - 1
             jzp = mol%id(jat)
             vec = mol%xyz(:, jat) - mol%xyz(:, iat)
-            r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
+            r1 = norm2(vec)
             rvdw = self%rvdw(iat, jat)
             capj = self%cap(jzp)
 
-            call get_cpair(self%kbc, tmp, r2, rvdw, capi, capj)
+            call get_cpair(self%kbc, tmp, r1, rvdw, capi, capj)
 
             ! Off-diagonal elements
             cmat(jat, iat) = -tmp
@@ -884,14 +868,14 @@ contains
 
    end subroutine get_cmat_3d
 
-   subroutine get_cpair(kbc, cpair, r2, rvdw, capi, capj)
-      real(wp), intent(in) :: r2, capi, capj, rvdw, kbc
+   subroutine get_cpair(kbc, cpair, r1, rvdw, capi, capj)
+      real(wp), intent(in) :: r1, capi, capj, rvdw, kbc
       real(wp), intent(out) :: cpair
 
       real(wp) :: arg
 
       ! Capacitance of bond between atom i and j
-      arg = -kbc*(sqrt(r2) - rvdw)/rvdw
+      arg = -kbc*(r1 - rvdw)/rvdw
       cpair = sqrt(capi*capj)*0.5_wp*(1.0_wp + erf(arg))
    end subroutine get_cpair
 
@@ -900,105 +884,33 @@ contains
       real(wp), intent(out) :: cpair
 
       integer :: itr
-      real(wp) :: vec(3), r2, tmp
+      real(wp) :: vec(3), r1, tmp
 
+      cpair = 0.0_wp
       do itr = 1, size(trans, 2)
          vec(:) = rij + trans(:, itr)
-         r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
-         if (sqrt(r2) < eps) cycle
-         call get_cpair(kbc, tmp, r2, rvdw, capi, capj)
+         r1 = norm2(vec)
+         if (r1 < eps) cycle
+         call get_cpair(kbc, tmp, r1, rvdw, capi, capj)
          cpair = cpair + tmp
       end do
    end subroutine get_cpair_dir
 
-   subroutine get_dcpair(mol, kbc, dgpair, dspair, vec, rvdw, capi, capj)
-      type(structure_type), intent(in) :: mol
+   subroutine get_dcpair(kbc, dgpair, dspair, vec, rvdw, capi, capj)
       real(wp), intent(in) :: vec(3), capi, capj, rvdw, kbc
       real(wp), intent(out) :: dgpair(3)
       real(wp), intent(out) :: dspair(3, 3)
 
-      real(wp) :: r2, arg, dtmp
+      real(wp) :: r1, arg, dtmp
 
-      r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
+      r1 = norm2(vec)
 
       ! Capacitance of bond between atom i and j
-      arg = -(kbc*(sqrt(r2) - rvdw)/rvdw)**2
+      arg = -(kbc*(r1 - rvdw)/rvdw)**2
       dtmp = sqrt(capi*capj)*kbc*exp(arg)/(sqrtpi*rvdw)
-      dgpair = dtmp*vec/sqrt(r2)
+      dgpair = dtmp*vec/r1
       dspair = spread(dgpair, 1, 3)*spread(vec, 2, 3)
    end subroutine get_dcpair
-
-   subroutine get_cdiag(self, mol, iat, ri, cdiag)
-      class(eeqbc_model), intent(in) :: self
-      type(structure_type), intent(in) :: mol
-      integer, intent(in) :: iat
-      real(wp), intent(in) :: ri(3)
-      real(wp), intent(out) :: cdiag
-
-      integer :: jat, izp, jzp
-      real(wp) :: vec(3), rvdw, capi, capj, tmp, r2
-
-      cdiag = 0.0_wp
-      !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(mol, self) &
-      !$omp private(iat, izp, jat, jzp, img, cdiag) &
-      !$omp private(vec, rvdw, tmp, capi, capj, ri, r2)
-      izp = mol%id(iat)
-      capi = self%cap(izp)
-      do jat = 1, mol%nat
-         if (iat .eq. jat) cycle
-         jzp = mol%id(jat)
-         rvdw = self%rvdw(iat, jat)
-         capj = self%cap(jzp)
-         vec = mol%xyz(:, jat) - ri(:)
-         r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
-         call get_cpair(self%kbc, tmp, r2, rvdw, capi, capj)
-         cdiag = cdiag + tmp
-         cdiag = cdiag + tmp
-      end do
-   end subroutine get_cdiag
-
-   subroutine get_dcdiag_3d(self, mol, wsc, dcdr, dcdL)
-      class(eeqbc_model), intent(in) :: self
-      type(structure_type), intent(in) :: mol
-      type(wignerseitz_cell_type), intent(in) :: wsc
-      real(wp), intent(out) :: dcdr(:, :, :)
-      real(wp), intent(out) :: dcdL(:, :, :)
-
-      integer :: iat, jat, izp, jzp, img
-      real(wp) :: vec(3), rvdw, dtmp, arg, dG(3), dS(3, 3), capi, capj, wsw
-      real(wp), allocatable :: dtrans(:, :)
-
-      call get_dir_trans(mol%lattice, dtrans)
-
-      dcdr(:, :, :) = 0.0_wp
-      dcdL(:, :, :) = 0.0_wp
-      !$omp parallel do default(none) schedule(runtime) &
-      !$omp reduction(+:dcdr, dcdL) shared(mol, self, wsc) &
-      !$omp private(iat, izp, jat, jzp, img) &
-      !$omp private(vec, rvdw, dG, dS, dtmp, arg, capi, capj, wsw)
-      do iat = 1, mol%nat
-         izp = mol%id(iat)
-         capi = self%cap(izp)
-         do jat = 1, iat - 1
-            jzp = mol%id(jat)
-            capj = self%cap(jzp)
-            wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
-            do img = 1, wsc%nimg(jat, iat)
-               vec = mol%xyz(:, jat) - mol%xyz(:, iat) - wsc%trans(:, wsc%tridx(img, jat, iat))
-               rvdw = self%rvdw(iat, jat)
-
-               call get_dcpair_dir(mol, self%kbc, dG, dS, vec, dtrans, rvdw, capi, capj)
-
-               ! Positive diagonal elements
-               dcdr(:, iat, iat) = +dG + dcdr(:, iat, iat)
-               dcdr(:, jat, jat) = -dG + dcdr(:, jat, jat)
-               dcdL(:, :, jat) = +dS + dcdL(:, :, jat)
-               dcdL(:, :, iat) = +dS + dcdL(:, :, iat)
-            end do
-         end do
-      end do
-   end subroutine get_dcdiag_3d
 
    subroutine get_dcmat_0d(self, mol, dcdr, dcdL)
       class(eeqbc_model), intent(in) :: self
@@ -1021,9 +933,10 @@ contains
          do jat = 1, iat - 1
             jzp = mol%id(jat)
             capj = self%cap(jzp)
+            rvdw = self%rvdw(iat, jat)
             vec = mol%xyz(:, jat) - mol%xyz(:, iat)
 
-            call get_dcpair(mol, self%kbc, dG, dS, vec, rvdw, capi, capj)
+            call get_dcpair(self%kbc, dG, dS, vec, rvdw, capi, capj)
 
             ! Negative off-diagonal elements
             dcdr(:, iat, jat) = -dG
