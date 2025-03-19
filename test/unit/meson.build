@@ -30,7 +30,6 @@ endif
 
 tests = [
   'model',
-  'ncoord',
   'pbc',
   'wignerseitz',
 ]

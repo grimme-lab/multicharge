@@ -15,9 +15,7 @@
 
 module multicharge
    use multicharge_cutoff, only : get_lattice_points
-   use multicharge_data, only : get_covalent_rad
    use multicharge_model, only : mchrg_model_type
-   use multicharge_ncoord, only : get_coordination_number
    use multicharge_output, only : write_ascii_model, write_ascii_properties, &
       & write_ascii_results
    use multicharge_param, only : new_eeq2019_model

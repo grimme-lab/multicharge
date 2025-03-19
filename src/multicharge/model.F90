@@ -24,6 +24,7 @@ module multicharge_model
    use mctc_io_math, only : matdet_3x3, matinv_3x3
    use multicharge_blas, only : gemv, symv, gemm
    use multicharge_cutoff, only : get_lattice_points
+   use mctc_ncoord, only: ncoord_type, new_ncoord, cn_count
    use multicharge_ewald, only : get_alpha
    use multicharge_lapack, only : sytrf, sytrs, sytri
    use multicharge_wignerseitz, only : wignerseitz_cell_type, new_wignerseitz_cell
@@ -33,11 +34,18 @@ module multicharge_model
    public :: mchrg_model_type, new_mchrg_model
 
 
+   !> Electronegativity equilibration model type
    type :: mchrg_model_type
+      !> Exponent gaussian charge
       real(wp), allocatable :: rad(:)
+      !> Electronegativity
       real(wp), allocatable :: chi(:)
+      !> Chemical hardness
       real(wp), allocatable :: eta(:)
+      !> CN scaling factor for electronegativity
       real(wp), allocatable :: kcn(:)
+      !> Coordination number
+      class(ncoord_type), allocatable :: ncoord
    contains
       procedure :: solve
    end type mchrg_model_type
@@ -51,17 +59,36 @@ module multicharge_model
 contains
 
 
-subroutine new_mchrg_model(self, chi, rad, eta, kcn)
+subroutine new_mchrg_model(self, mol, chi, rad, eta, kcn, &
+   & cutoff, cn_exp, rcov, cn_max)
+   !> Electronegativity equilibration model
    type(mchrg_model_type), intent(out) :: self
+   !> Molecular structure data
+   type(structure_type), intent(in) :: mol
+   !> Exponent gaussian charge
    real(wp), intent(in) :: rad(:)
+   !> Electronegativity
    real(wp), intent(in) :: chi(:)
+   !> Chemical hardness
    real(wp), intent(in) :: eta(:)
+   !> CN scaling factor for electronegativity
    real(wp), intent(in) :: kcn(:)
+   !> Cutoff radius for coordination number
+   real(wp), intent(in), optional :: cutoff
+   !> Steepness of the CN counting function
+   real(wp), intent(in), optional :: cn_exp
+   !> Covalent radii for CN
+   real(wp), intent(in), optional :: rcov(:)
+   !> Maximum CN cutoff for CN
+   real(wp), intent(in), optional :: cn_max
 
    self%rad = rad
    self%chi = chi
    self%eta = eta
    self%kcn = kcn
+
+   call new_ncoord(self%ncoord, mol, cn_count%erf, cutoff=cutoff, &
+      & kcn=cn_exp, rcov=rcov, cut=cn_max)
 
 end subroutine new_mchrg_model
 

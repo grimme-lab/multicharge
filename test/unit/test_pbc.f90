@@ -18,13 +18,9 @@ module test_pbc
    use mctc_env_testing, only : new_unittest, unittest_type, error_type, &
       & test_failed
    use mctc_io_structure, only : structure_type
+   use mctc_cutoff, only : get_lattice_points
    use mstore, only : get_structure
-   use multicharge_cutoff, only : get_lattice_points
-   use multicharge_data, only : get_covalent_rad
-   use multicharge_model
-   use multicharge_ncoord, only : get_coordination_number, cut_coordination_number
-   use multicharge_output, only : write_ascii_model, write_ascii_properties, &
-      & write_ascii_results
+   use multicharge_model, only : mchrg_model_type
    use multicharge_param, only : new_eeq2019_model
    implicit none
    private
@@ -71,8 +67,8 @@ subroutine gen_test(error, mol, qref, eref)
    type(error_type), allocatable, intent(out) :: error
 
    type(mchrg_model_type) :: model
-   real(wp), parameter :: cn_max = 8.0_wp, cutoff = 25.0_wp
-   real(wp), allocatable :: cn(:), rcov(:), trans(:, :)
+   real(wp), parameter :: cutoff = 25.0_wp
+   real(wp), allocatable :: cn(:), trans(:, :)
    real(wp), allocatable :: energy(:)
    real(wp), allocatable :: qvec(:)
 
@@ -81,8 +77,7 @@ subroutine gen_test(error, mol, qref, eref)
 
    allocate(cn(mol%nat))
 
-   rcov = get_covalent_rad(mol%num)
-   call get_coordination_number(mol, trans, cutoff, rcov, cn, cut=cn_max)
+   call model%ncoord%get_coordination_number(mol, trans, cn)
 
    if (present(eref)) then
       allocate(energy(mol%nat))
@@ -133,7 +128,7 @@ subroutine test_numgrad(error, mol)
 
    integer :: iat, ic
    type(mchrg_model_type) :: model
-   real(wp), parameter :: cn_max = 8.0_wp, cutoff = 25.0_wp
+   real(wp), parameter :: cutoff = 25.0_wp
    real(wp), parameter :: step = 1.0e-6_wp
    real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), rcov(:), trans(:, :)
    real(wp), allocatable :: energy(:), gradient(:, :), sigma(:, :)
@@ -143,7 +138,6 @@ subroutine test_numgrad(error, mol)
    call new_eeq2019_model(mol, model)
    call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
-   rcov = get_covalent_rad(mol%num)
    allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & energy(mol%nat), gradient(3, mol%nat), sigma(3, 3), numgrad(3, mol%nat))
    energy(:) = 0.0_wp
@@ -154,14 +148,14 @@ subroutine test_numgrad(error, mol)
       do ic = 1, 3
          energy(:) = 0.0_wp
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
-         call get_coordination_number(mol, trans, cutoff, rcov, cn, cut=cn_max)
+         call model%ncoord%get_coordination_number(mol, trans, cn)
          call model%solve(mol, cn, energy=energy)
          if (allocated(error)) exit lp
          er = sum(energy)
 
          energy(:) = 0.0_wp
          mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
-         call get_coordination_number(mol, trans, cutoff, rcov, cn, cut=cn_max)
+         call model%ncoord%get_coordination_number(mol, trans, cn)
          call model%solve(mol, cn, energy=energy)
          if (allocated(error)) exit lp
          el = sum(energy)
@@ -172,7 +166,7 @@ subroutine test_numgrad(error, mol)
    end do lp
    if (allocated(error)) return
 
-   call get_coordination_number(mol, trans, cutoff, rcov, cn, dcndr, dcndL, cut=cn_max)
+   call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
 
    energy(:) = 0.0_wp
    call model%solve(mol, cn, dcndr, dcndL, energy, gradient, sigma)
@@ -195,10 +189,10 @@ subroutine test_numsigma(error, mol)
 
    integer :: ic, jc
    type(mchrg_model_type) :: model
-   real(wp), parameter :: cn_max = 8.0_wp, cutoff = 25.0_wp
+   real(wp), parameter :: cutoff = 25.0_wp
    real(wp), parameter :: step = 1.0e-6_wp, unity(3, 3) = reshape(&
       & [1, 0, 0, 0, 1, 0, 0, 0, 1], shape(unity))
-   real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), rcov(:), trans(:, :)
+   real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), trans(:, :)
    real(wp), allocatable :: energy(:), gradient(:, :)
    real(wp), allocatable :: lattr(:, :), xyz(:, :)
    real(wp) :: er, el, eps(3, 3), numsigma(3, 3), sigma(3, 3), lattice(3, 3)
@@ -206,7 +200,6 @@ subroutine test_numsigma(error, mol)
    call new_eeq2019_model(mol, model)
    call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
-   rcov = get_covalent_rad(mol%num)
    allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & energy(mol%nat), gradient(3, mol%nat), xyz(3, mol%nat))
    energy(:) = 0.0_wp
@@ -224,7 +217,7 @@ subroutine test_numsigma(error, mol)
          mol%xyz(:, :) = matmul(eps, xyz)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
-         call get_coordination_number(mol, lattr, cutoff, rcov, cn, cut=cn_max)
+         call model%ncoord%get_coordination_number(mol, lattr, cn)
          call model%solve(mol, cn, energy=energy)
          if (allocated(error)) exit lp
          er = sum(energy)
@@ -234,7 +227,7 @@ subroutine test_numsigma(error, mol)
          mol%xyz(:, :) = matmul(eps, xyz)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
-         call get_coordination_number(mol, lattr, cutoff, rcov, cn, cut=cn_max)
+         call model%ncoord%get_coordination_number(mol, lattr, cn)
          call model%solve(mol, cn, energy=energy)
          if (allocated(error)) exit lp
          el = sum(energy)
@@ -248,7 +241,7 @@ subroutine test_numsigma(error, mol)
    end do lp
    if (allocated(error)) return
 
-   call get_coordination_number(mol, trans, cutoff, rcov, cn, dcndr, dcndL, cut=cn_max)
+   call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
 
    energy(:) = 0.0_wp
    call model%solve(mol, cn, dcndr, dcndL, energy, gradient, sigma)
@@ -271,16 +264,15 @@ subroutine test_numdqdr(error, mol)
 
    integer :: iat, ic
    type(mchrg_model_type) :: model
-   real(wp), parameter :: cn_max = 8.0_wp, cutoff = 25.0_wp
+   real(wp), parameter :: cutoff = 25.0_wp
    real(wp), parameter :: step = 1.0e-6_wp
-   real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), rcov(:), trans(:, :)
+   real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), trans(:, :)
    real(wp), allocatable :: ql(:), qr(:), dqdr(:, :, :), dqdL(:, :, :)
    real(wp), allocatable :: numdr(:, :, :)
 
    call new_eeq2019_model(mol, model)
    call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
-   rcov = get_covalent_rad(mol%num)
    allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & ql(mol%nat), qr(mol%nat), dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat), &
       & numdr(3, mol%nat, mol%nat))
@@ -288,12 +280,12 @@ subroutine test_numdqdr(error, mol)
    lp: do iat = 1, mol%nat
       do ic = 1, 3
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
-         call get_coordination_number(mol, trans, cutoff, rcov, cn, cut=cn_max)
+         call model%ncoord%get_coordination_number(mol, trans, cn)
          call model%solve(mol, cn, qvec=qr)
          if (allocated(error)) exit lp
 
          mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
-         call get_coordination_number(mol, trans, cutoff, rcov, cn, cut=cn_max)
+         call model%ncoord%get_coordination_number(mol, trans, cn)
          call model%solve(mol, cn, qvec=ql)
          if (allocated(error)) exit lp
 
@@ -303,7 +295,7 @@ subroutine test_numdqdr(error, mol)
    end do lp
    if (allocated(error)) return
 
-   call get_coordination_number(mol, trans, cutoff, rcov, cn, dcndr, dcndL, cut=cn_max)
+   call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
 
    call model%solve(mol, cn, dcndr, dcndL, dqdr=dqdr, dqdL=dqdL)
    if (allocated(error)) return
@@ -325,10 +317,10 @@ subroutine test_numdqdL(error, mol)
 
    integer :: ic, jc
    type(mchrg_model_type) :: model
-   real(wp), parameter :: cn_max = 8.0_wp, cutoff = 25.0_wp
+   real(wp), parameter :: cutoff = 25.0_wp
    real(wp), parameter :: step = 1.0e-6_wp, unity(3, 3) = reshape(&
       & [1, 0, 0, 0, 1, 0, 0, 0, 1], shape(unity))
-   real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), rcov(:), trans(:, :)
+   real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), trans(:, :)
    real(wp), allocatable :: qr(:), ql(:), dqdr(:, :, :), dqdL(:, :, :)
    real(wp), allocatable :: lattr(:, :), xyz(:, :), numdL(:, :, :)
    real(wp) :: eps(3, 3), lattice(3, 3)
@@ -336,7 +328,6 @@ subroutine test_numdqdL(error, mol)
    call new_eeq2019_model(mol, model)
    call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
-   rcov = get_covalent_rad(mol%num)
    allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & qr(mol%nat), ql(mol%nat), dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat), &
       & xyz(3, mol%nat), numdL(3, 3, mol%nat))
@@ -351,7 +342,7 @@ subroutine test_numdqdL(error, mol)
          mol%xyz(:, :) = matmul(eps, xyz)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
-         call get_coordination_number(mol, lattr, cutoff, rcov, cn, cut=cn_max)
+         call model%ncoord%get_coordination_number(mol, lattr, cn)
          call model%solve(mol, cn, qvec=qr)
          if (allocated(error)) exit lp
 
@@ -359,7 +350,7 @@ subroutine test_numdqdL(error, mol)
          mol%xyz(:, :) = matmul(eps, xyz)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
-         call get_coordination_number(mol, lattr, cutoff, rcov, cn, cut=cn_max)
+         call model%ncoord%get_coordination_number(mol, lattr, cn)
          call model%solve(mol, cn, qvec=ql)
          if (allocated(error)) exit lp
 
@@ -372,7 +363,7 @@ subroutine test_numdqdL(error, mol)
    end do lp
    if (allocated(error)) return
 
-   call get_coordination_number(mol, trans, cutoff, rcov, cn, dcndr, dcndL, cut=cn_max)
+   call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
 
    call model%solve(mol, cn, dcndr, dcndL, dqdr=dqdr, dqdL=dqdL)
    if (allocated(error)) return
