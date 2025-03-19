@@ -275,7 +275,7 @@ contains
       ptr%xtmp(mol%nat + 1) = mol%charge
 
       call gemv(ptr%cmat, ptr%xtmp, xvec)
-
+      print'(3es21.14)', xvec
    end subroutine get_xvec
 
    subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
@@ -339,6 +339,8 @@ contains
       else
          call self%get_amat_0d(mol, ptr%cn, ptr%qloc, ptr%cmat, amat)
       end if
+      call write_2d_matrix(amat, "amat")
+      call write_2d_matrix(ptr%cmat, "cmat")
    end subroutine get_coulomb_matrix
 
    subroutine get_amat_0d(self, mol, cn, qloc, cmat, amat)
@@ -426,7 +428,7 @@ contains
             gam = 1.0_wp/sqrt(radi**2 + radj**2)
             wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
             do img = 1, wsc%nimg(jat, iat)
-               vec = mol%xyz(:, jat) - mol%xyz(:, iat) - wsc%trans(:, wsc%tridx(img, jat, iat))
+               vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
                call get_amat_dir_3d(vec, gam, dtrans, self%kbc, rvdw, capi, capj, dtmp)
                amat(jat, iat) = amat(jat, iat) + dtmp*wsw
                amat(iat, jat) = amat(iat, jat) + dtmp*wsw
@@ -434,7 +436,7 @@ contains
          end do
 
          ! WSC image contributions
-         ! TODO: self-interaction for cmat yes/no? also how to handle self-interaction here?
+         ! TODO: self-interaction for cmat yes/no? also how to handle self-interaction here and below?
          gam = 1.0_wp/sqrt(2.0_wp*self%rad(izp)**2)
          rvdw = self%rvdw(iat, iat)
          wsw = 1.0_wp/real(wsc%nimg(iat, iat), wp)
@@ -453,10 +455,13 @@ contains
             rvdw = self%rvdw(iat, jat)
             ! Effective charge width of j
             capj = self%cap(jzp)
-            vec = mol%xyz(:, jat) - mol%xyz(:, iat)
-            r1 = norm2(vec)
-            call get_cpair(self%kbc, ctmp, r1, rvdw, capi, capj)
-            amat(iat, iat) = amat(iat, iat) + ctmp*dtmp
+            wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
+            do img = 1, wsc%nimg(jat, iat)
+               vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
+               r1 = norm2(vec)
+               call get_cpair_dir(self%kbc, ctmp, vec, dtrans, rvdw, capi, capj)
+               amat(iat, iat) = amat(iat, iat) + ctmp*dtmp*wsw
+            end do
          end do
          amat(iat, iat) = amat(iat, iat) + 1.0_wp
       end do
@@ -849,7 +854,7 @@ contains
             capj = self%cap(jzp)
             wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
             do img = 1, wsc%nimg(jat, iat)
-               vec = mol%xyz(:, jat) - mol%xyz(:, iat) - wsc%trans(:, wsc%tridx(img, jat, iat))
+               vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
 
                call get_cpair_dir(self%kbc, tmp, vec, dtrans, rvdw, capi, capj)
 
@@ -862,6 +867,15 @@ contains
                !$omp atomic
                cmat(jat, jat) = cmat(jat, jat) + tmp*wsw
             end do
+         end do
+
+         ! self-interaction
+         rvdw = self%rvdw(iat, iat)
+         wsw = 1.0_wp/real(wsc%nimg(iat, iat), wp)
+         do img = 1, wsc%nimg(iat, iat)
+            vec = wsc%trans(:, wsc%tridx(img, iat, iat))
+            call get_cpair_dir(self%kbc, tmp, vec, dtrans, rvdw, capi, capi)
+            cmat(iat, iat) = cmat(iat, iat) - tmp*wsw
          end do
       end do
       cmat(mol%nat + 1, mol%nat + 1) = 1.0_wp
