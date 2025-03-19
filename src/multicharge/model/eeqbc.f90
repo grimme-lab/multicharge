@@ -447,6 +447,7 @@ contains
          end do
 
          ! Effective hardness
+         ! (Term for T=0)
          dtmp = self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi
          do jat = 1, mol%nat
             if (iat .eq. jat) cycle
