@@ -335,7 +335,7 @@ contains
 
       if (any(mol%periodic)) then
          call self%get_amat_3d(mol, ptr%wsc, ptr%cn, ptr%qloc, amat)
-         elseC×
+      else
          call self%get_amat_0d(mol, ptr%cn, ptr%qloc, ptr%cmat, amat)
       end if
    end subroutine get_coulomb_matrix
@@ -655,8 +655,9 @@ contains
       real(wp), intent(out) :: atrace(:, :)
 
       integer :: iat, jat, izp, jzp, img
-      real(wp) :: vec(3), r2, gam, arg, dtmp, norm_cn, rvdw, ctmp, wsw
-      real(wp) :: radi, radj, dradi, dradj, dG(3), dGtmp(3), dS(3, 3), dStmp(3, 3), dgamdL(3, 3), capi, capj, dr, drtmp
+      real(wp) :: vec(3), r2, gam, arg, dtmp, norm_cn, rvdw, ctmp, wsw, dgam, dgamtmp
+      real(wp) :: radi, radj, dradi, dradj, dG(3), dGtmp(3), dS(3, 3), dStmp(3, 3), dc, dctmp
+      real(wp) :: dgamdL(3, 3), capi, capj, dr, drtmp, dGc(3), dSc(3, 3), dGctmp(3), dSctmp(3, 3)
       real(wp), allocatable :: dgamdr(:, :), dtrans(:, :)
 
       call get_dir_trans(mol%lattice, dtrans)
@@ -668,10 +669,11 @@ contains
       dadL(:, :, :) = 0.0_wp
 
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp reduction(+:atrace, dadr, dadL) shared(self, mol, cn, qloc, qvec, wsc) &
-      !$omp shared (cmat, dcdr, dcdL, dcndr, dcndL, dqlocdr, dqlocdL, wsc, dGtmp, dStmp) &
+      !$omp reduction(+:atrace, dadr, dadL) shared(self, mol, cn, qloc, qvec, wsc, dGc, dSc, dGctmp, dSctmp) &
+      !$omp shared (cmat, dcdr, dcdL, dcndr, dcndL, dqlocdr, dqlocdL, dGtmp, dStmp, dtrans) &
       !$omp private(iat, izp, jat, jzp, img, gam, vec, r2, dtmp, norm_cn, arg, rvdw) &
-      !$omp private(radi, radj, dradi, dradj, capi, capj, dgamdr, dgamdL, dG, dS, ctmp, wsw)
+      !$omp private(radi, radj, dradi, dradj, capi, capj, dgamdr, dgamdL, dG, dS, ctmp, wsw) &
+      !$omp private(dgamtmp, dctmp, dgam, dc)
       do iat = 1, mol%nat
          izp = mol%id(iat)
          ! Effective charge width of i
@@ -703,7 +705,7 @@ contains
                vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
 
                ! Explicit derivative
-               call get_damat_dir_3d(vec, gam, dGtmp, dStmp, dgamtmp, dctmp)
+               call get_damat_dir_3d(vec, dtrans, gam, dGtmp, dStmp, dgamtmp, dctmp)
                dG(:) = dG(:) + dGtmp(:)*wsw
                dS(:, :) = dS(:, :) + dStmp(:, :)*wsw
 
@@ -771,7 +773,7 @@ contains
 
    end subroutine get_damat_3d
 
-   subroutine get_damat_dir_3d(rij, gam, dG, dS, dgam, dc)
+   subroutine get_damat_dir_3d(rij, trans, gam, dG, dS, dgam, dc)
       real(wp), intent(in) :: rij(3)
       real(wp), intent(in) :: gam
       real(wp), intent(out) :: dG(3)
@@ -780,7 +782,7 @@ contains
       real(wp), intent(out) :: dc
 
       integer :: itr
-      real(wp) :: vec(3), r1, r2, gtmp, gam2
+      real(wp) :: vec(3), r1, r2, gtmp, gam2, trans(:, :)
 
       dG(:) = 0.0_wp
       dS(:, :) = 0.0_wp
@@ -943,6 +945,21 @@ contains
       end do
    end subroutine get_dcpair_3d
 
+   subroutine get_dcpair(kbc, vec, rvdw, capi, capj, dgpair, dspair)
+      real(wp), intent(in) :: vec(3), capi, capj, rvdw, kbc
+      real(wp), intent(out) :: dgpair(3)
+      real(wp), intent(out) :: dspair(3, 3)
+
+      real(wp) :: r1, arg, dtmp
+
+      r1 = norm2(vec)
+      ! Capacitance of bond between atom i and j
+      arg = -(kbc*(r1 - rvdw)/rvdw)**2
+      dtmp = sqrt(capi*capj)*kbc*exp(arg)/(sqrtpi*rvdw)
+      dgpair = dtmp*vec/r1
+      dspair = spread(dgpair, 1, 3)*spread(vec, 2, 3)
+   end subroutine get_dcpair
+
    subroutine get_dcmat_0d(self, mol, dcdr, dcdL)
       class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
@@ -967,7 +984,7 @@ contains
             rvdw = self%rvdw(iat, jat)
             vec = mol%xyz(:, jat) - mol%xyz(:, iat)
 
-            call get_dcpair(self%kbc, dG, dS, vec, rvdw, capi, capj)
+            call get_dcpair(self%kbc, vec, rvdw, capi, capj, dG, dS)
 
             ! Negative off-diagonal elements
             dcdr(:, iat, jat) = -dG
