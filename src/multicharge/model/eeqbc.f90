@@ -275,7 +275,6 @@ contains
       ptr%xtmp(mol%nat + 1) = mol%charge
 
       call gemv(ptr%cmat, ptr%xtmp, xvec)
-      print'(3es21.14)', xvec
    end subroutine get_xvec
 
    subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
@@ -336,11 +335,9 @@ contains
 
       if (any(mol%periodic)) then
          call self%get_amat_3d(mol, ptr%wsc, ptr%cn, ptr%qloc, amat)
-      else
+         elseC×
          call self%get_amat_0d(mol, ptr%cn, ptr%qloc, ptr%cmat, amat)
       end if
-      call write_2d_matrix(amat, "amat")
-      call write_2d_matrix(ptr%cmat, "cmat")
    end subroutine get_coulomb_matrix
 
    subroutine get_amat_0d(self, mol, cn, qloc, cmat, amat)
@@ -618,7 +615,7 @@ contains
 
          ! Hardness derivative
          dtmp = self%kqeta(izp)*qvec(iat)*cmat(iat, iat)
-         !atrace(:, iat)    = +dtmp*dqlocdr(:, iat, iat) + atrace(:, iat)
+         !atrace(:, iat)    = +dtmp*dqlocdr(:, iat, iat) + atrace(:, iat)sqrt(r2)
          dadr(:, :, iat) = +dtmp*dqlocdr(:, :, iat) + dadr(:, :, iat)
          dadL(:, :, iat) = +dtmp*dqlocdL(:, :, iat) + dadL(:, :, iat)
 
@@ -659,8 +656,10 @@ contains
 
       integer :: iat, jat, izp, jzp, img
       real(wp) :: vec(3), r2, gam, arg, dtmp, norm_cn, rvdw, ctmp, wsw
-      real(wp) :: radi, radj, dradi, dradj, dG(3), dS(3, 3), dgamdL(3, 3), capi, capj
-      real(wp), allocatable :: dgamdr(:, :)
+      real(wp) :: radi, radj, dradi, dradj, dG(3), dGtmp(3), dS(3, 3), dStmp(3, 3), dgamdL(3, 3), capi, capj, dr, drtmp
+      real(wp), allocatable :: dgamdr(:, :), dtrans(:, :)
+
+      call get_dir_trans(mol%lattice, dtrans)
 
       allocate (dgamdr(3, mol%nat))
 
@@ -670,7 +669,7 @@ contains
 
       !$omp parallel do default(none) schedule(runtime) &
       !$omp reduction(+:atrace, dadr, dadL) shared(self, mol, cn, qloc, qvec, wsc) &
-      !$omp shared (cmat, dcdr, dcdL, dcndr, dcndL, dqlocdr, dqlocdL) &
+      !$omp shared (cmat, dcdr, dcdL, dcndr, dcndL, dqlocdr, dqlocdL, wsc, dGtmp, dStmp) &
       !$omp private(iat, izp, jat, jzp, img, gam, vec, r2, dtmp, norm_cn, arg, rvdw) &
       !$omp private(radi, radj, dradi, dradj, capi, capj, dgamdr, dgamdL, dG, dS, ctmp, wsw)
       do iat = 1, mol%nat
@@ -684,109 +683,123 @@ contains
             jzp = mol%id(jat)
             capj = self%cap(jzp)
             rvdw = self%rvdw(iat, jat)
+
+            ! Effective charge width of j
+            norm_cn = 1.0_wp/self%avg_cn(jzp)**self%norm_exp
+            radj = self%rad(jzp)*(1.0_wp - self%kcnrad*cn(jat)*norm_cn)
+            dradj = -self%rad(jzp)*self%kcnrad*norm_cn
+
+            ! Coulomb interaction of Gaussian charges
+            gam = 1.0_wp/sqrt(radi**2 + radj**2)
+            dgamdr(:, :) = -(radi*dradi*dcndr(:, :, iat) + radj*dradj*dcndr(:, :, jat)) &
+                          & *gam**3.0_wp
+            dgamdL(:, :) = -(radi*dradi*dcndL(:, :, iat) + radj*dradj*dcndL(:, :, jat)) &
+                          & *gam**3.0_wp
+
+            dG(:) = 0.0_wp
+            dS(:, :) = 0.0_wp
             wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
             do img = 1, wsc%nimg(jat, iat)
-               vec = mol%xyz(:, jat) - mol%xyz(:, iat) - wsc%trans(:, wsc%tridx(img, jat, iat))
-               r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
-               ! Effective charge width of j
-               norm_cn = 1.0_wp/self%avg_cn(jzp)**self%norm_exp
-               radj = self%rad(jzp)*(1.0_wp - self%kcnrad*cn(jat)*norm_cn)
-               dradj = -self%rad(jzp)*self%kcnrad*norm_cn
-
-               ! Coulomb interaction of Gaussian charges
-               gam = 1.0_wp/sqrt(radi**2 + radj**2)
-               dgamdr(:, :) = -(radi*dradi*dcndr(:, :, iat) + radj*dradj*dcndr(:, :, jat)) &
-                             & *gam**3.0_wp
-               dgamdL(:, :) = -(radi*dradi*dcndL(:, :, iat) + radj*dradj*dcndL(:, :, jat)) &
-                             & *gam**3.0_wp
+               vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
 
                ! Explicit derivative
-               call get_cpair(self%kbc, ctmp, sqrt(r2), rvdw, capi, capj)
-               arg = gam*gam*r2
-               dtmp = 2.0_wp*gam*exp(-arg)/(sqrtpi*r2*self%dielectric) &
-                  & - erf(sqrt(arg))/(r2*sqrt(r2)*self%dielectric)
-               dG(:) = -dtmp*vec ! questionable sign
-               dS(:, :) = spread(dG, 1, 3)*spread(vec, 2, 3)
-               atrace(:, iat) = +dG*qvec(jat)*ctmp + atrace(:, iat)
-               atrace(:, jat) = -dG*qvec(iat)*ctmp + atrace(:, jat)
-               dadr(:, iat, jat) = +dG*qvec(iat)*ctmp + dadr(:, iat, jat)
-               dadr(:, jat, iat) = -dG*qvec(jat)*ctmp + dadr(:, jat, iat)
-               dadL(:, :, jat) = +dS*qvec(iat)*ctmp + dadL(:, :, jat)
-               dadL(:, :, iat) = +dS*qvec(jat)*ctmp + dadL(:, :, iat)
+               call get_damat_dir_3d(vec, gam, dGtmp, dStmp, dgamtmp, dctmp)
+               dG(:) = dG(:) + dGtmp(:)*wsw
+               dS(:, :) = dS(:, :) + dStmp(:, :)*wsw
 
                ! Effective charge width derivative
-               dtmp = 2.0_wp*exp(-arg)/(sqrtpi*self%dielectric)
-               atrace(:, iat) = -dtmp*qvec(jat)*dgamdr(:, jat)*ctmp + atrace(:, iat)
-               atrace(:, jat) = -dtmp*qvec(iat)*dgamdr(:, iat)*ctmp + atrace(:, jat)
-               dadr(:, iat, jat) = +dtmp*qvec(iat)*dgamdr(:, iat)*ctmp + dadr(:, iat, jat)
-               dadr(:, jat, iat) = +dtmp*qvec(jat)*dgamdr(:, jat)*ctmp + dadr(:, jat, iat)
-               dadL(:, :, jat) = +dtmp*qvec(iat)*dgamdL(:, :)*ctmp + dadL(:, :, jat)
-               dadL(:, :, iat) = +dtmp*qvec(jat)*dgamdL(:, :)*ctmp + dadL(:, :, iat)
+               dgam = dgam + dgamtmp*wsw
 
                ! Capacitance derivative off-diagonal
-               call get_dcpair(self%kbc, dG, dS, vec, rvdw, capi, capj)
-               dtmp = erf(sqrt(r2)*gam)/(sqrt(r2)*self%dielectric)
-               ! potentially switch indices for dcdr (now this means reversing signs)
-               atrace(:, iat) = -dtmp*qvec(jat)*dG + atrace(:, iat)
-               atrace(:, jat) = +dtmp*qvec(iat)*dG + atrace(:, jat) ! reverse sign
-               dadr(:, jat, iat) = +dtmp*qvec(jat)*dG + dadr(:, jat, iat)
-               dadr(:, iat, jat) = -dtmp*qvec(iat)*dG + dadr(:, iat, jat) ! reverse sign
-               dadL(:, :, jat) = +dtmp*qvec(iat)*dS + dadL(:, :, jat)
-               dadL(:, :, iat) = +dtmp*qvec(jat)*dS + dadL(:, :, iat)
-
-               ! Capacitance derivative diagonal
-               dtmp = (self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi)*qvec(iat)
-               dadr(:, jat, iat) = -dtmp*dG + dadr(:, jat, iat)
-               dtmp = (self%eta(jzp) + self%kqeta(jzp)*qloc(jat) + sqrt2pi/radj)*qvec(jat)
-               dadr(:, iat, jat) = +dtmp*dG + dadr(:, iat, jat) ! reverse sign because dcdr(i, j) = -dcdr(j, i)
+               dc = dc + dctmp*wsw
+               call get_dcpair_3d(self%kbc, vec, dtrans, rvdw, capi, capj, dGctmp, dSctmp)
+               dGc(:) = dGc(:) + dGctmp(:)*wsw
+               dSc(:, :) = dSc(:, :) + dSctmp(:, :)*wsw
             end do
-         end do
 
-         wsw = 1.0_wp/real(wsc%nimg(iat, iat), wp)
-         do img = 1, wsc%nimg(iat, iat)
-            ! Hardness derivative
-            dtmp = self%kqeta(izp)*qvec(iat)*cmat(iat, iat)
-            !atrace(:, iat)    = +dtmp*dqlocdr(:, iat, iat) + atrace(:, iat)
-            dadr(:, :, iat) = +dtmp*dqlocdr(:, :, iat) + dadr(:, :, iat)
-            dadL(:, :, iat) = +dtmp*dqlocdL(:, :, iat) + dadL(:, :, iat)
+            ! Explicit derivative
+            atrace(:, iat) = +dG*qvec(jat)*cmat(jat, iat) + atrace(:, iat)
+            atrace(:, jat) = -dG*qvec(iat)*cmat(iat, jat) + atrace(:, jat)
+            dadr(:, iat, jat) = +dG*qvec(iat)*cmat(iat, jat) + dadr(:, iat, jat)
+            dadr(:, jat, iat) = -dG*qvec(jat)*cmat(jat, iat) + dadr(:, jat, iat)
+            dadL(:, :, jat) = +dS*qvec(iat)*cmat(iat, jat) + dadL(:, :, jat)
+            dadL(:, :, iat) = +dS*qvec(jat)*cmat(jat, iat) + dadL(:, :, iat)
 
             ! Effective charge width derivative
-            dtmp = -sqrt2pi*dradi/(radi**2)*qvec(iat)*cmat(iat, iat)
-            !atrace(:, iat)    = -dtmp*dcndr(:, iat, iat) + atrace(:, iat)
-            dadr(:, :, iat) = +dtmp*dcndr(:, :, iat) + dadr(:, :, iat)
-            dadL(:, :, iat) = +dtmp*dcndL(:, :, iat) + dadL(:, :, iat)
+            atrace(:, iat) = -dgam*qvec(jat)*dgamdr(:, jat)*cmat(jat, iat) + atrace(:, iat)
+            atrace(:, jat) = -dgam*qvec(iat)*dgamdr(:, iat)*cmat(iat, jat) + atrace(:, jat)
+            dadr(:, iat, jat) = +dgam*qvec(iat)*dgamdr(:, iat)*cmat(iat, jat) + dadr(:, iat, jat)
+            dadr(:, jat, iat) = +dgam*qvec(jat)*dgamdr(:, jat)*cmat(jat, iat) + dadr(:, jat, iat)
+            dadL(:, :, jat) = +dgam*qvec(iat)*dgamdL(:, :)*cmat(iat, jat) + dadL(:, :, jat)
+            dadL(:, :, iat) = +dgam*qvec(jat)*dgamdL(:, :)*cmat(jat, iat) + dadL(:, :, iat)
 
-            ! Capacitance derivative
+            ! Capacitance derivative off-diagonal
+            ! potentially switch indices for dcdr (now this means reversing signs)
+            atrace(:, iat) = -dc*qvec(jat)*dGc(:) + atrace(:, iat)
+            atrace(:, jat) = +dc*qvec(iat)*dGc(:) + atrace(:, jat) ! reverse sign
+            dadr(:, jat, iat) = +dc*qvec(jat)*dGc(:) + dadr(:, jat, iat)
+            dadr(:, iat, jat) = -dc*qvec(iat)*dGc(:) + dadr(:, iat, jat) ! reverse sign
+            dadL(:, :, jat) = +dc*qvec(iat)*dSc(:, :) + dadL(:, :, jat)
+            dadL(:, :, iat) = +dc*qvec(jat)*dSc(:, :) + dadL(:, :, iat)
+
+            ! Capacitance derivative diagonal
             dtmp = (self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi)*qvec(iat)
-            !atrace(:, iat)    = -dtmp*dcdr(:, iat, iat) + atrace(:, iat)
-            dadr(:, iat, iat) = +dtmp*dcdr(:, iat, iat) + dadr(:, iat, iat)
-            dadL(:, :, iat) = +dtmp*dcdL(:, :, iat) + dadL(:, :, iat)
+            dadr(:, jat, iat) = -dtmp*dGc(:) + dadr(:, jat, iat)
+            dtmp = (self%eta(jzp) + self%kqeta(jzp)*qloc(jat) + sqrt2pi/radj)*qvec(jat)
+            dadr(:, iat, jat) = +dtmp*dGc(:) + dadr(:, iat, jat) ! reverse sign because dcdr(i, j) = -dcdr(j, i)
          end do
+
+         ! Hardness derivative
+         dtmp = self%kqeta(izp)*qvec(iat)*cmat(iat, iat)
+         !atrace(:, iat)    = +dtmp*dqlocdr(:, iat, iat) + atrace(:, iat)
+         dadr(:, :, iat) = +dtmp*dqlocdr(:, :, iat) + dadr(:, :, iat)
+         dadL(:, :, iat) = +dtmp*dqlocdL(:, :, iat) + dadL(:, :, iat)
+
+         ! Effective charge width derivative
+         dtmp = -sqrt2pi*dradi/(radi**2)*qvec(iat)*cmat(iat, iat)
+         !atrace(:, iat)    = -dtmp*dcndr(:, iat, iat) + atrace(:, iat)
+         dadr(:, :, iat) = +dtmp*dcndr(:, :, iat) + dadr(:, :, iat)
+         dadL(:, :, iat) = +dtmp*dcndL(:, :, iat) + dadL(:, :, iat)
+
+         ! Capacitance derivative
+         dtmp = (self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi)*qvec(iat)
+         !atrace(:, iat)    = -dtmp*dcdr(:, iat, iat) + atrace(:, iat)
+         dadr(:, iat, iat) = +dtmp*dcdr(:, iat, iat) + dadr(:, iat, iat)
+         dadL(:, :, iat) = +dtmp*dcdL(:, :, iat) + dadL(:, :, iat)
 
       end do
 
    end subroutine get_damat_3d
 
-   subroutine get_damat_dir_3d(rij, gam, dg, ds)
+   subroutine get_damat_dir_3d(rij, gam, dG, dS, dgam, dc)
       real(wp), intent(in) :: rij(3)
       real(wp), intent(in) :: gam
-      real(wp), intent(out) :: dg(3)
-      real(wp), intent(out) :: ds(3, 3)
+      real(wp), intent(out) :: dG(3)
+      real(wp), intent(out) :: dS(3, 3)
+      real(wp), intent(out) :: dgam
+      real(wp), intent(out) :: dc
 
       integer :: itr
-      real(wp) :: r1, r2, gtmp, gam2
+      real(wp) :: vec(3), r1, r2, gtmp, gam2
 
-      dg(:) = 0.0_wp
-      ds(:, :) = 0.0_wp
+      dG(:) = 0.0_wp
+      dS(:, :) = 0.0_wp
+      dgam = 0.0_wp
+      dc = 0.0_wp
 
       gam2 = gam*gam
 
-      r1 = norm2(rij)
-      if (r1 < eps) return
-      r2 = r1*r1
-      gtmp = +2*gam*exp(-r2*gam2)/(sqrtpi*r2) - erf(r1*gam)/(r2*r1)
-      dg(:) = dg + gtmp*rij
-      ds(:, :) = ds + gtmp*spread(rij, 1, 3)*spread(rij, 2, 3)
+      do itr = 1, size(trans, 2)
+         vec(:) = rij(:) + trans(:, itr)
+         r1 = norm2(vec)
+         if (r1 < eps) cycle
+         r2 = r1*r1
+         gtmp = +2*gam*exp(-r2*gam2)/(sqrtpi*r2) - erf(r1*gam)/(r2*r1)
+         dG(:) = dG + gtmp*vec
+         dS(:, :) = dS + gtmp*spread(vec, 1, 3)*spread(vec, 2, 3)
+         dgam = dgam + 2.0_wp*exp(-gam2*r2)/sqrtpi
+         dc = dc + erf(r1*gam)/r1
+      end do
 
    end subroutine get_damat_dir_3d
 
@@ -911,21 +924,24 @@ contains
       end do
    end subroutine get_cpair_dir
 
-   subroutine get_dcpair(kbc, dgpair, dspair, vec, rvdw, capi, capj)
-      real(wp), intent(in) :: vec(3), capi, capj, rvdw, kbc
+   subroutine get_dcpair_3d(kbc, vec, trans, rvdw, capi, capj, dgpair, dspair)
+      real(wp), intent(in) :: vec(3), capi, capj, rvdw, kbc, trans(:, :)
       real(wp), intent(out) :: dgpair(3)
       real(wp), intent(out) :: dspair(3, 3)
 
+      integer :: itr
       real(wp) :: r1, arg, dtmp
 
       r1 = norm2(vec)
 
-      ! Capacitance of bond between atom i and j
-      arg = -(kbc*(r1 - rvdw)/rvdw)**2
-      dtmp = sqrt(capi*capj)*kbc*exp(arg)/(sqrtpi*rvdw)
-      dgpair = dtmp*vec/r1
-      dspair = spread(dgpair, 1, 3)*spread(vec, 2, 3)
-   end subroutine get_dcpair
+      do itr = 1, size(trans, 2)
+         ! Capacitance of bond between atom i and j
+         arg = -(kbc*(r1 - rvdw)/rvdw)**2
+         dtmp = sqrt(capi*capj)*kbc*exp(arg)/(sqrtpi*rvdw)
+         dgpair = dtmp*vec/r1
+         dspair = spread(dgpair, 1, 3)*spread(vec, 2, 3)
+      end do
+   end subroutine get_dcpair_3d
 
    subroutine get_dcmat_0d(self, mol, dcdr, dcdL)
       class(eeqbc_model), intent(in) :: self
