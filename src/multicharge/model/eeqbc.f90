@@ -744,7 +744,7 @@ contains
             dadL(:, :, jat) = +dc*qvec(iat)*dSc(:, :) + dadL(:, :, jat)
             dadL(:, :, iat) = +dc*qvec(jat)*dSc(:, :) + dadL(:, :, iat)
 
-            ! Capacitance derivative diagonal TODO: ?
+            ! Capacitance derivative diagonal
             dtmp = (self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi)*qvec(iat)
             dadr(:, jat, iat) = -dtmp*dGc(:) + dadr(:, jat, iat)
             dtmp = (self%eta(jzp) + self%kqeta(jzp)*qloc(jat) + sqrt2pi/radj)*qvec(jat)
@@ -807,7 +807,7 @@ contains
          dadL(:, :, jat) = +dc*qvec(iat)*dSc(:, :) + dadL(:, :, jat)
          dadL(:, :, iat) = +dc*qvec(jat)*dSc(:, :) + dadL(:, :, iat)
 
-         ! Capacitance derivative diagonal TODO: ?
+         ! Capacitance derivative diagonal
          dtmp = (self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi)*qvec(iat)
          dadr(:, iat, iat) = -dtmp*dGc(:) + dadr(:, iat, iat)
 
