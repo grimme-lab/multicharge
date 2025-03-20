@@ -76,7 +76,11 @@ program main
       end if
    end if
 
-   call new_eeq2019_model(mol, model)
+   call new_eeq2019_model(mol, model, error)
+   if(allocated(error)) then
+      write(error_unit, '(a)') error%message
+      error stop
+   end if
 
    call write_ascii_model(output_unit, mol, model)
 

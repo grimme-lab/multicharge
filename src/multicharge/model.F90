@@ -60,7 +60,7 @@ contains
 
 
 subroutine new_mchrg_model(self, mol, chi, rad, eta, kcn, &
-   & cutoff, cn_exp, rcov, cn_max)
+   & cutoff, cn_exp, rcov, cn_max, error)
    !> Electronegativity equilibration model
    type(mchrg_model_type), intent(out) :: self
    !> Molecular structure data
@@ -81,6 +81,8 @@ subroutine new_mchrg_model(self, mol, chi, rad, eta, kcn, &
    real(wp), intent(in), optional :: rcov(:)
    !> Maximum CN cutoff for CN
    real(wp), intent(in), optional :: cn_max
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
 
    self%rad = rad
    self%chi = chi
@@ -88,7 +90,7 @@ subroutine new_mchrg_model(self, mol, chi, rad, eta, kcn, &
    self%kcn = kcn
 
    call new_ncoord(self%ncoord, mol, cn_count%erf, cutoff=cutoff, &
-      & kcn=cn_exp, rcov=rcov, cut=cn_max)
+      & kcn=cn_exp, rcov=rcov, cut=cn_max, error=error)
 
 end subroutine new_mchrg_model
 
