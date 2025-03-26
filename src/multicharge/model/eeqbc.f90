@@ -26,7 +26,7 @@ module multicharge_model_eeqbc
    use mctc_io_constants, only: pi
    use mctc_io_convert, only: autoaa
    use mctc_io_math, only: matdet_3x3
-   use mctc_ncoord, only: new_ncoord
+   use mctc_ncoord, only: new_ncoord, cn_count
    use multicharge_wignerseitz, only: wignerseitz_cell_type
    use multicharge_model_type, only: mchrg_model_type, get_dir_trans, get_rec_trans
    use multicharge_blas, only: gemv, gemm
@@ -180,10 +180,10 @@ contains
       end if
 
       ! Coordination number
-      call new_ncoord(self%ncoord, mol, "erf", cutoff=cutoff, kcn=cn_exp, &
+      call new_ncoord(self%ncoord, mol, cn_count%erf, cutoff=cutoff, kcn=cn_exp, &
          & rcov=rcov, cut=cn_max, norm_exp=self%norm_exp)
       ! Electronegativity weighted coordination number for local charge
-      call new_ncoord(self%ncoord_en, mol, "erf_en", cutoff=cutoff, kcn=cn_exp, &
+      call new_ncoord(self%ncoord_en, mol, cn_count%erf_en, cutoff=cutoff, kcn=cn_exp, &
          & rcov=rcov, en=en, cut=cn_max, norm_exp=self%norm_exp)
 
    end subroutine new_eeqbc_model

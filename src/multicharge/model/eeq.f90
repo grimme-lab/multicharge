@@ -22,7 +22,7 @@ module multicharge_model_eeq
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
    use mctc_io_math, only: matdet_3x3
-   use mctc_ncoord, only: new_ncoord
+   use mctc_ncoord, only: new_ncoord, cn_count
    use multicharge_wignerseitz, only: wignerseitz_cell_type
    use multicharge_model_type, only: mchrg_model_type, get_dir_trans, get_rec_trans
    use multicharge_model_cache, only: cache_container, model_cache
@@ -98,7 +98,7 @@ contains
          self%dielectric = 1.0_wp
       end if
 
-      call new_ncoord(self%ncoord, mol, "erf", cutoff=cutoff, kcn=cn_exp, &
+      call new_ncoord(self%ncoord, mol, cn_count%erf, cutoff=cutoff, kcn=cn_exp, &
          & rcov=rcov, cut=cn_max)
 
    end subroutine new_eeq_model
