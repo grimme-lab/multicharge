@@ -89,8 +89,8 @@ subroutine new_mchrg_model(self, mol, chi, rad, eta, kcn, &
    self%eta = eta
    self%kcn = kcn
 
-   call new_ncoord(self%ncoord, mol, cn_count%erf, cutoff=cutoff, &
-      & kcn=cn_exp, rcov=rcov, cut=cn_max, error=error)
+   call new_ncoord(self%ncoord, mol, cn_count%erf, error, cutoff=cutoff, &
+      & kcn=cn_exp, rcov=rcov, cut=cn_max)
 
 end subroutine new_mchrg_model
 

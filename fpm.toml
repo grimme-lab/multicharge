@@ -9,8 +9,8 @@ copyright = "Copyright 2021 Sebastian Ehlert"
 link = ["lapack", "blas"]
 
 [dependencies]
-mctc-lib.git = "https://github.com/thfroitzheim/mctc-lib.git"
-mctc-lib.tag = "error-handling"
+mctc-lib.git = "https://github.com/grimme-lab/mctc-lib.git"
+mctc-lib.tag = "HEAD"
 
 [dev-dependencies]
 mstore.git = "https://github.com/grimme-lab/mstore.git"
