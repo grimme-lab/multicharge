@@ -45,8 +45,8 @@ subroutine new_eeq2019_model(mol, model, error)
    rad = get_eeq_rad(mol%num)
    rcov = get_covalent_rad(mol%num)
 
-   call new_mchrg_model(model, mol, chi=chi, rad=rad, eta=eta, kcn=kcn, &
-      & cutoff=cutoff, cn_exp=cn_exp, rcov=rcov, cn_max=cn_max, error=error)
+   call new_mchrg_model(model, mol, chi=chi, rad=rad, eta=eta, kcn=kcn, error=error,&
+      & cutoff=cutoff, cn_exp=cn_exp, rcov=rcov, cn_max=cn_max)
 
 end subroutine new_eeq2019_model
 
