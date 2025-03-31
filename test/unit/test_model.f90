@@ -80,7 +80,8 @@ subroutine gen_test(error, mol, qref, eref)
    real(wp), allocatable :: energy(:)
    real(wp), allocatable :: qvec(:)
 
-   call new_eeq2019_model(mol, model)
+   call new_eeq2019_model(mol, model, error)
+   if (allocated(error)) return
 
    allocate(cn(mol%nat))
 
@@ -134,7 +135,8 @@ subroutine test_numgrad(error, mol)
    real(wp), allocatable :: numgrad(:, :)
    real(wp) :: er, el
 
-   call new_eeq2019_model(mol, model)
+   call new_eeq2019_model(mol, model, error)
+   if (allocated(error)) return
 
    allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & energy(mol%nat), gradient(3, mol%nat), sigma(3, 3), numgrad(3, mol%nat))
@@ -195,7 +197,8 @@ subroutine test_numsigma(error, mol)
    real(wp), allocatable :: lattr(:, :), xyz(:, :)
    real(wp) :: er, el, eps(3, 3), numsigma(3, 3), sigma(3, 3)
 
-   call new_eeq2019_model(mol, model)
+   call new_eeq2019_model(mol, model, error)
+   if (allocated(error)) return
 
    allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & energy(mol%nat), gradient(3, mol%nat), xyz(3, mol%nat))
@@ -263,7 +266,8 @@ subroutine test_numdqdr(error, mol)
    real(wp), allocatable :: ql(:), qr(:), dqdr(:, :, :), dqdL(:, :, :)
    real(wp), allocatable :: numdr(:, :, :)
 
-   call new_eeq2019_model(mol, model)
+   call new_eeq2019_model(mol, model, error)
+   if (allocated(error)) return
 
    allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & ql(mol%nat), qr(mol%nat), dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat), &
@@ -317,7 +321,8 @@ subroutine test_numdqdL(error, mol)
    real(wp), allocatable :: lattr(:, :), xyz(:, :), numdL(:, :, :)
    real(wp) :: eps(3, 3)
 
-   call new_eeq2019_model(mol, model)
+   call new_eeq2019_model(mol, model, error)
+   if (allocated(error)) return
 
    allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & qr(mol%nat), ql(mol%nat), dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat), &

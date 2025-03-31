@@ -14,7 +14,7 @@
 ! limitations under the License.
 
 module multicharge_param
-   use mctc_env, only : wp
+   use mctc_env, only : error_type, wp
    use mctc_io, only : structure_type
    use mctc_data, only: get_covalent_rad
    use multicharge_model, only : mchrg_model_type, new_mchrg_model
@@ -27,11 +27,13 @@ module multicharge_param
 
 contains
 
-subroutine new_eeq2019_model(mol, model)
+subroutine new_eeq2019_model(mol, model, error)
    !> Molecular structure data
    type(structure_type), intent(in) :: mol
    !> Electronegativity equilibration model
    type(mchrg_model_type), intent(out) :: model
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
 
    real(wp), parameter :: cutoff = 25.0_wp, cn_exp = 7.5_wp, cn_max = 8.0_wp
 
@@ -43,7 +45,7 @@ subroutine new_eeq2019_model(mol, model)
    rad = get_eeq_rad(mol%num)
    rcov = get_covalent_rad(mol%num)
 
-   call new_mchrg_model(model, mol, chi=chi, rad=rad, eta=eta, kcn=kcn, &
+   call new_mchrg_model(model, mol, chi=chi, rad=rad, eta=eta, kcn=kcn, error=error,&
       & cutoff=cutoff, cn_exp=cn_exp, rcov=rcov, cn_max=cn_max)
 
 end subroutine new_eeq2019_model

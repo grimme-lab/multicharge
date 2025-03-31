@@ -59,7 +59,7 @@ module multicharge_model
 contains
 
 
-subroutine new_mchrg_model(self, mol, chi, rad, eta, kcn, &
+subroutine new_mchrg_model(self, mol, chi, rad, eta, kcn, error, &
    & cutoff, cn_exp, rcov, cn_max)
    !> Electronegativity equilibration model
    type(mchrg_model_type), intent(out) :: self
@@ -73,6 +73,8 @@ subroutine new_mchrg_model(self, mol, chi, rad, eta, kcn, &
    real(wp), intent(in) :: eta(:)
    !> CN scaling factor for electronegativity
    real(wp), intent(in) :: kcn(:)
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
    !> Cutoff radius for coordination number
    real(wp), intent(in), optional :: cutoff
    !> Steepness of the CN counting function
@@ -87,7 +89,7 @@ subroutine new_mchrg_model(self, mol, chi, rad, eta, kcn, &
    self%eta = eta
    self%kcn = kcn
 
-   call new_ncoord(self%ncoord, mol, cn_count%erf, cutoff=cutoff, &
+   call new_ncoord(self%ncoord, mol, cn_count%erf, error, cutoff=cutoff, &
       & kcn=cn_exp, rcov=rcov, cut=cn_max)
 
 end subroutine new_mchrg_model
