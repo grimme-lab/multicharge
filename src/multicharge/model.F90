@@ -158,12 +158,15 @@ subroutine get_amat_0d(self, mol, amat)
 
    integer :: iat, jat, izp, jzp
    real(wp) :: vec(3), r2, gam, tmp
+   real(wp), allocatable :: imat(:, :)
 
    amat(:, :) = 0.0_wp
 
-   !$omp parallel do default(none) schedule(runtime) &
+   !$omp parallel default(none) &
    !$omp shared(amat, mol, self) &
-   !$omp private(iat, izp, jat, jzp, gam, vec, r2, tmp)
+   !$omp private(iat, izp, jat, jzp, gam, vec, r2, tmp, imat)
+   allocate(imat, source=amat)
+   !$omp do schedule(runtime) 
    do iat = 1, mol%nat
       izp = mol%id(iat)
       do jat = 1, iat-1
@@ -172,15 +175,17 @@ subroutine get_amat_0d(self, mol, amat)
          r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
          gam = 1.0_wp / (self%rad(izp)**2 + self%rad(jzp)**2)
          tmp = erf(sqrt(r2*gam))/sqrt(r2)
-         !$omp atomic
-         amat(jat, iat) = amat(jat, iat) + tmp
-         !$omp atomic
-         amat(iat, jat) = amat(iat, jat) + tmp
+         imat(jat, iat) = imat(jat, iat) + tmp
+         imat(iat, jat) = imat(iat, jat) + tmp
       end do
       tmp = self%eta(izp) + sqrt2pi / self%rad(izp)
-      !$omp atomic
-      amat(iat, iat) = amat(iat, iat) + tmp
+      imat(iat, iat) = imat(iat, iat) + tmp
    end do
+   !$omp critical (get_amat_0d_)
+   amat(:, :) = amat + imat
+   !$omp end critical (get_amat_0d_)
+   deallocate(imat)
+   !$omp end parallel
 
    amat(mol%nat+1, 1:mol%nat+1) = 1.0_wp
    amat(1:mol%nat+1, mol%nat+1) = 1.0_wp
@@ -197,7 +202,7 @@ subroutine get_amat_3d(self, mol, wsc, alpha, amat)
 
    integer :: iat, jat, izp, jzp, img
    real(wp) :: vec(3), gam, wsw, dtmp, rtmp, vol
-   real(wp), allocatable :: dtrans(:, :), rtrans(:, :)
+   real(wp), allocatable :: dtrans(:, :), rtrans(:, :), imat(:, :)
 
    amat(:, :) = 0.0_wp
 
@@ -205,9 +210,11 @@ subroutine get_amat_3d(self, mol, wsc, alpha, amat)
    call get_dir_trans(mol%lattice, dtrans)
    call get_rec_trans(mol%lattice, rtrans)
 
-   !$omp parallel do default(none) schedule(runtime) &
+   !$omp parallel default(none) &
    !$omp shared(amat, mol, self, wsc, dtrans, rtrans, alpha, vol) &
-   !$omp private(iat, izp, jat, jzp, gam, wsw, vec, dtmp, rtmp)
+   !$omp private(iat, izp, jat, jzp, gam, wsw, vec, dtmp, rtmp, imat)
+   allocate(imat, source=amat)
+   !$omp do schedule(runtime) 
    do iat = 1, mol%nat
       izp = mol%id(iat)
       do jat = 1, iat-1
@@ -218,10 +225,8 @@ subroutine get_amat_3d(self, mol, wsc, alpha, amat)
             vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
             call get_amat_dir_3d(vec, gam, alpha, dtrans, dtmp)
             call get_amat_rec_3d(vec, vol, alpha, rtrans, rtmp)
-            !$omp atomic
-            amat(jat, iat) = amat(jat, iat) + (dtmp + rtmp) * wsw
-            !$omp atomic
-            amat(iat, jat) = amat(iat, jat) + (dtmp + rtmp) * wsw
+            imat(jat, iat) = imat(jat, iat) + (dtmp + rtmp) * wsw
+            imat(iat, jat) = imat(iat, jat) + (dtmp + rtmp) * wsw
          end do
       end do
 
@@ -231,14 +236,17 @@ subroutine get_amat_3d(self, mol, wsc, alpha, amat)
          vec = wsc%trans(:, wsc%tridx(img, iat, iat))
          call get_amat_dir_3d(vec, gam, alpha, dtrans, dtmp)
          call get_amat_rec_3d(vec, vol, alpha, rtrans, rtmp)
-         !$omp atomic
-         amat(iat, iat) = amat(iat, iat) + (dtmp + rtmp) * wsw
+         imat(iat, iat) = imat(iat, iat) + (dtmp + rtmp) * wsw
       end do
 
       dtmp = self%eta(izp) + sqrt2pi / self%rad(izp) - 2 * alpha / sqrtpi
-      !$omp atomic
-      amat(iat, iat) = amat(iat, iat) + dtmp
+      imat(iat, iat) = imat(iat, iat) + dtmp
    end do
+   !$omp critical (get_amat_3d_)
+   amat(:, :) = amat + imat
+   !$omp end critical (get_amat_3d_)
+   deallocate(imat)
+   !$omp end parallel
 
    amat(mol%nat+1, 1:mol%nat+1) = 1.0_wp
    amat(1:mol%nat+1, mol%nat+1) = 1.0_wp
@@ -301,14 +309,20 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
 
    integer :: iat, jat, izp, jzp
    real(wp) :: vec(3), r2, gam, arg, dtmp, dG(3), dS(3, 3)
+   real(wp), allocatable :: itrace(:, :), didr(:, :, :), didL(:, :, :)
 
    atrace(:, :) = 0.0_wp
    dadr(:, :, :) = 0.0_wp
    dadL(:, :, :) = 0.0_wp
 
-   !$omp parallel do default(none) schedule(runtime) &
-   !$omp reduction(+:atrace, dadr, dadL) shared(mol, self, qvec) &
-   !$omp private(iat, izp, jat, jzp, gam, r2, vec, dG, dS, dtmp, arg)
+   !$omp parallel default(none) &
+   !$omp shared(atrace, dadr, dadL, mol, self, qvec) &
+   !$omp private(iat, izp, jat, jzp, gam, r2, vec, dG, dS, dtmp, arg, &
+   !$omp& itrace, didr, didL)
+   allocate(itrace, source=atrace)
+   allocate(didr, source=dadr)
+   allocate(didL, source=dadL)
+   !$omp do schedule(runtime)
    do iat = 1, mol%nat
       izp = mol%id(iat)
       do jat = 1, iat-1
@@ -320,14 +334,21 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
          dtmp = 2.0_wp*gam*exp(-arg)/(sqrtpi*r2)-erf(sqrt(arg))/(r2*sqrt(r2))
          dG = dtmp*vec
          dS = spread(dG, 1, 3) * spread(vec, 2, 3)
-         atrace(:, iat) = +dG*qvec(jat) + atrace(:, iat)
-         atrace(:, jat) = -dG*qvec(iat) + atrace(:, jat)
-         dadr(:, iat, jat) = +dG*qvec(iat)
-         dadr(:, jat, iat) = -dG*qvec(jat)
-         dadL(:, :, jat) = +dS*qvec(iat) + dadL(:, :, jat)
-         dadL(:, :, iat) = +dS*qvec(jat) + dadL(:, :, iat)
+         itrace(:, iat) = +dG*qvec(jat) + itrace(:, iat)
+         itrace(:, jat) = -dG*qvec(iat) + itrace(:, jat)
+         didr(:, iat, jat) = +dG*qvec(iat)
+         didr(:, jat, iat) = -dG*qvec(jat)
+         didL(:, :, jat) = +dS*qvec(iat) + didL(:, :, jat)
+         didL(:, :, iat) = +dS*qvec(jat) + didL(:, :, iat)
       end do
    end do
+   !$omp critical (get_damat_0d_)
+   atrace(:, :) = atrace + itrace
+   dadr(:, :, :) = dadr + didr
+   dadL(:, :, :) = dadL + didL
+   !$omp end critical (get_damat_0d_)
+   deallocate(didL, didr, itrace)
+   !$omp end parallel
 
 end subroutine get_damat_0d
 
@@ -345,6 +366,7 @@ subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
    real(wp) :: vol, gam, wsw, vec(3), dG(3), dS(3, 3)
    real(wp) :: dGd(3), dSd(3, 3), dGr(3), dSr(3, 3)
    real(wp), allocatable :: dtrans(:, :), rtrans(:, :)
+   real(wp), allocatable :: itrace(:, :), didr(:, :, :), didL(:, :, :)
 
    atrace(:, :) = 0.0_wp
    dadr(:, :, :) = 0.0_wp
@@ -354,11 +376,15 @@ subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
    call get_dir_trans(mol%lattice, dtrans)
    call get_rec_trans(mol%lattice, rtrans)
 
-   !$omp parallel do default(none) schedule(runtime) &
-   !$omp reduction(+:atrace, dadr, dadL) &
-   !$omp shared(mol, self, wsc, alpha, vol, dtrans, rtrans, qvec) &
-   !$omp private(iat, izp, jat, jzp, img, gam, wsw, vec, dG, dS, &
-   !$omp& dGr, dSr, dGd, dSd)
+   !$omp parallel default(none) &
+   !$omp shared(mol, self, wsc, alpha, vol, dtrans, rtrans, qvec, &
+   !$omp& atrace, dadr, dadL) &
+   !$omp private(iat, izp, jat, jzp, img, gam, wsw, vec, & 
+   !$omp& dG, dS, dGr, dSr, dGd, dSd, itrace, didr, didL)
+   allocate(itrace, source=atrace)
+   allocate(didr, source=dadr)
+   allocate(didL, source=dadL)
+   !$omp do schedule(runtime)
    do iat = 1, mol%nat
       izp = mol%id(iat)
       do jat = 1, iat-1
@@ -374,12 +400,12 @@ subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
             dG = dG + (dGd + dGr) * wsw
             dS = dS + (dSd + dSr) * wsw
          end do
-         atrace(:, iat) = +dG*qvec(jat) + atrace(:, iat)
-         atrace(:, jat) = -dG*qvec(iat) + atrace(:, jat)
-         dadr(:, iat, jat) = +dG*qvec(iat) + dadr(:, iat, jat)
-         dadr(:, jat, iat) = -dG*qvec(jat) + dadr(:, jat, iat)
-         dadL(:, :, jat) = +dS*qvec(iat) + dadL(:, :, jat)
-         dadL(:, :, iat) = +dS*qvec(jat) + dadL(:, :, iat)
+         itrace(:, iat) = +dG*qvec(jat) + itrace(:, iat)
+         itrace(:, jat) = -dG*qvec(iat) + itrace(:, jat)
+         didr(:, iat, jat) = +dG*qvec(iat) + didr(:, iat, jat)
+         didr(:, jat, iat) = -dG*qvec(jat) + didr(:, jat, iat)
+         didL(:, :, jat) = +dS*qvec(iat) + didL(:, :, jat)
+         didL(:, :, iat) = +dS*qvec(jat) + didL(:, :, iat)
       end do
 
       dS(:, :) = 0.0_wp
@@ -391,8 +417,15 @@ subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
          call get_damat_rec_3d(vec, vol, alpha, rtrans, dGr, dSr)
          dS = dS + (dSd + dSr) * wsw
       end do
-      dadL(:, :, iat) = +dS*qvec(iat) + dadL(:, :, iat)
+      didL(:, :, iat) = +dS*qvec(iat) + didL(:, :, iat)
    end do
+   !$omp critical (get_damat_3d_)
+   atrace(:, :) = atrace + itrace
+   dadr(:, :, :) = dadr + didr
+   dadL(:, :, :) = dadL + didL
+   !$omp end critical (get_damat_3d_)
+   deallocate(didL, didr, itrace)
+   !$omp end parallel
 
 end subroutine get_damat_3d
 
