@@ -14,7 +14,7 @@
 ! limitations under the License.
 
 module multicharge_param
-   use mctc_env, only: wp
+   use mctc_env, only: error_type, wp
    use mctc_io, only: structure_type
    use mctc_io_convert, only: autoaa
    use mctc_data, only: get_covalent_rad, get_pauling_en, get_vdw_rad
@@ -43,13 +43,18 @@ module multicharge_param
 
 contains
 
-   subroutine new_eeq2019_model(mol, model, dielectric)
+   subroutine new_eeq2019_model(mol, model, error, dielectric)
       !> Molecular structure data
       type(structure_type), intent(in) :: mol
       !> Electronegativity equilibration model
       class(mchrg_model_type), allocatable, intent(out) :: model
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
       !> Dielectric constant of the medium
       real(wp), intent(in), optional :: dielectric
+
+
+      real(wp), parameter :: cutoff = 25.0_wp, cn_exp = 7.5_wp, cn_max = 8.0_wp
 
       real(wp), allocatable :: chi(:), eta(:), kcnchi(:), rad(:), rcov(:)
       type(eeq_model), allocatable :: eeq
@@ -62,7 +67,7 @@ contains
 
       allocate (eeq)
       call new_eeq_model(eeq, mol=mol, chi=chi, rad=rad, eta=eta, kcnchi=kcnchi, &
-         & cutoff=25.0_wp, cn_exp=7.5_wp, rcov=rcov, cn_max=8.0_wp, &
+         & error=error, cutoff=cutoff, cn_exp=cn_exp, rcov=rcov, cn_max=cn_max, &
          & dielectric=dielectric)
       call move_alloc(eeq, model)
 

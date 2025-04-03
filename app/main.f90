@@ -81,11 +81,14 @@ program main
    end if
 
    if (model_id == mchargeModel%eeq2019) then
-      call new_eeq2019_model(mol, model, dielectric)
+      call new_eeq2019_model(mol, model, dielectric, error)
    else if (model_id == mchargeModel%eeqbc2024) then
-      call new_eeqbc2024_model(mol, model, dielectric)
+      call new_eeqbc2024_model(mol, model, dielectric, error)
    else
-      call fatal_error(error, "Invalid model")
+      call fatal_error(error, "Invalid model was choosen.")
+   end if
+   if(allocated(error)) then
+      write(error_unit, '(a)') error%message
       error stop
    end if
 
