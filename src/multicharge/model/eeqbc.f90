@@ -286,8 +286,10 @@ contains
       type(eeqbc_cache), pointer :: ptr
 
       integer :: iat, izp, jat
-      real(wp) :: tmpdcn, tmpdqloc
       real(wp), allocatable :: dtmpdr(:, :, :), dtmpdL(:, :, :)
+
+      ! Thread-private arrays for reduction
+      real(wp), allocatable :: dxdr_local(:, :, :), dxdL_local(:, :, :)
 
       call view(cache, ptr)
       allocate (dtmpdr(3, mol%nat, mol%nat + 1), dtmpdL(3, 3, mol%nat + 1))
@@ -296,32 +298,51 @@ contains
       dxdL(:, :, :) = 0.0_wp
       dtmpdr(:, :, :) = 0.0_wp
       dtmpdL(:, :, :) = 0.0_wp
-      !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(ptr, self, mol, dtmpdr, dtmpdL) &
-      !$omp private(iat, izp)
+
+      !$omp parallel default(none) &
+      !$omp shared(mol, self, ptr, dtmpdr, dtmpdL) &
+      !$omp private(iat, izp, dxdr_local, dxdL_local)
+      allocate(dxdr_local, source=dtmpdr)
+      allocate(dxdL_local, source=dtmpdL)
+      !$omp do schedule(runtime)
       do iat = 1, mol%nat
          izp = mol%id(iat)
          ! CN and effective charge derivative
-         dtmpdr(:, :, iat) = self%kcnchi(izp)*ptr%dcndr(:, :, iat) + dtmpdr(:, :, iat)
-         dtmpdL(:, :, iat) = self%kcnchi(izp)*ptr%dcndL(:, :, iat) + dtmpdL(:, :, iat)
-         dtmpdr(:, :, iat) = self%kqchi(izp)*ptr%dqlocdr(:, :, iat) + dtmpdr(:, :, iat)
-         dtmpdL(:, :, iat) = self%kqchi(izp)*ptr%dqlocdL(:, :, iat) + dtmpdL(:, :, iat)
+         dxdr_local(:, :, iat) = self%kcnchi(izp)*ptr%dcndr(:, :, iat) + dxdr_local(:, :, iat)
+         dxdL_local(:, :, iat) = self%kcnchi(izp)*ptr%dcndL(:, :, iat) + dxdL_local(:, :, iat)
+         dxdr_local(:, :, iat) = self%kqchi(izp)*ptr%dqlocdr(:, :, iat) + dxdr_local(:, :, iat)
+         dxdL_local(:, :, iat) = self%kqchi(izp)*ptr%dqlocdL(:, :, iat) + dxdL_local(:, :, iat)
       end do
+      !$omp end do
+      !$omp critical (get_xvec_derivs_)
+      dtmpdr(:, :, :) = dtmpdr(:, :, :) + dxdr_local(:, :, :)
+      dtmpdL(:, :, :) = dtmpdL(:, :, :) + dxdL_local(:, :, :)
+      !$omp end critical (get_xvec_derivs_)
+      deallocate(dxdL_local, dxdr_local)
+      !$omp end parallel
 
       call gemm(dtmpdr, ptr%cmat, dxdr)
       call gemm(dtmpdL, ptr%cmat, dxdL)
-      !call gemv(cache%dcdr(:, :, :mol%nat), tmp(:mol%nat), xvec)
 
-      !$omp parallel do default(none) schedule(runtime) &
-      !$omp reduction(+:dxdr, dxdL) shared(self, mol, ptr) &
-      !$omp private(iat, jat)
+      !$omp parallel default(none) &
+      !$omp shared(mol, self, ptr, dxdr) &
+      !$omp private(iat, izp, dxdr_local)
+      allocate(dxdr_local(3, mol%nat, mol%nat+1), source=0.0_wp)
+      !$omp do schedule(runtime)
       do iat = 1, mol%nat
          do jat = 1, mol%nat
-            dxdr(:, iat, iat) = ptr%xtmp(jat)*ptr%dcdr(:, iat, jat) + dxdr(:, iat, iat)
-            dxdr(:, iat, jat) = (ptr%xtmp(iat) - ptr%xtmp(jat))*ptr%dcdr(:, iat, jat) &
-               & + dxdr(:, iat, jat)
+            dxdr_local(:, iat, iat) = ptr%xtmp(jat)*ptr%dcdr(:, iat, jat) + dxdr_local(:, iat, iat)
+            dxdr_local(:, iat, jat) = (ptr%xtmp(iat) - ptr%xtmp(jat))*ptr%dcdr(:, iat, jat) &
+               & + dxdr_local(:, iat, jat)
          end do
       end do
+      !$omp end do
+      !$omp critical (get_xvec_derivs_)
+      dxdr(:, :, :) = dxdr(:, :, :) + dxdr_local(:, :, :)
+      !$omp end critical (get_xvec_derivs_)
+      deallocate(dxdr_local)
+      !$omp end parallel
+
    end subroutine get_xvec_derivs
 
    subroutine get_coulomb_matrix(self, mol, cache, amat)
@@ -352,36 +373,45 @@ contains
       integer :: iat, jat, izp, jzp
       real(wp) :: vec(3), r2, gam2, tmp, norm_cn, radi, radj
 
+      ! Thread-private array for reduction
+      real(wp), allocatable :: amat_local(:, :)
+   
       amat(:, :) = 0.0_wp
-
-      !$omp parallel do default(none) schedule(runtime) &
+   
+      !$omp parallel default(none) &
       !$omp shared(amat, mol, self, cn, qloc, cmat) &
-      !$omp private(iat, izp, jat, jzp, gam2, vec, r2, tmp, norm_cn, radi, radj)
+      !$omp private(iat, izp, jat, jzp, gam2, vec, r2, tmp) &
+      !$omp private(norm_cn, radi, radj, amat_local)
+      allocate(amat_local, source=amat)
+      !$omp do schedule(runtime) 
       do iat = 1, mol%nat
          izp = mol%id(iat)
          ! Effective charge width of i
-         norm_cn = 1.0_wp/self%avg_cn(izp)**self%norm_exp
-         radi = self%rad(izp)*(1.0_wp - self%kcnrad*cn(iat)*norm_cn)
+         norm_cn = 1.0_wp / self%avg_cn(izp)**self%norm_exp
+         radi = self%rad(izp) * (1.0_wp - self%kcnrad*cn(iat)*norm_cn)
          do jat = 1, iat - 1
             jzp = mol%id(jat)
             vec = mol%xyz(:, jat) - mol%xyz(:, iat)
             r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
             ! Effective charge width of j
-            norm_cn = cn(jat)/self%avg_cn(jzp)**self%norm_exp
-            radj = self%rad(jzp)*(1.0_wp - self%kcnrad*norm_cn)
+            norm_cn = cn(jat) / self%avg_cn(jzp)**self%norm_exp
+            radj = self%rad(jzp) * (1.0_wp - self%kcnrad*norm_cn)
             ! Coulomb interaction of Gaussian charges
-            gam2 = 1.0_wp/(radi**2 + radj**2)
-            tmp = erf(sqrt(r2*gam2))/(sqrt(r2))*cmat(jat, iat)
-            !$omp atomic
-            amat(jat, iat) = amat(jat, iat) + tmp
-            !$omp atomic
-            amat(iat, jat) = amat(iat, jat) + tmp
+            gam2 = 1.0_wp / (radi**2 + radj**2)
+            tmp = erf(sqrt(r2*gam2)) / sqrt(r2) * cmat(jat, iat)
+            amat_local(jat, iat) = amat_local(jat, iat) + tmp
+            amat_local(iat, jat) = amat_local(iat, jat) + tmp
          end do
          ! Effective hardness
-         tmp = self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi
-         !$omp atomic
-         amat(iat, iat) = amat(iat, iat) + tmp*cmat(iat, iat) + 1.0_wp
+         tmp = self%eta(izp) + self%kqeta(izp) * qloc(iat) + sqrt2pi / radi
+         amat_local(iat, iat) = amat_local(iat, iat) + tmp*cmat(iat, iat) + 1.0_wp
       end do
+      !$omp end do
+      !$omp critical (get_amat_0d_)
+      amat(:, :) = amat(:, :) + amat_local(:, :)
+      !$omp end critical (get_amat_0d_)
+      deallocate(amat_local)
+      !$omp end parallel
 
       amat(mol%nat + 1, 1:mol%nat + 1) = 1.0_wp
       amat(1:mol%nat + 1, mol%nat + 1) = 1.0_wp
@@ -402,23 +432,27 @@ contains
       real(wp) :: vec(3), gam, wsw, dtmp, rtmp, vol, ctmp, capi, capj, radi, radj, norm_cn, rvdw
       real(wp), allocatable :: dtrans(:, :), rtrans(:, :)
 
+      ! Thread-private array for reduction
+      real(wp), allocatable :: amat_local(:, :)
+
       amat(:, :) = 0.0_wp
 
       vol = abs(matdet_3x3(mol%lattice))
       call get_dir_trans(mol%lattice, dtrans)
       call get_rec_trans(mol%lattice, rtrans)
 
-      !$omp parallel do default(none) schedule(runtime) &
-      !$omp reduction(+:amat) shared(mol, self, wsc, dtrans, rtrans, alpha, vol, cdiag) &
-      !$omp shared(cn, qloc) &
+      !$omp parallel default(none) &
+      !$omp shared(amat, mol, cn, qloc, self, wsc, dtrans, rtrans, alpha, vol, cdiag) &
       !$omp private(iat, izp, jat, jzp, gam, wsw, vec, dtmp, rtmp, ctmp, norm_cn) &
-      !$omp private(isp, jsp, radi, radj, capi, capj, rvdw)
+      !$omp private(isp, jsp, radi, radj, capi, capj, rvdw, amat_local)
+      allocate(amat_local, source=amat)
+      !$omp do schedule(runtime) 
       do iat = 1, mol%nat
          izp = mol%id(iat)
          isp = mol%num(izp)
          ! Effective charge width of i
-         norm_cn = 1.0_wp/self%avg_cn(izp)**self%norm_exp
-         radi = self%rad(izp)*(1.0_wp - self%kcnrad*cn(iat)*norm_cn)
+         norm_cn = 1.0_wp / self%avg_cn(izp)**self%norm_exp
+         radi = self%rad(izp) * (1.0_wp - self%kcnrad*cn(iat)*norm_cn)
          capi = self%cap(isp)
          do jat = 1, iat - 1
             jzp = mol%id(jat)
@@ -426,36 +460,42 @@ contains
             ! vdw distance in Angstrom (approximate factor 2)
             rvdw = self%rvdw(iat, jat)
             ! Effective charge width of j
-            norm_cn = cn(jat)/self%avg_cn(jzp)**self%norm_exp
-            radj = self%rad(jzp)*(1.0_wp - self%kcnrad*norm_cn)
+            norm_cn = cn(jat) / self%avg_cn(jzp)**self%norm_exp
+            radj = self%rad(jzp) * (1.0_wp - self%kcnrad*norm_cn)
             capj = self%cap(jsp)
             ! Coulomb interaction of Gaussian charges
-            gam = 1.0_wp/sqrt(radi**2 + radj**2)
-            wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
+            gam = 1.0_wp / sqrt(radi**2 + radj**2)
+            wsw = 1.0_wp / real(wsc%nimg(jat, iat), wp)
             do img = 1, wsc%nimg(jat, iat)
                vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
-               call get_cpair(mol, self%kbc, ctmp, vec, rvdw, capi, capj)
+               call get_cpair(self%kbc, ctmp, vec, rvdw, capi, capj)
                call get_amat_dir_3d(vec, gam, alpha, dtrans, dtmp)
                call get_amat_rec_3d(vec, vol, alpha, rtrans, rtmp)
-               amat(jat, iat) = amat(jat, iat) + ctmp*(dtmp + rtmp)*wsw
-               amat(iat, jat) = amat(iat, jat) + ctmp*(dtmp + rtmp)*wsw
+               amat_local(jat, iat) = amat_local(jat, iat) + ctmp*(dtmp + rtmp)*wsw
+               amat_local(iat, jat) = amat_local(iat, jat) + ctmp*(dtmp + rtmp)*wsw
             end do
          end do
 
          ! WSC image contributions
-         gam = 1.0_wp/sqrt(2.0_wp*self%rad(izp)**2)
-         wsw = 1.0_wp/real(wsc%nimg(iat, iat), wp)
+         gam = 1.0_wp / sqrt(2.0_wp * self%rad(izp)**2)
+         wsw = 1.0_wp / real(wsc%nimg(iat, iat), wp)
          do img = 1, wsc%nimg(iat, iat)
             vec = wsc%trans(:, wsc%tridx(img, iat, iat))
             ctmp = cdiag(iat, img)
             call get_amat_dir_3d(vec, gam, alpha, dtrans, dtmp)
             call get_amat_rec_3d(vec, vol, alpha, rtrans, rtmp)
-            amat(iat, iat) = amat(iat, iat) + ctmp*(dtmp + rtmp)*wsw
+            amat_local(iat, iat) = amat_local(iat, iat) + ctmp*(dtmp + rtmp)*wsw
          end do
          ! Effective hardness
-         dtmp = self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi
-         amat(iat, iat) = amat(iat, iat) + cdiag(iat, 1)*dtmp + 1.0_wp
+         dtmp = self%eta(izp) + self%kqeta(izp) * qloc(iat) + sqrt2pi / radi
+         amat_local(iat, iat) = amat_local(iat, iat) + cdiag(iat, 1) * dtmp + 1.0_wp
       end do
+      !$omp end do
+      !$omp critical (get_amat_3d_)
+      amat(:, :) = amat(:, :) + amat_local(:, :)
+      !$omp end critical (get_amat_3d_)
+      deallocate(amat_local)
+      !$omp end parallel
 
       amat(mol%nat + 1, 1:mol%nat + 1) = 1.0_wp
       amat(1:mol%nat + 1, mol%nat + 1) = 1.0_wp
@@ -550,17 +590,26 @@ contains
       real(wp) :: radi, radj, dradi, dradj, dG(3), dS(3, 3), dgamdL(3, 3)
       real(wp), allocatable :: dgamdr(:, :)
 
+      ! Thread-private arrays for reduction
+      real(wp), allocatable :: atrace_local(:, :)
+      real(wp), allocatable :: dadr_local(:, :, :), dadL_local(:, :, :)
+
       allocate (dgamdr(3, mol%nat))
 
       atrace(:, :) = 0.0_wp
       dadr(:, :, :) = 0.0_wp
       dadL(:, :, :) = 0.0_wp
 
-      !$omp parallel do default(none) schedule(runtime) &
-      !$omp reduction(+:atrace, dadr, dadL) shared(self, mol, cn, qloc, qvec) &
-      !$omp shared (cmat, dcdr, dcdL, dcndr, dcndL, dqlocdr, dqlocdL) &
+      !$omp parallel default(none) &
+      !$omp shared(atrace, dadr, dadL, mol, self, cn, qloc, qvec) &
+      !$omp shared(cmat, dcdr, dcdL, dcndr, dcndL, dqlocdr, dqlocdL) &
       !$omp private(iat, izp, jat, jzp, gam, vec, r2, dtmp, norm_cn, arg) &
-      !$omp private(radi, radj, dradi, dradj, dgamdr, dgamdL, dG, dS)
+      !$omp private(radi, radj, dradi, dradj, dgamdr, dgamdL, dG, dS) &
+      !$omp private(atrace_local, dadr_local, dadL_local)
+      allocate(atrace_local, source=atrace)
+      allocate(dadr_local, source=dadr)
+      allocate(dadL_local, source=dadL)
+      !$omp do schedule(runtime)
       do iat = 1, mol%nat
          izp = mol%id(iat)
          ! Effective charge width of i
@@ -589,58 +638,66 @@ contains
                & - erf(sqrt(arg))/(r2*sqrt(r2))
             dG(:) = -dtmp*vec ! questionable sign
             dS(:, :) = spread(dG, 1, 3)*spread(vec, 2, 3)
-            atrace(:, iat) = +dG*qvec(jat)*cmat(jat, iat) + atrace(:, iat)
-            atrace(:, jat) = -dG*qvec(iat)*cmat(iat, jat) + atrace(:, jat)
-            dadr(:, iat, jat) = +dG*qvec(iat)*cmat(iat, jat) + dadr(:, iat, jat)
-            dadr(:, jat, iat) = -dG*qvec(jat)*cmat(jat, iat) + dadr(:, jat, iat)
-            dadL(:, :, jat) = +dS*qvec(iat)*cmat(iat, jat) + dadL(:, :, jat)
-            dadL(:, :, iat) = +dS*qvec(jat)*cmat(jat, iat) + dadL(:, :, iat)
+            atrace_local(:, iat) = +dG*qvec(jat)*cmat(jat, iat) + atrace_local(:, iat)
+            atrace_local(:, jat) = -dG*qvec(iat)*cmat(iat, jat) + atrace_local(:, jat)
+            dadr_local(:, iat, jat) = +dG*qvec(iat)*cmat(iat, jat) + dadr_local(:, iat, jat)
+            dadr_local(:, jat, iat) = -dG*qvec(jat)*cmat(jat, iat) + dadr_local(:, jat, iat)
+            dadL_local(:, :, jat) = +dS*qvec(iat)*cmat(iat, jat) + dadL_local(:, :, jat)
+            dadL_local(:, :, iat) = +dS*qvec(jat)*cmat(jat, iat) + dadL_local(:, :, iat)
 
             ! Effective charge width derivative
             dtmp = 2.0_wp*exp(-arg)/(sqrtpi)
-            atrace(:, iat) = -dtmp*qvec(jat)*dgamdr(:, jat)*cmat(jat, iat) + atrace(:, iat)
-            atrace(:, jat) = -dtmp*qvec(iat)*dgamdr(:, iat)*cmat(iat, jat) + atrace(:, jat)
-            dadr(:, iat, jat) = +dtmp*qvec(iat)*dgamdr(:, iat)*cmat(iat, jat) + dadr(:, iat, jat)
-            dadr(:, jat, iat) = +dtmp*qvec(jat)*dgamdr(:, jat)*cmat(jat, iat) + dadr(:, jat, iat)
-            dadL(:, :, jat) = +dtmp*qvec(iat)*dgamdL(:, :)*cmat(iat, jat) + dadL(:, :, jat)
-            dadL(:, :, iat) = +dtmp*qvec(jat)*dgamdL(:, :)*cmat(jat, iat) + dadL(:, :, iat)
+            atrace_local(:, iat) = -dtmp*qvec(jat)*dgamdr(:, jat)*cmat(jat, iat) + atrace_local(:, iat)
+            atrace_local(:, jat) = -dtmp*qvec(iat)*dgamdr(:, iat)*cmat(iat, jat) + atrace_local(:, jat)
+            dadr_local(:, iat, jat) = +dtmp*qvec(iat)*dgamdr(:, iat)*cmat(iat, jat) + dadr_local(:, iat, jat)
+            dadr_local(:, jat, iat) = +dtmp*qvec(jat)*dgamdr(:, jat)*cmat(jat, iat) + dadr_local(:, jat, iat)
+            dadL_local(:, :, jat) = +dtmp*qvec(iat)*dgamdL(:, :)*cmat(iat, jat) + dadL_local(:, :, jat)
+            dadL_local(:, :, iat) = +dtmp*qvec(jat)*dgamdL(:, :)*cmat(jat, iat) + dadL_local(:, :, iat)
 
             ! Capacitance derivative off-diagonal
             dtmp = erf(sqrt(r2)*gam)/(sqrt(r2))
             ! potentially switch indices for dcdr
-            atrace(:, iat) = -dtmp*qvec(jat)*dcdr(:, jat, iat) + atrace(:, iat)
-            atrace(:, jat) = -dtmp*qvec(iat)*dcdr(:, iat, jat) + atrace(:, jat)
-            dadr(:, iat, jat) = +dtmp*qvec(iat)*dcdr(:, iat, jat) + dadr(:, iat, jat)
-            dadr(:, jat, iat) = +dtmp*qvec(jat)*dcdr(:, jat, iat) + dadr(:, jat, iat)
-            dadL(:, :, jat) = +dtmp*qvec(iat)*dcdL(:, :, iat) + dadL(:, :, jat)
-            dadL(:, :, iat) = +dtmp*qvec(jat)*dcdL(:, :, jat) + dadL(:, :, iat)
+            atrace_local(:, iat) = -dtmp*qvec(jat)*dcdr(:, jat, iat) + atrace_local(:, iat)
+            atrace_local(:, jat) = -dtmp*qvec(iat)*dcdr(:, iat, jat) + atrace_local(:, jat)
+            dadr_local(:, iat, jat) = +dtmp*qvec(iat)*dcdr(:, iat, jat) + dadr_local(:, iat, jat)
+            dadr_local(:, jat, iat) = +dtmp*qvec(jat)*dcdr(:, jat, iat) + dadr_local(:, jat, iat)
+            dadL_local(:, :, jat) = +dtmp*qvec(iat)*dcdL(:, :, iat) + dadL_local(:, :, jat)
+            dadL_local(:, :, iat) = +dtmp*qvec(jat)*dcdL(:, :, jat) + dadL_local(:, :, iat)
 
             ! Capacitance derivative diagonal
             dtmp = (self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi)*qvec(iat)
-            dadr(:, jat, iat) = -dtmp*dcdr(:, jat, iat) + dadr(:, jat, iat)
+            dadr_local(:, jat, iat) = -dtmp*dcdr(:, jat, iat) + dadr_local(:, jat, iat)
             dtmp = (self%eta(jzp) + self%kqeta(jzp)*qloc(jat) + sqrt2pi/radj)*qvec(jat)
-            dadr(:, iat, jat) = -dtmp*dcdr(:, iat, jat) + dadr(:, iat, jat)
+            dadr_local(:, iat, jat) = -dtmp*dcdr(:, iat, jat) + dadr_local(:, iat, jat)
          end do
 
          ! Hardness derivative
          dtmp = self%kqeta(izp)*qvec(iat)*cmat(iat, iat)
-         !atrace(:, iat)    = +dtmp*dqlocdr(:, iat, iat) + atrace(:, iat)
-         dadr(:, :, iat) = +dtmp*dqlocdr(:, :, iat) + dadr(:, :, iat)
-         dadL(:, :, iat) = +dtmp*dqlocdL(:, :, iat) + dadL(:, :, iat)
+         !atrace_local(:, iat) = +dtmp*dqlocdr(:, iat, iat) + atrace_local(:, iat)
+         dadr_local(:, :, iat) = +dtmp*dqlocdr(:, :, iat) + dadr_local(:, :, iat)
+         dadL_local(:, :, iat) = +dtmp*dqlocdL(:, :, iat) + dadL_local(:, :, iat)
 
          ! Effective charge width derivative
          dtmp = -sqrt2pi*dradi/(radi**2)*qvec(iat)*cmat(iat, iat)
-         !atrace(:, iat)    = -dtmp*dcndr(:, iat, iat) + atrace(:, iat)
-         dadr(:, :, iat) = +dtmp*dcndr(:, :, iat) + dadr(:, :, iat)
-         dadL(:, :, iat) = +dtmp*dcndL(:, :, iat) + dadL(:, :, iat)
+         !atrace_local(:, iat) = -dtmp*dcndr(:, iat, iat) + atrace_local(:, iat)
+         dadr_local(:, :, iat) = +dtmp*dcndr(:, :, iat) + dadr_local(:, :, iat)
+         dadL_local(:, :, iat) = +dtmp*dcndL(:, :, iat) + dadL_local(:, :, iat)
 
          ! Capacitance derivative
          dtmp = (self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi)*qvec(iat)
-         !atrace(:, iat)    = -dtmp*dcdr(:, iat, iat) + atrace(:, iat)
-         dadr(:, iat, iat) = +dtmp*dcdr(:, iat, iat) + dadr(:, iat, iat)
-         dadL(:, :, iat) = +dtmp*dcdL(:, :, iat) + dadL(:, :, iat)
+         !atrace_local(:, iat) = -dtmp*dcdr(:, iat, iat) + atrace_local(:, iat)
+         dadr_local(:, iat, iat) = +dtmp*dcdr(:, iat, iat) + dadr_local(:, iat, iat)
+         dadL_local(:, :, iat) = +dtmp*dcdL(:, :, iat) + dadL_local(:, :, iat)
 
       end do
+      !$omp end do
+      !$omp critical (get_damat_0d_)
+      atrace(:, :) = atrace(:, :) + atrace_local(:, :)
+      dadr(:, :, :) = dadr(:, :, :) + dadr_local(:, :, :)
+      dadL(:, :, :) = dadL(:, :, :) + dadL_local(:, :, :)
+      !$omp end critical (get_damat_0d_)
+      deallocate(dadL_local, dadr_local, atrace_local)
+      !$omp end parallel
 
    end subroutine get_damat_0d
 
@@ -659,6 +716,10 @@ contains
       real(wp) :: dGd(3), dSd(3, 3), dGr(3), dSr(3, 3)
       real(wp), allocatable :: dtrans(:, :), rtrans(:, :)
 
+      ! Thread-private arrays for reduction
+      real(wp), allocatable :: atrace_local(:, :)
+      real(wp), allocatable :: dadr_local(:, :, :), dadL_local(:, :, :)
+
       atrace(:, :) = 0.0_wp
       dadr(:, :, :) = 0.0_wp
       dadL(:, :, :) = 0.0_wp
@@ -667,45 +728,57 @@ contains
       call get_dir_trans(mol%lattice, dtrans)
       call get_rec_trans(mol%lattice, rtrans)
 
-      !$omp parallel do default(none) schedule(runtime) &
-      !$omp reduction(+:atrace, dadr, dadL) &
+      !$omp parallel default(none) &
       !$omp shared(mol, self, wsc, alpha, vol, dtrans, rtrans, qvec) &
-      !$omp private(iat, izp, jat, jzp, img, gam, wsw, vec, dG, dS, &
-      !$omp& dGr, dSr, dGd, dSd)
+      !$omp shared(atrace, dadr, dadL) &
+      !$omp private(iat, izp, jat, jzp, img, gam, wsw, vec, dG, dS) & 
+      !$omp private(dGr, dSr, dGd, dSd, atrace_local, dadr_local, dadL_local)
+      allocate(atrace_local, source=atrace)
+      allocate(dadr_local, source=dadr)
+      allocate(dadL_local, source=dadL)
+      !$omp do schedule(runtime)
       do iat = 1, mol%nat
          izp = mol%id(iat)
          do jat = 1, iat - 1
             jzp = mol%id(jat)
             dG(:) = 0.0_wp
             dS(:, :) = 0.0_wp
-            gam = 1.0_wp/sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
-            wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
+            gam = 1.0_wp / sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
+            wsw = 1.0_wp / real(wsc%nimg(jat, iat), wp)
             do img = 1, wsc%nimg(jat, iat)
                vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
                call get_damat_dir_3d(vec, gam, alpha, dtrans, dGd, dSd)
                call get_damat_rec_3d(vec, vol, alpha, rtrans, dGr, dSr)
-               dG = dG + (dGd + dGr)*wsw
-               dS = dS + (dSd + dSr)*wsw
+               dG = dG + (dGd + dGr) * wsw
+               dS = dS + (dSd + dSr) * wsw
             end do
-            atrace(:, iat) = +dG*qvec(jat) + atrace(:, iat)
-            atrace(:, jat) = -dG*qvec(iat) + atrace(:, jat)
-            dadr(:, iat, jat) = +dG*qvec(iat) + dadr(:, iat, jat)
-            dadr(:, jat, iat) = -dG*qvec(jat) + dadr(:, jat, iat)
-            dadL(:, :, jat) = +dS*qvec(iat) + dadL(:, :, jat)
-            dadL(:, :, iat) = +dS*qvec(jat) + dadL(:, :, iat)
+            atrace_local(:, iat) = +dG*qvec(jat) + atrace_local(:, iat)
+            atrace_local(:, jat) = -dG*qvec(iat) + atrace_local(:, jat)
+            dadr_local(:, iat, jat) = +dG*qvec(iat) + dadr_local(:, iat, jat)
+            dadr_local(:, jat, iat) = -dG*qvec(jat) + dadr_local(:, jat, iat)
+            dadL_local(:, :, jat) = +dS*qvec(iat) + dadL_local(:, :, jat)
+            dadL_local(:, :, iat) = +dS*qvec(jat) + dadL_local(:, :, iat)
          end do
 
          dS(:, :) = 0.0_wp
-         gam = 1.0_wp/sqrt(2.0_wp*self%rad(izp)**2)
-         wsw = 1.0_wp/real(wsc%nimg(iat, iat), wp)
+         gam = 1.0_wp / sqrt(2.0_wp * self%rad(izp)**2)
+         wsw = 1.0_wp / real(wsc%nimg(iat, iat), wp)
          do img = 1, wsc%nimg(iat, iat)
             vec = wsc%trans(:, wsc%tridx(img, iat, iat))
             call get_damat_dir_3d(vec, gam, alpha, dtrans, dGd, dSd)
             call get_damat_rec_3d(vec, vol, alpha, rtrans, dGr, dSr)
-            dS = dS + (dSd + dSr)*wsw
+            dS = dS + (dSd + dSr) * wsw
          end do
-         dadL(:, :, iat) = +dS*qvec(iat) + dadL(:, :, iat)
+         dadL_local(:, :, iat) = +dS*qvec(iat) + dadL_local(:, :, iat)
       end do
+      !$omp end do
+      !$omp critical (get_damat_3d_)
+      atrace(:, :) = atrace(:, :) + atrace_local(:, :)
+      dadr(:, :, :) = dadr(:, :, :) + dadr_local(:, :, :)
+      dadL(:, :, :) = dadL(:, :, :) + dadL_local(:, :, :)
+      !$omp end critical (get_damat_3d_)
+      deallocate(dadL_local, dadr_local, atrace_local)
+      !$omp end parallel
 
    end subroutine get_damat_3d
 
@@ -779,11 +852,17 @@ contains
       integer :: iat, jat, izp, jzp, isp, jsp
       real(wp) :: vec(3), rvdw, tmp, capi, capj
 
+      ! Thread-private array for reduction
+      real(wp), allocatable :: cmat_local(:, :)
+   
       cmat(:, :) = 0.0_wp
-      !$omp parallel do default(none) schedule(runtime) &
+   
+      !$omp parallel default(none) &
       !$omp shared(cmat, mol, self) &
       !$omp private(iat, izp, isp, jat, jzp, jsp) &
-      !$omp private(vec, rvdw, tmp, capi, capj)
+      !$omp private(vec, rvdw, tmp, capi, capj, cmat_local)
+      allocate(cmat_local, source=cmat)
+      !$omp do schedule(runtime) 
       do iat = 1, mol%nat
          izp = mol%id(iat)
          isp = mol%num(izp)
@@ -794,23 +873,27 @@ contains
             vec = mol%xyz(:, jat) - mol%xyz(:, iat)
             rvdw = self%rvdw(iat, jat)
             capj = self%cap(jzp)
-            call get_cpair(mol, self%kbc, tmp, vec, rvdw, capi, capj)
+            call get_cpair(self%kbc, tmp, vec, rvdw, capi, capj)
             ! Off-diagonal elements
-            cmat(jat, iat) = -tmp
-            cmat(iat, jat) = -tmp
+            cmat_local(jat, iat) = -tmp
+            cmat_local(iat, jat) = -tmp
             ! Diagonal elements
-            !$omp atomic
-            cmat(iat, iat) = cmat(iat, iat) + tmp
-            !$omp atomic
-            cmat(jat, jat) = cmat(jat, jat) + tmp
+            cmat_local(iat, iat) = cmat_local(iat, iat) + tmp
+            cmat_local(jat, jat) = cmat_local(jat, jat) + tmp
          end do
       end do
+      !$omp end do
+      !$omp critical (get_cmat_0d_)
+      cmat(:, :) = cmat(:, :) + cmat_local(:, :)
+      !$omp end critical (get_cmat_0d_)
+      deallocate(cmat_local)
+      !$omp end parallel
+
       cmat(mol%nat + 1, mol%nat + 1) = 1.0_wp
 
    end subroutine get_cmat_0d
 
-   subroutine get_cpair(mol, kbc, cpair, vec, rvdw, capi, capj)
-      type(structure_type), intent(in) :: mol
+   subroutine get_cpair(kbc, cpair, vec, rvdw, capi, capj)
       real(wp), intent(in) :: vec(3), capi, capj, rvdw, kbc
       real(wp), intent(out) :: cpair
 
@@ -831,11 +914,17 @@ contains
       integer :: iat, jat, izp, jzp, isp, jsp, img
       real(wp) :: vec(3), rvdw, capi, capj, tmp
 
+      ! Thread-private array for reduction
+      real(wp), allocatable :: cdiag_local(:, :)
+
       cdiag(:, :) = 0.0_wp
-      !$omp parallel do default(none) schedule(runtime) &
-      !$omp reduction(+:cdiag) shared(mol, self, wsc) &
+
+      !$omp parallel default(none) &
+      !$omp shared(cdiag, mol, self, wsc) &
       !$omp private(iat, izp, isp, jat, jzp, jsp, img) &
-      !$omp private(vec, rvdw, tmp, capi, capj)
+      !$omp private(vec, rvdw, tmp, capi, capj, cdiag_local)
+      allocate(cdiag_local, source=cdiag)
+      !$omp do schedule(runtime) 
       do iat = 1, mol%nat
          izp = mol%id(iat)
          isp = mol%num(izp)
@@ -847,12 +936,19 @@ contains
             capj = self%cap(jsp)
             do img = 1, wsc%nimg(jat, iat)
                vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
-               call get_cpair(mol, self%kbc, tmp, vec, rvdw, capi, capj)
-               cdiag(iat, img) = cdiag(iat, img) + tmp
-               cdiag(jat, img) = cdiag(jat, img) + tmp
+               call get_cpair(self%kbc, tmp, vec, rvdw, capi, capj)
+               cdiag_local(iat, img) = cdiag_local(iat, img) + tmp
+               cdiag_local(jat, img) = cdiag_local(jat, img) + tmp
             end do
          end do
       end do
+      !$omp end do
+      !$omp critical (get_cdiag_3d_)
+      cdiag(:, :) = cdiag(:, :) + cdiag_local(:, :)
+      !$omp end critical (get_cdiag_3d_)
+      deallocate(cdiag_local)
+      !$omp end parallel
+
    end subroutine get_cdiag_3d
 
    subroutine get_dcmat_0d(self, mol, dcdr, dcdL)
@@ -864,12 +960,20 @@ contains
       integer :: iat, jat, izp, jzp
       real(wp) :: vec(3), r2, rvdw, dtmp, arg, dG(3), dS(3, 3), capi, capj
 
+      ! Thread-private arrays for reduction
+      real(wp), allocatable :: dcdr_local(:, :, :), dcdL_local(:, :, :)
+
       dcdr(:, :, :) = 0.0_wp
       dcdL(:, :, :) = 0.0_wp
-      !$omp parallel do default(none) schedule(runtime) &
-      !$omp reduction(+:dcdr, dcdL) shared(mol, self) &
-      !$omp private(iat, izp, jat, jzp, r2) &
-      !$omp private(vec, rvdw, dG, dS, dtmp, arg, capi, capj)
+
+      !$omp parallel default(none) &
+      !$omp shared(dcdr, dcdL, mol, self) &
+      !$omp private(iat, izp, jat, jzp, r2, vec, rvdw) &
+      !$omp private(dG, dS, dtmp, arg, capi, capj) &
+      !$omp private(dcdr_local, dcdL_local)
+      allocate(dcdr_local, source=dcdr)
+      allocate(dcdL_local, source=dcdL)
+      !$omp do schedule(runtime)
       do iat = 1, mol%nat
          izp = mol%id(iat)
          capi = self%cap(izp)
@@ -888,15 +992,22 @@ contains
             dS = spread(dG, 1, 3)*spread(vec, 2, 3)
 
             ! Negative off-diagonal elements
-            dcdr(:, iat, jat) = -dG
-            dcdr(:, jat, iat) = +dG
+            dcdr_local(:, iat, jat) = -dG
+            dcdr_local(:, jat, iat) = +dG
             ! Positive diagonal elements
-            dcdr(:, iat, iat) = +dG + dcdr(:, iat, iat)
-            dcdr(:, jat, jat) = -dG + dcdr(:, jat, jat)
-            dcdL(:, :, jat) = +dS + dcdL(:, :, jat)
-            dcdL(:, :, iat) = +dS + dcdL(:, :, iat)
+            dcdr_local(:, iat, iat) = +dG + dcdr_local(:, iat, iat)
+            dcdr_local(:, jat, jat) = -dG + dcdr_local(:, jat, jat)
+            dcdL_local(:, :, jat) = +dS + dcdL_local(:, :, jat)
+            dcdL_local(:, :, iat) = +dS + dcdL_local(:, :, iat)
          end do
       end do
+      !$omp end do
+      !$omp critical (get_dcmat_0d_)
+      dcdr(:, :, :) = dcdr(:, :, :) + dcdr_local(:, :, :)
+      dcdL(:, :, :) = dcdL(:, :, :) + dcdL_local(:, :, :)
+      !$omp end critical (get_dcmat_0d_)
+      deallocate(dcdL_local, dcdr_local)
+      !$omp end parallel
 
    end subroutine get_dcmat_0d
 
