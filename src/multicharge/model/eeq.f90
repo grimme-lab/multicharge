@@ -18,7 +18,7 @@
 
 !> Electronegativity equlibration charge model
 module multicharge_model_eeq
-   use mctc_env, only: wp
+   use mctc_env, only: error_type, wp
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
    use mctc_io_math, only: matdet_3x3
@@ -62,12 +62,14 @@ module multicharge_model_eeq
 
 contains
 
-   subroutine new_eeq_model(self, mol, chi, rad, eta, kcnchi, &
-      & cutoff, cn_exp, rcov, cn_max, dielectric)
+   subroutine new_eeq_model(self, mol, error, chi, rad, eta, kcnchi, &
+      & cutoff, cn_exp, rcov, cn_max)
       !> Electronegativity equilibration model
       type(eeq_model), intent(out) :: self
       !> Molecular structure data
       type(structure_type), intent(in) :: mol
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
       !> Electronegativity
       real(wp), intent(in) :: chi(:)
       !> Exponent gaussian charge
@@ -84,22 +86,14 @@ contains
       real(wp), intent(in), optional :: rcov(:)
       !> Maximum CN cutoff for CN
       real(wp), intent(in), optional :: cn_max
-      !> Dielectric constant of the surrounding medium
-      real(wp), intent(in), optional :: dielectric
 
       self%chi = chi
       self%rad = rad
       self%eta = eta
       self%kcnchi = kcnchi
 
-      if (present(dielectric)) then
-         self%dielectric = dielectric
-      else
-         self%dielectric = 1.0_wp
-      end if
-
-      call new_ncoord(self%ncoord, mol, cn_count%erf, cutoff=cutoff, kcn=cn_exp, &
-         & rcov=rcov, cut=cn_max)
+      call new_ncoord(self%ncoord, mol, cn_count%erf, error, &
+         & cutoff=cutoff, kcn=cn_exp, rcov=rcov, cut=cn_max)
 
    end subroutine new_eeq_model
 
@@ -218,7 +212,7 @@ contains
             vec = mol%xyz(:, jat) - mol%xyz(:, iat)
             r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
             gam = 1.0_wp/(self%rad(izp)**2 + self%rad(jzp)**2)
-            tmp = erf(sqrt(r2*gam))/(sqrt(r2)*self%dielectric)
+            tmp = erf(sqrt(r2*gam))/(sqrt(r2))
             !$omp atomic
             amat(jat, iat) = amat(jat, iat) + tmp
             !$omp atomic
@@ -378,8 +372,8 @@ contains
             r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
             gam = 1.0_wp/sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
             arg = gam*gam*r2
-            dtmp = 2.0_wp*gam*exp(-arg)/(sqrtpi*r2*self%dielectric) &
-               & - erf(sqrt(arg))/(r2*sqrt(r2)*self%dielectric)
+            dtmp = 2.0_wp*gam*exp(-arg)/(sqrtpi*r2) &
+               & - erf(sqrt(arg))/(r2*sqrt(r2))
             dG = dtmp*vec
             dS = spread(dG, 1, 3)*spread(vec, 2, 3)
             atrace(:, iat) = +dG*qvec(jat) + atrace(:, iat)

@@ -43,18 +43,17 @@ module multicharge_param
 
 contains
 
-   subroutine new_eeq2019_model(mol, model, error, dielectric)
+   subroutine new_eeq2019_model(mol, model, error)
       !> Molecular structure data
       type(structure_type), intent(in) :: mol
       !> Electronegativity equilibration model
       class(mchrg_model_type), allocatable, intent(out) :: model
       !> Error handling
       type(error_type), allocatable, intent(out) :: error
-      !> Dielectric constant of the medium
-      real(wp), intent(in), optional :: dielectric
 
-
-      real(wp), parameter :: cutoff = 25.0_wp, cn_exp = 7.5_wp, cn_max = 8.0_wp
+      real(wp), parameter :: cutoff = 25.0_wp
+      real(wp), parameter :: cn_exp = 7.5_wp
+      real(wp), parameter :: cn_max = 8.0_wp
 
       real(wp), allocatable :: chi(:), eta(:), kcnchi(:), rad(:), rcov(:)
       type(eeq_model), allocatable :: eeq
@@ -66,20 +65,26 @@ contains
       rcov = get_covalent_rad(mol%num)
 
       allocate (eeq)
-      call new_eeq_model(eeq, mol=mol, chi=chi, rad=rad, eta=eta, kcnchi=kcnchi, &
-         & error=error, cutoff=cutoff, cn_exp=cn_exp, rcov=rcov, cn_max=cn_max, &
-         & dielectric=dielectric)
+      call new_eeq_model(eeq, mol=mol, error=error, chi=chi, &
+         & rad=rad, eta=eta, kcnchi=kcnchi, cutoff=cutoff, &
+         & cn_exp=cn_exp, rcov=rcov, cn_max=cn_max)
       call move_alloc(eeq, model)
 
    end subroutine new_eeq2019_model
 
-   subroutine new_eeqbc2024_model(mol, model, dielectric)
+   subroutine new_eeqbc2024_model(mol, model, error)
       !> Molecular structure data
       type(structure_type), intent(in) :: mol
       !> Electronegativity equilibration model
       class(mchrg_model_type), allocatable, intent(out) :: model
-      !> Dielectric constant of the medium
-      real(wp), intent(in), optional :: dielectric
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      real(wp), parameter :: kcnrad = 0.14_wp
+      real(wp), parameter :: kbc = 0.60_wp
+      real(wp), parameter :: cutoff = 25.0_wp
+      real(wp), parameter :: cn_exp = 2.0_wp
+      real(wp), parameter :: norm_exp = 0.75_wp
 
       real(wp), allocatable :: chi(:), eta(:), rad(:), kcnchi(:), &
          & kqchi(:), kqeta(:), cap(:), rcov(:), avg_cn(:), en(:), &
@@ -106,14 +111,15 @@ contains
       en = merge(1.20_wp, en, mol%num == 93 .or. mol%num == 94 &
          &.or. mol%num == 97 .or. mol%num == 103)
       en = en/3.98_wp
-      rvdw = get_vdw_rad(spread(mol%num(mol%id), 2, mol%nat), spread(mol%num(mol%id), 1, mol%nat))*autoaa
+      rvdw = get_vdw_rad(spread(mol%num(mol%id), 2, mol%nat), &
+         & spread(mol%num(mol%id), 1, mol%nat)) * autoaa
 
       allocate (eeqbc)
-      call new_eeqbc_model(eeqbc, mol=mol, chi=chi, rad=rad, eta=eta, &
-         & kcnchi=kcnchi, kqchi=kqchi, kqeta=kqeta, kcnrad=0.14_wp, &
-         & cap=cap, avg_cn=avg_cn, kbc=0.60_wp, cutoff=25.0_wp, &
-         & cn_exp=2.0_wp, rcov=rcov, en=en, norm_exp=0.75_wp, &
-         & dielectric=dielectric, rvdw=rvdw)
+      call new_eeqbc_model(eeqbc, mol=mol, error=error, chi=chi, & 
+         & rad=rad, eta=eta, kcnchi=kcnchi, kqchi=kqchi, kqeta=kqeta, &
+         & kcnrad=kcnrad, cap=cap, avg_cn=avg_cn, kbc=kbc, &
+         & cutoff=cutoff, cn_exp=cn_exp, rcov=rcov, en=en, &
+         & norm_exp=norm_exp, rvdw=rvdw)
       call move_alloc(eeqbc, model)
 
    end subroutine new_eeqbc2024_model

@@ -25,7 +25,7 @@ module multicharge_model_type
 
    use iso_fortran_env, only: output_unit
 
-   use mctc_env, only: wp, ik => IK
+   use mctc_env, only: error_type, fatal_error, wp, ik => IK
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
    use mctc_io_math, only: matinv_3x3
@@ -57,8 +57,6 @@ module multicharge_model_type
       real(wp), allocatable :: kqeta(:)
       !> CN scaling factor for charge width
       real(wp), allocatable :: kcnrad
-      !> Dielectric constant of the surrounding medium
-      real(wp), allocatable :: dielectric
       !> Coordination number
       class(ncoord_type), allocatable :: ncoord
       !> Electronegativity weighted CN for local charge
@@ -206,21 +204,37 @@ contains
 
    end subroutine get_rec_trans
 
-   subroutine solve(self, mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
+   subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
       & energy, gradient, sigma, qvec, dqdr, dqdL)
+      !> Electronegativity equilibration model
       class(mchrg_model_type), intent(in) :: self
+      !> Molecular structure data
       type(structure_type), intent(in) :: mol
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+      !> Coordination number
       real(wp), intent(in), contiguous :: cn(:)
+      !> Local atomic partial charges
       real(wp), intent(in), contiguous :: qloc(:)
+      !> Optional derivative of the coordination number w.r.t. atomic positions
       real(wp), intent(in), contiguous, optional :: dcndr(:, :, :)
+      !> Optional derivative of the coordination number w.r.t. lattice vectors
       real(wp), intent(in), contiguous, optional :: dcndL(:, :, :)
+      !> Optional derivative of the local atomic partial charges w.r.t. atomic positions
       real(wp), intent(in), contiguous, optional :: dqlocdr(:, :, :)
+      !> Optional derivative of the local atomic partial charges w.r.t. lattice vectors
       real(wp), intent(in), contiguous, optional :: dqlocdL(:, :, :)
+      !> Optional atomic partial charges result
       real(wp), intent(out), contiguous, optional :: qvec(:)
+      !> Optional electrostatic energy result
       real(wp), intent(inout), contiguous, optional :: energy(:)
+      !> Optional gradient for electrostatic energy
       real(wp), intent(inout), contiguous, optional :: gradient(:, :)
+      !> Optional stress tensor for electrostatic energy
       real(wp), intent(inout), contiguous, optional :: sigma(:, :)
+      !> Optional derivative of the atomic partial charges w.r.t. atomic positions
       real(wp), intent(out), contiguous, optional :: dqdr(:, :, :)
+      !> Optional derivative of the atomic partial charges w.r.t. lattice vectors
       real(wp), intent(out), contiguous, optional :: dqdL(:, :, :)
 
       integer :: ic, jc, iat, ndim
@@ -251,7 +265,7 @@ contains
          call get_dir_trans(mol%lattice, trans)
       end if
 
-      ! Get amat
+      ! Setup the Coulomb matrix
       ndim = mol%nat + 1
       allocate (amat(ndim, ndim))
       call self%get_coulomb_matrix(mol, cache, amat)
@@ -263,23 +277,36 @@ contains
       vrhs = xvec
       ainv = amat
 
+      ! Factorize the Coulomb matrix
       allocate (ipiv(ndim))
       call sytrf(ainv, ipiv, info=info, uplo='l')
+      if (info /= 0) then
+         call fatal_error(error, "Bunch-Kaufman factorization failed.")
+         return
+      end if
 
-      if (info == 0) then
-         if (cpq) then
-            call sytri(ainv, ipiv, info=info, uplo='l')
-            if (info == 0) then
-               call symv(ainv, xvec, vrhs, uplo='l')
-               do ic = 1, ndim
-                  do jc = ic + 1, ndim
-                     ainv(ic, jc) = ainv(jc, ic)
-                  end do
-               end do
-            end if
-         else
-            call sytrs(ainv, vrhs, ipiv, info=info, uplo='l')
+      if (cpq) then
+         ! Inverted matrix is needed for coupled-perturbed equations
+         call sytri(ainv, ipiv, info=info, uplo='l')
+         if (info /= 0) then
+            call fatal_error(error, "Inversion of factorized matrix failed.")
+            return
          end if
+         ! Solve the linear system
+         call symv(ainv, xvec, vrhs, uplo='l')
+         do ic = 1, ndim
+            do jc = ic + 1, ndim
+               ainv(ic, jc) = ainv(jc, ic)
+            end do
+         end do
+      else
+         ! Solve the linear system
+         call sytrs(ainv, vrhs, ipiv, info=info, uplo='l')
+         if (info /= 0) then
+            call fatal_error(error, "Solution of linear system failed.")
+            return
+         end if
+
       end if
 
       if (present(qvec)) then

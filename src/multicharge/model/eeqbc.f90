@@ -21,7 +21,7 @@ module multicharge_model_eeqbc
 
    use iso_fortran_env, only: output_unit
 
-   use mctc_env, only: wp
+   use mctc_env, only: error_type, wp
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
    use mctc_io_convert, only: autoaa
@@ -106,13 +106,15 @@ module multicharge_model_eeqbc
    real(wp), parameter :: default_kbc = 0.65_wp
 contains
 
-   subroutine new_eeqbc_model(self, mol, chi, rad, eta, kcnchi, kqchi, kqeta, &
-      & kcnrad, cap, avg_cn, kbc, cutoff, cn_exp, rcov, en, cn_max, norm_exp, &
-      & dielectric, rvdw)
+   subroutine new_eeqbc_model(self, mol, error, chi, rad, &
+      & eta, kcnchi, kqchi, kqeta, kcnrad, cap, avg_cn, & 
+      & kbc, cutoff, cn_exp, rcov, en, cn_max, norm_exp, rvdw)
       !> Bond capacitor electronegativity equilibration model
       type(eeqbc_model), intent(out) :: self
       !> Molecular structure data
       type(structure_type), intent(in) :: mol
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
       !> Electronegativity
       real(wp), intent(in) :: chi(:)
       !> Exponent gaussian charge
@@ -145,8 +147,6 @@ contains
       real(wp), intent(in), optional :: cn_max
       !> Pauling electronegativities normalized to fluorine
       real(wp), intent(in), optional :: en(:)
-      !> Dielectric constant of the surrounding medium
-      real(wp), intent(in), optional :: dielectric
       !> Van-der-Waals radii
       real(wp), intent(in), optional :: rvdw(:, :)
 
@@ -173,18 +173,14 @@ contains
          self%norm_exp = default_norm_exp
       end if
 
-      if (present(dielectric)) then
-         self%dielectric = dielectric
-      else
-         self%dielectric = 1.0_wp
-      end if
-
       ! Coordination number
-      call new_ncoord(self%ncoord, mol, cn_count%erf, cutoff=cutoff, kcn=cn_exp, &
-         & rcov=rcov, cut=cn_max, norm_exp=self%norm_exp)
+      call new_ncoord(self%ncoord, mol, cn_count%erf, error, &
+         & cutoff=cutoff, kcn=cn_exp, rcov=rcov, cut=cn_max, &
+         & norm_exp=self%norm_exp)
       ! Electronegativity weighted coordination number for local charge
-      call new_ncoord(self%ncoord_en, mol, cn_count%erf_en, cutoff=cutoff, kcn=cn_exp, &
-         & rcov=rcov, en=en, cut=cn_max, norm_exp=self%norm_exp)
+      call new_ncoord(self%ncoord_en, mol, cn_count%erf_en, error, & 
+         & cutoff=cutoff, kcn=cn_exp, rcov=rcov, en=en, cut=cn_max, &
+         & norm_exp=self%norm_exp)
 
    end subroutine new_eeqbc_model
 
@@ -375,7 +371,7 @@ contains
             radj = self%rad(jzp)*(1.0_wp - self%kcnrad*norm_cn)
             ! Coulomb interaction of Gaussian charges
             gam2 = 1.0_wp/(radi**2 + radj**2)
-            tmp = erf(sqrt(r2*gam2))/(sqrt(r2)*self%dielectric)*cmat(jat, iat)
+            tmp = erf(sqrt(r2*gam2))/(sqrt(r2))*cmat(jat, iat)
             !$omp atomic
             amat(jat, iat) = amat(jat, iat) + tmp
             !$omp atomic
@@ -589,8 +585,8 @@ contains
 
             ! Explicit derivative
             arg = gam*gam*r2
-            dtmp = 2.0_wp*gam*exp(-arg)/(sqrtpi*r2*self%dielectric) &
-               & - erf(sqrt(arg))/(r2*sqrt(r2)*self%dielectric)
+            dtmp = 2.0_wp*gam*exp(-arg)/(sqrtpi*r2) &
+               & - erf(sqrt(arg))/(r2*sqrt(r2))
             dG(:) = -dtmp*vec ! questionable sign
             dS(:, :) = spread(dG, 1, 3)*spread(vec, 2, 3)
             atrace(:, iat) = +dG*qvec(jat)*cmat(jat, iat) + atrace(:, iat)
@@ -601,7 +597,7 @@ contains
             dadL(:, :, iat) = +dS*qvec(jat)*cmat(jat, iat) + dadL(:, :, iat)
 
             ! Effective charge width derivative
-            dtmp = 2.0_wp*exp(-arg)/(sqrtpi*self%dielectric)
+            dtmp = 2.0_wp*exp(-arg)/(sqrtpi)
             atrace(:, iat) = -dtmp*qvec(jat)*dgamdr(:, jat)*cmat(jat, iat) + atrace(:, iat)
             atrace(:, jat) = -dtmp*qvec(iat)*dgamdr(:, iat)*cmat(iat, jat) + atrace(:, jat)
             dadr(:, iat, jat) = +dtmp*qvec(iat)*dgamdr(:, iat)*cmat(iat, jat) + dadr(:, iat, jat)
@@ -610,7 +606,7 @@ contains
             dadL(:, :, iat) = +dtmp*qvec(jat)*dgamdL(:, :)*cmat(jat, iat) + dadL(:, :, iat)
 
             ! Capacitance derivative off-diagonal
-            dtmp = erf(sqrt(r2)*gam)/(sqrt(r2)*self%dielectric)
+            dtmp = erf(sqrt(r2)*gam)/(sqrt(r2))
             ! potentially switch indices for dcdr
             atrace(:, iat) = -dtmp*qvec(jat)*dcdr(:, jat, iat) + atrace(:, iat)
             atrace(:, jat) = -dtmp*qvec(iat)*dcdr(:, iat, jat) + atrace(:, jat)

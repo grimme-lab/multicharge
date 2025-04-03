@@ -40,9 +40,9 @@ program main
    real(wp), allocatable :: energy(:), gradient(:, :), sigma(:, :)
    real(wp), allocatable :: qvec(:)
    real(wp), allocatable :: dqdr(:, :, :), dqdL(:, :, :)
-   real(wp), allocatable :: charge, dielectric
+   real(wp), allocatable :: charge
 
-   call get_arguments(input, model_id, input_format, grad, charge, json, dielectric, error)
+   call get_arguments(input, model_id, input_format, grad, charge, json, error)
    if (allocated(error)) then
       write (error_unit, '(a)') error%message
       error stop
@@ -81,9 +81,9 @@ program main
    end if
 
    if (model_id == mchargeModel%eeq2019) then
-      call new_eeq2019_model(mol, model, dielectric, error)
+      call new_eeq2019_model(mol, model, error)
    else if (model_id == mchargeModel%eeqbc2024) then
-      call new_eeqbc2024_model(mol, model, dielectric, error)
+      call new_eeqbc2024_model(mol, model, error)
    else
       call fatal_error(error, "Invalid model was choosen.")
    end if
@@ -114,7 +114,8 @@ program main
    call get_lattice_points(mol%periodic, mol%lattice, model%ncoord%cutoff, trans)
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
-   call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, energy, gradient, sigma, qvec, dqdr, dqdL)
+   call model%solve(mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
+      & energy, gradient, sigma, qvec, dqdr, dqdL)
    ! TODO: write_ascii for dqdr, dqdL
 
    call write_ascii_properties(output_unit, mol, model, cn, qvec)
@@ -148,7 +149,6 @@ contains
          "-c, -charge, --charge <value>", "Set the molecular charge", &
          "-g, -grad, --grad", "Evaluate molecular gradient and virial", &
          "-j, -json, --json", "Provide output in JSON format to the file 'multicharge.json'", &
-         "-e, -eps, --eps <value>", "Set the dielectric constant of the medium (default vacuum)", &
          "-v, -version, --version", "Print program version and exit", &
          "-h, -help, --help", "Show this help message"
 
@@ -167,7 +167,7 @@ contains
    end subroutine version
 
    subroutine get_arguments(input, model_id, input_format, grad, charge, &
-      & json, dielectric, error)
+      & json, error)
 
       !> Input file name
       character(len=:), allocatable :: input
@@ -189,9 +189,6 @@ contains
 
       !> Error handling
       type(error_type), allocatable, intent(out) :: error
-
-      !> Dielectric constant of the medium
-      real(wp), allocatable, intent(out) :: dielectric
 
       integer :: iarg, narg, iostat
       character(len=:), allocatable :: arg
@@ -258,19 +255,6 @@ contains
             grad = .true.
          case ("-j", "-json", "--json")
             json = .true.
-         case ("-e", "-eps", "--eps")
-            iarg = iarg + 1
-            call get_argument(iarg, arg)
-            if (.not. allocated(arg)) then
-               call fatal_error(error, "Missing argument for dielectric constant")
-               exit
-            end if
-            allocate (dielectric)
-            read (arg, *, iostat=iostat) dielectric
-            if (iostat /= 0) then
-               call fatal_error(error, "Invalid dielectric constant value")
-               exit
-            end if
          end select
       end do
 
