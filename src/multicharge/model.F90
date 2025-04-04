@@ -18,7 +18,7 @@
 #endif
 
 module multicharge_model
-   use mctc_env, only : error_type, wp, ik => IK
+   use mctc_env, only : error_type, fatal_error, wp, ik => IK
    use mctc_io, only : structure_type
    use mctc_io_constants, only : pi
    use mctc_io_math, only : matdet_3x3, matinv_3x3
@@ -59,12 +59,14 @@ module multicharge_model
 contains
 
 
-subroutine new_mchrg_model(self, mol, chi, rad, eta, kcn, error, &
+subroutine new_mchrg_model(self, mol, error, chi, rad, eta, kcn, &
    & cutoff, cn_exp, rcov, cn_max)
    !> Electronegativity equilibration model
    type(mchrg_model_type), intent(out) :: self
    !> Molecular structure data
    type(structure_type), intent(in) :: mol
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
    !> Exponent gaussian charge
    real(wp), intent(in) :: rad(:)
    !> Electronegativity
@@ -73,8 +75,6 @@ subroutine new_mchrg_model(self, mol, chi, rad, eta, kcn, error, &
    real(wp), intent(in) :: eta(:)
    !> CN scaling factor for electronegativity
    real(wp), intent(in) :: kcn(:)
-   !> Error handling
-   type(error_type), allocatable, intent(out) :: error
    !> Cutoff radius for coordination number
    real(wp), intent(in), optional :: cutoff
    !> Steepness of the CN counting function
@@ -506,9 +506,10 @@ subroutine get_damat_rec_3d(rij, vol, alp, trans, dg, ds)
 
 end subroutine get_damat_rec_3d
 
-subroutine solve(self, mol, cn, dcndr, dcndL, energy, gradient, sigma, qvec, dqdr, dqdL)
+subroutine solve(self, mol, error, cn, dcndr, dcndL, energy, gradient, sigma, qvec, dqdr, dqdL)
    class(mchrg_model_type), intent(in) :: self
    type(structure_type), intent(in) :: mol
+   type(error_type), allocatable, intent(out) :: error
    real(wp), intent(in), contiguous :: cn(:)
    real(wp), intent(in), contiguous, optional :: dcndr(:, :, :)
    real(wp), intent(in), contiguous, optional :: dcndL(:, :, :)
@@ -556,20 +557,31 @@ subroutine solve(self, mol, cn, dcndr, dcndL, energy, gradient, sigma, qvec, dqd
    ainv = amat
 
    call sytrf(ainv, ipiv, info=info, uplo='l')
+   if (info /= 0) then
+      call fatal_error(error, "Bunch-Kaufman factorization failed.")
+      return
+   end if
 
-   if (info == 0) then
-      if (cpq) then
-         call sytri(ainv, ipiv, info=info, uplo='l')
-         if (info == 0) then
-            call symv(ainv, xvec, vrhs, uplo='l')
-            do ic = 1, ndim
-               do jc = ic+1, ndim
-                  ainv(ic, jc) = ainv(jc, ic)
-               end do
-            end do
-         end if
-      else
-         call sytrs(ainv, vrhs, ipiv, info=info, uplo='l')
+   if (cpq) then
+      ! Inverted matrix is needed for coupled-perturbed equations
+      call sytri(ainv, ipiv, info=info, uplo='l')
+      if (info /= 0) then
+         call fatal_error(error, "Inversion of factorized matrix failed.")
+         return
+      end if
+      ! Solve the linear system
+      call symv(ainv, xvec, vrhs, uplo='l')
+      do ic = 1, ndim
+         do jc = ic + 1, ndim
+            ainv(ic, jc) = ainv(jc, ic)
+         end do
+      end do
+   else
+      ! Solve the linear system
+      call sytrs(ainv, vrhs, ipiv, info=info, uplo='l')
+      if (info /= 0) then
+         call fatal_error(error, "Solution of linear system failed.")
+         return
       end if
    end if
 

@@ -99,8 +99,13 @@ program main
       sigma(:, :) = 0.0_wp
    end if
 
-   call model%solve(mol, cn, dcndr, dcndL, energy, gradient, sigma, &
+   call model%solve(mol, error, cn, dcndr, dcndL, energy, gradient, sigma, &
       & qvec, dqdr, dqdL)
+   if (allocated(error)) then
+      write(error_unit, '(a)') error%message
+      error stop
+   end if
+   
 
    call write_ascii_properties(output_unit, mol, model, cn, qvec)
    call write_ascii_results(output_unit, mol, energy, gradient, sigma)

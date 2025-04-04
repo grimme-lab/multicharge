@@ -88,7 +88,7 @@ subroutine gen_test(error, mol, qref, eref)
       allocate(qvec(mol%nat))
    end if
 
-   call model%solve(mol, cn, energy=energy, qvec=qvec)
+   call model%solve(mol, error, cn, energy=energy, qvec=qvec)
    if (allocated(error)) return
 
    if (present(qref)) then
@@ -151,14 +151,14 @@ subroutine test_numgrad(error, mol)
          energy(:) = 0.0_wp
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
          call model%ncoord%get_coordination_number(mol, trans, cn)
-         call model%solve(mol, cn, energy=energy)
+         call model%solve(mol, error, cn, energy=energy)
          if (allocated(error)) exit lp
          er = sum(energy)
 
          energy(:) = 0.0_wp
          mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
          call model%ncoord%get_coordination_number(mol, trans, cn)
-         call model%solve(mol, cn, energy=energy)
+         call model%solve(mol, error, cn, energy=energy)
          if (allocated(error)) exit lp
          el = sum(energy)
 
@@ -171,7 +171,7 @@ subroutine test_numgrad(error, mol)
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
 
    energy(:) = 0.0_wp
-   call model%solve(mol, cn, dcndr, dcndL, energy, gradient, sigma)
+   call model%solve(mol, error, cn, dcndr, dcndL, energy, gradient, sigma)
    if (allocated(error)) return
 
    if (any(abs(gradient(:, :) - numgrad(:, :)) > thr2)) then
@@ -221,7 +221,7 @@ subroutine test_numsigma(error, mol)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
          call model%ncoord%get_coordination_number(mol, lattr, cn)
-         call model%solve(mol, cn, energy=energy)
+         call model%solve(mol, error, cn, energy=energy)
          if (allocated(error)) exit lp
          er = sum(energy)
 
@@ -231,7 +231,7 @@ subroutine test_numsigma(error, mol)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
          call model%ncoord%get_coordination_number(mol, lattr, cn)
-         call model%solve(mol, cn, energy=energy)
+         call model%solve(mol, error, cn, energy=energy)
          if (allocated(error)) exit lp
          el = sum(energy)
 
@@ -247,7 +247,7 @@ subroutine test_numsigma(error, mol)
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
 
    energy(:) = 0.0_wp
-   call model%solve(mol, cn, dcndr, dcndL, energy, gradient, sigma)
+   call model%solve(mol, error, cn, dcndr, dcndL, energy, gradient, sigma)
    if (allocated(error)) return
 
    if (any(abs(sigma(:, :) - numsigma(:, :)) > thr2)) then
@@ -285,12 +285,12 @@ subroutine test_numdqdr(error, mol)
       do ic = 1, 3
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
          call model%ncoord%get_coordination_number(mol, trans, cn)
-         call model%solve(mol, cn, qvec=qr)
+         call model%solve(mol, error, cn, qvec=qr)
          if (allocated(error)) exit lp
 
          mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
          call model%ncoord%get_coordination_number(mol, trans, cn)
-         call model%solve(mol, cn, qvec=ql)
+         call model%solve(mol, error, cn, qvec=ql)
          if (allocated(error)) exit lp
 
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
@@ -301,7 +301,7 @@ subroutine test_numdqdr(error, mol)
 
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
 
-   call model%solve(mol, cn, dcndr, dcndL, dqdr=dqdr, dqdL=dqdL)
+   call model%solve(mol, error, cn, dcndr, dcndL, dqdr=dqdr, dqdL=dqdL)
    if (allocated(error)) return
 
    if (any(abs(dqdr(:, :, :) - numdr(:, :, :)) > thr2)) then
@@ -348,7 +348,7 @@ subroutine test_numdqdL(error, mol)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
          call model%ncoord%get_coordination_number(mol, lattr, cn)
-         call model%solve(mol, cn, qvec=qr)
+         call model%solve(mol, error, cn, qvec=qr)
          if (allocated(error)) exit lp
 
          eps(jc, ic) = eps(jc, ic) - 2*step
@@ -356,7 +356,7 @@ subroutine test_numdqdL(error, mol)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
          call model%ncoord%get_coordination_number(mol, lattr, cn)
-         call model%solve(mol, cn, qvec=ql)
+         call model%solve(mol, error, cn, qvec=ql)
          if (allocated(error)) exit lp
 
          eps(jc, ic) = eps(jc, ic) + step
@@ -370,7 +370,7 @@ subroutine test_numdqdL(error, mol)
 
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
 
-   call model%solve(mol, cn, dcndr, dcndL, dqdr=dqdr, dqdL=dqdL)
+   call model%solve(mol, error, cn, dcndr, dcndL, dqdr=dqdr, dqdL=dqdL)
    if (allocated(error)) return
 
    if (any(abs(dqdL(:, :, :) - numdL(:, :, :)) > thr2)) then
