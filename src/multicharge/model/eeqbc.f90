@@ -286,6 +286,7 @@ contains
       type(eeqbc_cache), pointer :: ptr
 
       integer :: iat, izp, jat
+      real(wp) :: tmp(3)
       real(wp), allocatable :: dtmpdr(:, :, :), dtmpdL(:, :, :)
 
       ! Thread-private arrays for reduction
@@ -299,49 +300,35 @@ contains
       dtmpdr(:, :, :) = 0.0_wp
       dtmpdL(:, :, :) = 0.0_wp
 
-      !$omp parallel default(none) &
+      !$omp parallel do default(none) schedule(runtime) &
       !$omp shared(mol, self, ptr, dtmpdr, dtmpdL) &
-      !$omp private(iat, izp, dxdr_local, dxdL_local)
-      allocate(dxdr_local, source=dtmpdr)
-      allocate(dxdL_local, source=dtmpdL)
-      !$omp do schedule(runtime)
+      !$omp private(iat, izp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
          ! CN and effective charge derivative
-         dxdr_local(:, :, iat) = self%kcnchi(izp)*ptr%dcndr(:, :, iat) + dxdr_local(:, :, iat)
-         dxdL_local(:, :, iat) = self%kcnchi(izp)*ptr%dcndL(:, :, iat) + dxdL_local(:, :, iat)
-         dxdr_local(:, :, iat) = self%kqchi(izp)*ptr%dqlocdr(:, :, iat) + dxdr_local(:, :, iat)
-         dxdL_local(:, :, iat) = self%kqchi(izp)*ptr%dqlocdL(:, :, iat) + dxdL_local(:, :, iat)
+         dtmpdr(:, :, iat) = self%kcnchi(izp)*ptr%dcndr(:, :, iat) + dtmpdr(:, :, iat)
+         dtmpdL(:, :, iat) = self%kcnchi(izp)*ptr%dcndL(:, :, iat) + dtmpdL(:, :, iat)
+         dtmpdr(:, :, iat) = self%kqchi(izp)*ptr%dqlocdr(:, :, iat) + dtmpdr(:, :, iat)
+         dtmpdL(:, :, iat) = self%kqchi(izp)*ptr%dqlocdL(:, :, iat) + dtmpdL(:, :, iat)
       end do
-      !$omp end do
-      !$omp critical (get_xvec_derivs_)
-      dtmpdr(:, :, :) = dtmpdr(:, :, :) + dxdr_local(:, :, :)
-      dtmpdL(:, :, :) = dtmpdL(:, :, :) + dxdL_local(:, :, :)
-      !$omp end critical (get_xvec_derivs_)
-      deallocate(dxdL_local, dxdr_local)
-      !$omp end parallel
 
       call gemm(dtmpdr, ptr%cmat, dxdr)
       call gemm(dtmpdL, ptr%cmat, dxdL)
 
-      !$omp parallel default(none) &
+      !$omp parallel do default(none) schedule(runtime) &
       !$omp shared(mol, self, ptr, dxdr) &
-      !$omp private(iat, izp, dxdr_local)
-      allocate(dxdr_local(3, mol%nat, mol%nat+1), source=0.0_wp)
-      !$omp do schedule(runtime)
+      !$omp private(iat, izp, tmp)
       do iat = 1, mol%nat
+         tmp = 0.0_wp 
          do jat = 1, mol%nat
-            dxdr_local(:, iat, iat) = ptr%xtmp(jat)*ptr%dcdr(:, iat, jat) + dxdr_local(:, iat, iat)
-            dxdr_local(:, iat, jat) = (ptr%xtmp(iat) - ptr%xtmp(jat))*ptr%dcdr(:, iat, jat) &
-               & + dxdr_local(:, iat, jat)
+            ! Diagonal elements
+            tmp(:) = tmp(:) + ptr%xtmp(jat)*ptr%dcdr(:, iat, jat) 
+            ! Derivative of capacitance matrix
+            dxdr(:, iat, jat) = (ptr%xtmp(iat) - ptr%xtmp(jat))*ptr%dcdr(:, iat, jat) &
+               & + dxdr(:, iat, jat)
          end do
+         dxdr(:, iat, iat) = dxdr(:, iat, iat) + tmp(:)
       end do
-      !$omp end do
-      !$omp critical (get_xvec_derivs_)
-      dxdr(:, :, :) = dxdr(:, :, :) + dxdr_local(:, :, :)
-      !$omp end critical (get_xvec_derivs_)
-      deallocate(dxdr_local)
-      !$omp end parallel
 
    end subroutine get_xvec_derivs
 

@@ -159,33 +159,20 @@ contains
 
       type(eeq_cache), pointer :: ptr
 
-      ! Thread-private arrays for reduction
-      real(wp), allocatable :: dxdr_local(:, :, :), dxdL_local(:, :, :)
-
       call view(cache, ptr)
 
       dxdr(:, :, :) = 0.0_wp
       dxdL(:, :, :) = 0.0_wp
 
-      !$omp parallel default(none) &
+      !$omp parallel do default(none) schedule(runtime) &
       !$omp shared(mol, self, ptr, dxdr, dxdL) &
-      !$omp private(iat, izp, tmp, dxdr_local, dxdL_local)
-      allocate(dxdr_local, source=dxdr)
-      allocate(dxdL_local, source=dxdL)
-      !$omp do schedule(runtime)
+      !$omp private(iat, izp, tmp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
          tmp = self%kcnchi(izp)/sqrt(ptr%cn(iat) + reg)
-         dxdr_local(:, :, iat) = 0.5_wp*tmp*ptr%dcndr(:, :, iat) + dxdr_local(:, :, iat)
-         dxdL_local(:, :, iat) = 0.5_wp*tmp*ptr%dcndL(:, :, iat) + dxdL_local(:, :, iat)
+         dxdr(:, :, iat) = 0.5_wp*tmp*ptr%dcndr(:, :, iat) + dxdr(:, :, iat)
+         dxdL(:, :, iat) = 0.5_wp*tmp*ptr%dcndL(:, :, iat) + dxdL(:, :, iat)
       end do
-      !$omp end do
-      !$omp critical (get_xvec_derivs_)
-      dxdr(:, :, :) = dxdr(:, :, :) + dxdr_local(:, :, :)
-      dxdL(:, :, :) = dxdL(:, :, :) + dxdL_local(:, :, :)
-      !$omp end critical (get_xvec_derivs_)
-      deallocate(dxdL_local, dxdr_local)
-      !$omp end parallel
 
    end subroutine get_xvec_derivs
 
