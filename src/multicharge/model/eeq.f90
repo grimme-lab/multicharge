@@ -163,6 +163,7 @@ contains
 
       integer :: iat, izp
       real(wp) :: tmp
+      real(wp), allocatable :: dtrans(:, :), cn(:), dcndr(:, :, :), dcndL(:, :, :)
 
       type(eeq_cache), pointer :: ptr
 
@@ -171,15 +172,32 @@ contains
       dxdr(:, :, :) = 0.0_wp
       dxdL(:, :, :) = 0.0_wp
 
-      !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(mol, self, ptr, dxdr, dxdL) &
-      !$omp private(iat, izp, tmp)
-      do iat = 1, mol%nat
-         izp = mol%id(iat)
-         tmp = self%kcnchi(izp)/sqrt(ptr%cn(iat) + reg)
-         dxdr(:, :, iat) = 0.5_wp*tmp*ptr%dcndr(:, :, iat) + dxdr(:, :, iat)
-         dxdL(:, :, iat) = 0.5_wp*tmp*ptr%dcndL(:, :, iat) + dxdL(:, :, iat)
-      end do
+      ! NOTE: just remove the mol%periodic branch to restore
+      if (any(mol%periodic)) then
+         !$omp parallel do default(none) schedule(runtime) &
+         !$omp shared(mol, self, ptr, dxdr, dxdL, dtrans, cn) &
+         !$omp private(iat, izp, tmp, wsw)
+         do iat = 1, mol%nat
+            izp = mol%id(iat)
+            wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
+            do img = 1, wsc%nimg(jat, iat)
+               call self%ncoord%get_coordination_number(mol, wsc%trans(:, wsc%tridx(img, jat, iat)), cn, dcndr, dcndL)
+               tmp = self%kcnchi(izp)/sqrt(cn(iat) + reg)
+               dxdr(:, :, iat) = 0.5_wp*tmp*dcndr(:, :, iat)*wsw + dxdr(:, :, iat)
+               dxdL(:, :, iat) = 0.5_wp*tmp*dcndL(:, :, iat)*wsw + dxdL(:, :, iat)
+            end do
+         end do
+      else
+         !$omp parallel do default(none) schedule(runtime) &
+         !$omp shared(mol, self, ptr, dxdr, dxdL) &
+         !$omp private(iat, izp, tmp)
+         do iat = 1, mol%nat
+            izp = mol%id(iat)
+            tmp = self%kcnchi(izp)/sqrt(ptr%cn(iat) + reg)
+            dxdr(:, :, iat) = 0.5_wp*tmp*ptr%dcndr(:, :, iat) + dxdr(:, :, iat)
+            dxdL(:, :, iat) = 0.5_wp*tmp*ptr%dcndL(:, :, iat) + dxdL(:, :, iat)
+         end do
+      end if
    end subroutine get_xvec_derivs
 
    subroutine get_coulomb_matrix(self, mol, cache, amat)
