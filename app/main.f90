@@ -117,6 +117,10 @@ program main
    call model%solve(mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
       & energy, gradient, sigma, qvec, dqdr, dqdL)
    ! TODO: write_ascii for dqdr, dqdL
+   if (allocated(error)) then
+      write(error_unit, '(a)') error%message
+      error stop
+   end if
 
    call write_ascii_properties(output_unit, mol, model, cn, qvec)
    call write_ascii_results(output_unit, mol, energy, gradient, sigma)
