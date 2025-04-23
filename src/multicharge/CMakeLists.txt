@@ -21,6 +21,7 @@ set(dir "${CMAKE_CURRENT_SOURCE_DIR}")
 list(
   APPEND srcs
   "${dir}/blas.F90"
+  "${dir}/charge.f90"
   "${dir}/ewald.f90"
   "${dir}/lapack.F90"
   "${dir}/model.f90"

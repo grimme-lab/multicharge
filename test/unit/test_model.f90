@@ -25,6 +25,7 @@ module test_model
    use multicharge_param, only: new_eeq2019_model, new_eeqbc2024_model
    use multicharge_model_cache, only: cache_container
    use multicharge_blas, only: gemv
+   use multicharge_charge, only: get_charges, get_eeq_charges, get_eeqbc_charges
    implicit none
    private
 
@@ -830,10 +831,40 @@ contains
          &-3.73300836681036E-1_wp, 3.84585142200261E-2_wp, -5.05851076468890E-1_wp, &
          & 5.17677178773158E-1_wp]
 
+      real(wp), allocatable :: qvec(:)
+
       call get_structure(mol, "MB16-43", "01")
       call new_eeq2019_model(mol, model, error)
       if (allocated(error)) return
       call gen_test(error, mol, model, qref=ref)
+      if (allocated(error)) return
+
+      ! Check wrapper functions
+      allocate (qvec(mol%nat), source = 0.0_wp)
+      call get_charges(model, mol, error, qvec)
+      if (allocated(error)) return
+
+      if (any(abs(qvec - ref) > thr)) then
+         call test_failed(error, "Partial charges do not match")
+         print'(a)', "Charges:"
+         print'(3es21.14)', qvec
+         print'(a)', "diff:"
+         print'(3es21.14)', qvec - ref
+      end if
+      if (allocated(error)) return
+
+      qvec = 0.0_wp 
+      call get_eeq_charges(mol, error, qvec)
+      if (allocated(error)) return
+
+      if (any(abs(qvec - ref) > thr)) then
+         call test_failed(error, "Partial charges do not match")
+         print'(a)', "Charges:"
+         print'(3es21.14)', qvec
+         print'(a)', "diff:"
+         print'(3es21.14)', qvec - ref
+      end if
+      if (allocated(error)) return
 
    end subroutine test_eeq_q_mb01
 
@@ -1295,10 +1326,39 @@ contains
          &-1.44595425453640E-2_wp, 2.57782082780412E-1_wp, -1.11777579535162E-1_wp, &
          & 4.83486124588080E-1_wp]
 
+      real(wp), allocatable :: qvec(:)
+
       call get_structure(mol, "MB16-43", "01")
       call new_eeqbc2024_model(mol, model, error)
       if (allocated(error)) return
       call gen_test(error, mol, model, qref=ref)
+
+      ! Check wrapper functions
+      allocate (qvec(mol%nat), source = 0.0_wp)
+      call get_charges(model, mol, error, qvec)
+      if (allocated(error)) return
+
+      if (any(abs(qvec - ref) > thr)) then
+         call test_failed(error, "Partial charges do not match")
+         print'(a)', "Charges:"
+         print'(3es21.14)', qvec
+         print'(a)', "diff:"
+         print'(3es21.14)', qvec - ref
+      end if
+      if (allocated(error)) return
+
+      qvec = 0.0_wp 
+      call get_eeqbc_charges(mol, error, qvec)
+      if (allocated(error)) return
+
+      if (any(abs(qvec - ref) > thr)) then
+         call test_failed(error, "Partial charges do not match")
+         print'(a)', "Charges:"
+         print'(3es21.14)', qvec
+         print'(a)', "diff:"
+         print'(3es21.14)', qvec - ref
+      end if
+      if (allocated(error)) return
 
    end subroutine test_eeqbc_q_mb01
 
