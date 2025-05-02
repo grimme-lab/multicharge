@@ -22,7 +22,7 @@ module multicharge_model_eeq
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
    use mctc_io_math, only: matdet_3x3
-   use mctc_ncoord, only: new_ncoord
+   use mctc_ncoord, only: new_ncoord, cn_count
    use multicharge_wignerseitz, only: wignerseitz_cell_type, new_wignerseitz_cell
    use multicharge_ewald, only: get_alpha
    use multicharge_model_type, only: mchrg_model_type, get_dir_trans, get_rec_trans
@@ -99,7 +99,7 @@ contains
          self%dielectric = 1.0_wp
       end if
 
-      call new_ncoord(self%ncoord, mol, "erf", cutoff=cutoff, kcn=cn_exp, &
+      call new_ncoord(self%ncoord, mol, cn_count%erf, cutoff=cutoff, kcn=cn_exp, &
          & rcov=rcov, cut=cn_max)
 
    end subroutine new_eeq_model
@@ -124,6 +124,12 @@ contains
       if (present(dcndr) .and. present(dcndL)) then
          ptr%dcndr = dcndr
          ptr%dcndL = dcndL
+      end if
+
+      if (any(mol%periodic)) then
+         ! Create WSC
+         call new_wignerseitz_cell(ptr%wsc, mol)
+         call get_alpha(mol%lattice, ptr%alpha)
       end if
 
    end subroutine update
@@ -163,7 +169,6 @@ contains
 
       integer :: iat, izp
       real(wp) :: tmp
-      real(wp), allocatable :: dtrans(:, :), cn(:), dcndr(:, :, :), dcndL(:, :, :)
 
       type(eeq_cache), pointer :: ptr
 
@@ -172,32 +177,15 @@ contains
       dxdr(:, :, :) = 0.0_wp
       dxdL(:, :, :) = 0.0_wp
 
-      ! NOTE: just remove the mol%periodic branch to restore
-      if (any(mol%periodic)) then
-         !$omp parallel do default(none) schedule(runtime) &
-         !$omp shared(mol, self, ptr, dxdr, dxdL, dtrans, cn) &
-         !$omp private(iat, izp, tmp, wsw)
-         do iat = 1, mol%nat
-            izp = mol%id(iat)
-            wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
-            do img = 1, wsc%nimg(jat, iat)
-               call self%ncoord%get_coordination_number(mol, wsc%trans(:, wsc%tridx(img, jat, iat)), cn, dcndr, dcndL)
-               tmp = self%kcnchi(izp)/sqrt(cn(iat) + reg)
-               dxdr(:, :, iat) = 0.5_wp*tmp*dcndr(:, :, iat)*wsw + dxdr(:, :, iat)
-               dxdL(:, :, iat) = 0.5_wp*tmp*dcndL(:, :, iat)*wsw + dxdL(:, :, iat)
-            end do
-         end do
-      else
-         !$omp parallel do default(none) schedule(runtime) &
-         !$omp shared(mol, self, ptr, dxdr, dxdL) &
-         !$omp private(iat, izp, tmp)
-         do iat = 1, mol%nat
-            izp = mol%id(iat)
-            tmp = self%kcnchi(izp)/sqrt(ptr%cn(iat) + reg)
-            dxdr(:, :, iat) = 0.5_wp*tmp*ptr%dcndr(:, :, iat) + dxdr(:, :, iat)
-            dxdL(:, :, iat) = 0.5_wp*tmp*ptr%dcndL(:, :, iat) + dxdL(:, :, iat)
-         end do
-      end if
+      !$omp parallel do default(none) schedule(runtime) &
+      !$omp shared(mol, self, ptr, dxdr, dxdL) &
+      !$omp private(iat, izp, tmp)
+      do iat = 1, mol%nat
+         izp = mol%id(iat)
+         tmp = self%kcnchi(izp)/sqrt(ptr%cn(iat) + reg)
+         dxdr(:, :, iat) = 0.5_wp*tmp*ptr%dcndr(:, :, iat) + dxdr(:, :, iat)
+         dxdL(:, :, iat) = 0.5_wp*tmp*ptr%dcndL(:, :, iat) + dxdL(:, :, iat)
+      end do
    end subroutine get_xvec_derivs
 
    subroutine get_coulomb_matrix(self, mol, cache, amat)

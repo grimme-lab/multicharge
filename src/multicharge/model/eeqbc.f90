@@ -26,7 +26,7 @@ module multicharge_model_eeqbc
    use mctc_io_constants, only: pi
    use mctc_io_convert, only: autoaa
    use mctc_io_math, only: matdet_3x3
-   use mctc_ncoord, only: new_ncoord
+   use mctc_ncoord, only: new_ncoord, cn_count
    use multicharge_wignerseitz, only: new_wignerseitz_cell, wignerseitz_cell_type
    use multicharge_model_type, only: mchrg_model_type, get_dir_trans, get_rec_trans
    use multicharge_blas, only: gemv, gemm
@@ -178,10 +178,10 @@ contains
       end if
 
       ! Coordination number
-      call new_ncoord(self%ncoord, mol, "erf", cutoff=cutoff, kcn=cn_exp, &
+      call new_ncoord(self%ncoord, mol, cn_count%erf, cutoff=cutoff, kcn=cn_exp, &
          & rcov=rcov, cut=cn_max, norm_exp=self%norm_exp)
       ! Electronegativity weighted coordination number for local charge
-      call new_ncoord(self%ncoord_en, mol, "erf_en", cutoff=cutoff, kcn=cn_exp, &
+      call new_ncoord(self%ncoord_en, mol, cn_count%erf_en, cutoff=cutoff, kcn=cn_exp, &
          & rcov=rcov, en=en, cut=cn_max, norm_exp=self%norm_exp)
 
    end subroutine new_eeqbc_model
@@ -261,9 +261,13 @@ contains
 
       type(eeqbc_cache), pointer :: ptr
 
-      integer :: iat, izp
+      integer :: iat, izp, img
+      real(wp) :: ctmp, vec(3), rvdw, capi, wsw
+      real(wp), allocatable :: dtrans(:, :)
 
       call view(cache, ptr)
+
+      call get_dir_trans(mol%lattice, dtrans)
 
       !$omp parallel do default(none) schedule(runtime) &
       !$omp shared(mol, self, ptr) private(iat, izp)
@@ -275,6 +279,25 @@ contains
       ptr%xtmp(mol%nat + 1) = mol%charge
 
       call gemv(ptr%cmat, ptr%xtmp, xvec)
+
+      if (any(mol%periodic)) then
+         !$omp parallel do default(none) schedule(runtime) &
+         !$omp shared(mol, self, ptr, xvec, dtrans) private(iat, izp, img, wsw) &
+         !$omp private(capi, vec, rvdw, ctmp)
+         do iat = 1, mol%nat
+            izp = mol%id(iat)
+            capi = self%cap(izp)
+            ! eliminate self-interaction (quasi off-diagonal)
+            rvdw = self%rvdw(iat, iat)
+            wsw = 1.0_wp/real(ptr%wsc%nimg(iat, iat), wp)
+            do img = 1, ptr%wsc%nimg(iat, iat)
+               vec = ptr%wsc%trans(:, ptr%wsc%tridx(img, iat, iat))
+
+               call get_cpair_dir(self%kbc, vec, dtrans, rvdw, capi, capi, ctmp)
+               xvec(iat) = xvec(iat) - wsw*ctmp*ptr%xtmp(iat)
+            end do
+         end do
+      end if
    end subroutine get_xvec
 
    subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
@@ -334,7 +357,7 @@ contains
       call view(cache, ptr)
 
       if (any(mol%periodic)) then
-         call self%get_amat_3d(mol, ptr%wsc, ptr%cn, ptr%qloc, amat)
+         call self%get_amat_3d(mol, ptr%wsc, ptr%cn, ptr%qloc, ptr%cmat, amat)
       else
          call self%get_amat_0d(mol, ptr%cn, ptr%qloc, ptr%cmat, amat)
       end if
@@ -388,11 +411,11 @@ contains
 
    end subroutine get_amat_0d
 
-   subroutine get_amat_3d(self, mol, wsc, cn, qloc, amat)
+   subroutine get_amat_3d(self, mol, wsc, cn, qloc, cmat, amat)
       class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
       type(wignerseitz_cell_type), intent(in) :: wsc
-      real(wp), intent(in) :: cn(:), qloc(:)
+      real(wp), intent(in) :: cn(:), qloc(:), cmat(:, :)
       real(wp), intent(out) :: amat(:, :)
 
       integer :: iat, jat, izp, jzp, img
@@ -404,7 +427,7 @@ contains
       amat(:, :) = 0.0_wp
       !$omp parallel do default(none) schedule(runtime) &
       !$omp reduction(+:amat) shared(mol, self, dtrans, wsc) &
-      !$omp shared(cn, qloc) &
+      !$omp shared(cn, qloc, cmat) &
       !$omp private(iat, izp, jat, jzp, gam, vec, dtmp, ctmp, norm_cn) &
       !$omp private(radi, radj, capi, capj, rvdw, r1, wsw)
       do iat = 1, mol%nat
@@ -433,7 +456,6 @@ contains
          end do
 
          ! WSC image contributions
-         ! TODO: self-interaction for cmat yes/no? also how to handle self-interaction here and below?
          gam = 1.0_wp/sqrt(2.0_wp*self%rad(izp)**2)
          rvdw = self%rvdw(iat, iat)
          wsw = 1.0_wp/real(wsc%nimg(iat, iat), wp)
@@ -444,24 +466,8 @@ contains
          end do
 
          ! Effective hardness
-         ! (Term for T=0)
          dtmp = self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi
-         do jat = 1, mol%nat
-            if (iat .eq. jat) cycle
-            jzp = mol%id(jat)
-            ! vdw distance in Angstrom (approximate factor 2)
-            rvdw = self%rvdw(iat, jat)
-            ! Effective charge width of j
-            capj = self%cap(jzp)
-            wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
-            do img = 1, wsc%nimg(jat, iat)
-               vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
-               r1 = norm2(vec)
-               call get_cpair_dir(self%kbc, vec, dtrans, rvdw, capi, capj, ctmp)
-               amat(iat, iat) = amat(iat, iat) + ctmp*dtmp*wsw
-            end do
-         end do
-         amat(iat, iat) = amat(iat, iat) + 1.0_wp
+         amat(iat, iat) = amat(iat, iat) + 1.0_wp + cmat(iat, iat)*dtmp
       end do
 
       amat(mol%nat + 1, 1:mol%nat + 1) = 1.0_wp
@@ -952,7 +958,7 @@ contains
          do img = 1, wsc%nimg(iat, iat)
             vec = wsc%trans(:, wsc%tridx(img, iat, iat))
             call get_cpair_dir(self%kbc, vec, dtrans, rvdw, capi, capi, tmp)
-            cmat(iat, iat) = cmat(iat, iat) - tmp*wsw
+            cmat(iat, iat) = cmat(iat, iat) + tmp*wsw
          end do
       end do
       cmat(mol%nat + 1, mol%nat + 1) = 1.0_wp
