@@ -23,10 +23,10 @@ module multicharge_version
 
 
    !> String representation of the multicharge version
-   character(len=*), parameter :: multicharge_version_string = "0.3.1"
+   character(len=*), parameter :: multicharge_version_string = "0.4.0"
 
    !> Numeric representation of the multicharge version
-   integer, parameter :: multicharge_version_compact(3) = [0, 3, 1]
+   integer, parameter :: multicharge_version_compact(3) = [0, 4, 0]
 
 
 contains

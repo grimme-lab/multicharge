@@ -86,7 +86,7 @@ contains
          allocate (qvec(mol%nat))
       end if
 
-      call model%solve(mol, cn, qloc, energy=energy, qvec=qvec)
+      call model%solve(mol, error, cn, qloc, energy=energy, qvec=qvec)
       if (allocated(error)) return
 
       if (present(qref)) then
@@ -151,7 +151,7 @@ contains
             mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
-            call model%solve(mol, cn, qloc, energy=energy)
+            call model%solve(mol, error, cn, qloc, energy=energy)
             if (allocated(error)) exit lp
             er = sum(energy)
 
@@ -159,7 +159,7 @@ contains
             mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
-            call model%solve(mol, cn, qloc, energy=energy)
+            call model%solve(mol, error, cn, qloc, energy=energy)
             if (allocated(error)) exit lp
             el = sum(energy)
 
@@ -173,7 +173,8 @@ contains
       call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
       energy(:) = 0.0_wp
-      call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, energy, gradient, sigma)
+      call model%solve(mol, error, cn, qloc, dcndr, dcndL, &
+         & dqlocdr, dqlocdL, energy, gradient, sigma)
       if (allocated(error)) return
 
       if (any(abs(gradient(:, :) - numgrad(:, :)) > thr2)) then
@@ -225,7 +226,7 @@ contains
             lattr(:, :) = matmul(eps, trans)
             call model%ncoord%get_coordination_number(mol, lattr, cn)
             call model%local_charge(mol, trans, qloc)
-            call model%solve(mol, cn, qloc, energy=energy)
+            call model%solve(mol, error, cn, qloc, energy=energy)
             if (allocated(error)) exit lp
             er = sum(energy)
 
@@ -236,7 +237,7 @@ contains
             lattr(:, :) = matmul(eps, trans)
             call model%ncoord%get_coordination_number(mol, lattr, cn)
             call model%local_charge(mol, trans, qloc)
-            call model%solve(mol, cn, qloc, energy=energy)
+            call model%solve(mol, error, cn, qloc, energy=energy)
             if (allocated(error)) exit lp
             el = sum(energy)
 
@@ -253,7 +254,8 @@ contains
       call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
       energy(:) = 0.0_wp
-      call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, energy, gradient, sigma)
+      call model%solve(mol, error, cn, qloc, dcndr, dcndL, &
+         & dqlocdr, dqlocdL, energy, gradient, sigma)
       if (allocated(error)) return
 
       if (any(abs(sigma(:, :) - numsigma(:, :)) > thr2)) then
@@ -293,13 +295,13 @@ contains
             mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
-            call model%solve(mol, cn, qloc, qvec=qr)
+            call model%solve(mol, error, cn, qloc, qvec=qr)
             if (allocated(error)) exit lp
 
             mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
-            call model%solve(mol, cn, qloc, qvec=ql)
+            call model%solve(mol, error, cn, qloc, qvec=ql)
             if (allocated(error)) exit lp
 
             mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
@@ -311,7 +313,7 @@ contains
       call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
       call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
-      call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, dqdr=dqdr, dqdL=dqdL)
+      call model%solve(mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, dqdr=dqdr, dqdL=dqdL)
       if (allocated(error)) return
 
       if (any(abs(dqdr(:, :, :) - numdr(:, :, :)) > thr2)) then
@@ -360,7 +362,7 @@ contains
             lattr(:, :) = matmul(eps, trans)
             call model%ncoord%get_coordination_number(mol, lattr, cn)
             call model%local_charge(mol, trans, qloc)
-            call model%solve(mol, cn, qloc, qvec=qr)
+            call model%solve(mol, error, cn, qloc, qvec=qr)
             if (allocated(error)) exit lp
 
             eps(jc, ic) = eps(jc, ic) - 2*step
@@ -369,7 +371,7 @@ contains
             lattr(:, :) = matmul(eps, trans)
             call model%ncoord%get_coordination_number(mol, lattr, cn)
             call model%local_charge(mol, trans, qloc)
-            call model%solve(mol, cn, qloc, qvec=ql)
+            call model%solve(mol, error, cn, qloc, qvec=ql)
             if (allocated(error)) exit lp
 
             eps(jc, ic) = eps(jc, ic) + step
@@ -384,7 +386,8 @@ contains
       call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
       call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
-      call model%solve(mol, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, dqdr=dqdr, dqdL=dqdL)
+      call model%solve(mol, error, cn, qloc, dcndr, dcndL, &
+         & dqlocdr, dqlocdL, dqdr=dqdr, dqdL=dqdL)
       if (allocated(error)) return
 
       if (any(abs(dqdL(:, :, :) - numdL(:, :, :)) > thr2)) then
@@ -417,7 +420,8 @@ contains
          &-4.65527691475100E-1_wp]
 
       call get_structure(mol, "X23", "cyanamide")
-      call new_eeq2019_model(mol, model)
+      call new_eeq2019_model(mol, model, error)
+      if (allocated(error)) return
       call gen_test(error, mol, model, qref=ref)
 
    end subroutine test_q_cyanamide
@@ -440,7 +444,8 @@ contains
          &-6.31059677948463E-1_wp, -6.31085206912995E-1_wp, -6.31081747027041E-1_wp]
 
       call get_structure(mol, "X23", "formamide")
-      call new_eeq2019_model(mol, model)
+      call new_eeq2019_model(mol, model, error)
+      if (allocated(error)) return
       call gen_test(error, mol, model, eref=ref)
 
    end subroutine test_e_formamide
@@ -454,7 +459,8 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "X23", "CO2")
-      call new_eeq2019_model(mol, model)
+      call new_eeq2019_model(mol, model, error)
+      if (allocated(error)) return
       call test_numgrad(error, mol, model)
 
    end subroutine test_g_co2
@@ -468,7 +474,8 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "ICE10", "vi")
-      call new_eeq2019_model(mol, model)
+      call new_eeq2019_model(mol, model, error)
+      if (allocated(error)) return
       call test_numsigma(error, mol, model)
 
    end subroutine test_s_ice
@@ -482,7 +489,8 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "X23", "urea")
-      call new_eeq2019_model(mol, model)
+      call new_eeq2019_model(mol, model, error)
+      if (allocated(error)) return
       call test_numdqdr(error, mol, model)
 
    end subroutine test_dqdr_urea
@@ -496,7 +504,8 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "X23", "oxacb")
-      call new_eeq2019_model(mol, model)
+      call new_eeq2019_model(mol, model, error)
+      if (allocated(error)) return
       call test_numdqdL(error, mol, model)
 
    end subroutine test_dqdL_oxacb

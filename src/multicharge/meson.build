@@ -18,6 +18,7 @@ subdir('param')
 
 srcs += files(
   'blas.F90',
+  'charge.f90',
   'ewald.f90',
   'lapack.F90',
   'model.f90',

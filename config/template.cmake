@@ -13,7 +13,7 @@ if(NOT TARGET "@PROJECT_NAME@::@PROJECT_NAME@")
   endif()
 
   if(NOT TARGET "LAPACK::LAPACK")
-    find_dependency("LAPACK")
+    find_dependency("custom-lapack")
   endif()
 
   if(NOT TARGET "mctc-lib::mctc-lib")
