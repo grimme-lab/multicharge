@@ -800,14 +800,20 @@ contains
                dadL_local(:, :, jat) = +dgam*qvec(iat)*dgamdL(:, :) + dadL_local(:, :, jat)
                dadL_local(:, :, iat) = +dgam*qvec(jat)*dgamdL(:, :) + dadL_local(:, :, iat)
 
+               call get_damat_dc_dir(vec, dtrans, capi, capj, rvdw, self%kbc, gam, dG, dS)
+               dG = dG*wsw
+               dS = dS*wsw
+
                ! Capacitance derivative off-diagonal
                ! potentially switch indices for dcdr (now this means reversing signs)
-               atrace_local(:, iat) = -dc*qvec(jat)*dGc(:) + atrace_local(:, iat)
-               atrace_local(:, jat) = +dc*qvec(iat)*dGc(:) + atrace_local(:, jat) ! reverse sign
-               dadr_local(:, jat, iat) = +dc*qvec(jat)*dGc(:) + dadr_local(:, jat, iat)
-               dadr_local(:, iat, jat) = -dc*qvec(iat)*dGc(:) + dadr_local(:, iat, jat) ! reverse sign
-               dadL_local(:, :, jat) = +dc*qvec(iat)*dSc(:, :) + dadL_local(:, :, jat)
-               dadL_local(:, :, iat) = +dc*qvec(jat)*dSc(:, :) + dadL_local(:, :, iat)
+               atrace_local(:, iat) = -qvec(jat)*dG(:) + atrace_local(:, iat)
+               atrace_local(:, jat) = +qvec(iat)*dG(:) + atrace_local(:, jat) ! reverse sign
+               dadr_local(:, jat, iat) = +qvec(jat)*dG(:) + dadr_local(:, jat, iat)
+               dadr_local(:, iat, jat) = -qvec(iat)*dG(:) + dadr_local(:, iat, jat) ! reverse sign
+               dadL_local(:, :, jat) = +qvec(iat)*dS(:, :) + dadL_local(:, :, jat)
+               dadL_local(:, :, iat) = +qvec(jat)*dS(:, :) + dadL_local(:, :, iat)
+
+               ! ---- questionable start ----
 
                ! Capacitance derivative diagonal
                dtmp = (self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi)*qvec(iat)
@@ -815,10 +821,7 @@ contains
                dtmp = (self%eta(jzp) + self%kqeta(jzp)*qloc(jat) + sqrt2pi/radj)*qvec(jat)
                dadr_local(:, iat, jat) = +dtmp*dGc(:) + dadr_local(:, iat, jat) ! reverse sign because dcdr(i, j) = -dcdr(j, i)
             end do
-
          end do
-
-         ! ---- questionable start ----
 
          ! Diagonal image contributions
          rvdw = self%rvdw(iat, jat)
@@ -962,6 +965,32 @@ contains
       end do
 
    end subroutine get_damat_dir
+
+   subroutine get_damat_dc_dir(rij, trans, capi, capj, rvdw, kbc, gam, dG, dS)
+      real(wp), intent(in) :: rij(3)
+      real(wp), intent(in) :: trans(:, :)
+      real(wp), intent(in) :: gam
+      real(wp), intent(in) :: capi, capj, rvdw, kbc
+      real(wp), intent(out) :: dG(3)
+      real(wp), intent(out) :: dS(3, 3)
+
+      integer :: itr
+      real(wp) :: vec(3), r1, gtmp, stmp, tmp
+
+      dG(:) = 0.0_wp
+      dS(:, :) = 0.0_wp
+
+      do itr = 1, size(trans, 2)
+         vec(:) = rij(:) + trans(:, itr)
+         r1 = norm2(vec)
+         if (r1 < eps) cycle
+         call get_dcpair(kbc, vec, rvdw, capi, capj, gtmp, stmp)
+         tmp = erf(gam*r1)/r1
+         dG(:) = dG(:) + tmp*gtmp
+         dS(:) = dS(:, :) + tmp*stmp
+      end do
+
+   end subroutine get_damat_dc_dir
 
    subroutine get_cmat_0d(self, mol, cmat)
       class(eeqbc_model), intent(in) :: self
