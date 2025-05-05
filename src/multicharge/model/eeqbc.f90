@@ -307,13 +307,15 @@ contains
 
       integer :: iat, izp, jat
       real(wp) :: tmp(3)
-      real(wp), allocatable :: dtmpdr(:, :, :), dtmpdL(:, :, :)
+      real(wp), allocatable :: dtmpdr(:, :, :), dtmpdL(:, :, :), dtrans(:, :)
 
       ! Thread-private arrays for reduction
       real(wp), allocatable :: dxdr_local(:, :, :), dxdL_local(:, :, :)
 
       call view(cache, ptr)
       allocate (dtmpdr(3, mol%nat, mol%nat + 1), dtmpdL(3, 3, mol%nat + 1))
+
+      call get_dir_trans(mol%lattice, dtrans)
 
       dxdr(:, :, :) = 0.0_wp
       dxdL(:, :, :) = 0.0_wp
@@ -334,6 +336,25 @@ contains
 
       call gemm(dtmpdr, ptr%cmat, dxdr)
       call gemm(dtmpdL, ptr%cmat, dxdL)
+
+      if (any(mol%periodic)) then
+         !$omp parallel do default(none) schedule(runtime) &
+         !$omp shared(mol, self, ptr, dtmpdr, dtrans) private(iat, izp, img, wsw) &
+         !$omp private(capi, vec, rvdw, ctmp)
+         do iat = 1, mol%nat
+            izp = mol%id(iat)
+            capi = self%cap(izp)
+            ! add quasi off-diagonal (i = j, T != 0)
+            rvdw = self%rvdw(iat, iat)
+            wsw = 1.0_wp/real(ptr%wsc%nimg(iat, iat), wp)
+            do img = 1, ptr%wsc%nimg(iat, iat)
+               vec = ptr%wsc%trans(:, ptr%wsc%tridx(img, iat, iat))
+
+               call get_cpair_dir(self%kbc, vec, dtrans, rvdw, capi, capi, ctmp)
+               dtmpdr(:, :, iat) = dtmpdr(:, :, iat) + wsw*ctmp*(self%kcnchi(izp)*ptr%dcndr(:, :, iat))
+            end do
+         end do
+      end if
 
       !$omp parallel do default(none) schedule(runtime) &
       !$omp shared(mol, self, ptr, dxdr) &
@@ -1075,25 +1096,6 @@ contains
       end do
    end subroutine get_cpair_dir
 
-   subroutine get_dcpair_3d(kbc, vec, trans, rvdw, capi, capj, dgpair, dspair)
-      real(wp), intent(in) :: vec(3), capi, capj, rvdw, kbc, trans(:, :)
-      real(wp), intent(out) :: dgpair(3)
-      real(wp), intent(out) :: dspair(3, 3)
-
-      integer :: itr
-      real(wp) :: r1, arg, dtmp
-
-      r1 = norm2(vec)
-
-      do itr = 1, size(trans, 2)
-         ! Capacitance of bond between atom i and j
-         arg = -(kbc*(r1 - rvdw)/rvdw)**2
-         dtmp = sqrt(capi*capj)*kbc*exp(arg)/(sqrtpi*rvdw)
-         dgpair = dtmp*vec/r1
-         dspair = spread(dgpair, 1, 3)*spread(vec, 2, 3)
-      end do
-   end subroutine get_dcpair_3d
-
    subroutine get_dcpair(kbc, vec, rvdw, capi, capj, dgpair, dspair)
       real(wp), intent(in) :: vec(3), capi, capj, rvdw, kbc
       real(wp), intent(out) :: dgpair(3)
@@ -1162,6 +1164,91 @@ contains
       !$omp end parallel
 
    end subroutine get_dcmat_0d
+
+   subroutine get_dcmat_3d(self, mol, dcdr, dcdL)
+      class(eeqbc_model), intent(in) :: self
+      type(structure_type), intent(in) :: mol
+      real(wp), intent(out) :: dcdr(:, :, :)
+      real(wp), intent(out) :: dcdL(:, :, :)
+
+      integer :: iat, jat, izp, jzp
+      real(wp) :: vec(3), r2, rvdw, dtmp, arg, dG(3), dS(3, 3), capi, capj
+      real(wp), allocatable :: dtrans(:, :)
+
+      ! Thread-private arrays for reduction
+      real(wp), allocatable :: dcdr_local(:, :, :), dcdL_local(:, :, :)
+
+      call get_dir_trans(mol%lattice, dtrans)
+
+      dcdr(:, :, :) = 0.0_wp
+      dcdL(:, :, :) = 0.0_wp
+
+      !$omp parallel default(none) &
+      !$omp shared(dcdr, dcdL, mol, self, dtrans) &
+      !$omp private(iat, izp, jat, jzp, r2, vec, rvdw) &
+      !$omp private(dG, dS, dtmp, arg, capi, capj) &
+      !$omp private(dcdr_local, dcdL_local)
+      allocate (dcdr_local, source=dcdr)
+      allocate (dcdL_local, source=dcdL)
+      !$omp do schedule(runtime)
+      do iat = 1, mol%nat
+         izp = mol%id(iat)
+         capi = self%cap(izp)
+         do jat = 1, iat - 1
+            jzp = mol%id(jat)
+            capj = self%cap(jzp)
+            rvdw = self%rvdw(iat, jat)
+            wsw = 1/real(wsc%nimg(jat, iat), wp)
+            do img = 1, wsc%nimg(jat, iat)
+               vec = mol%xyz(:, jat) - mol%xyz(:, iat) + wsc%trans(:, wsc%tridx(img, jat, iat))
+
+               call get_dcpair_dir(self%kbc, vec, dtrans, rvdw, capi, capj, dG, dS)
+
+               ! Negative off-diagonal elements
+               dcdr_local(:, iat, jat) = -dG*wsw + dcdr_local(:, iat, jat)
+               dcdr_local(:, jat, iat) = +dG*wsw + dcdr_local(:, jat, iat)
+               ! Positive diagonal elements
+               dcdr_local(:, iat, iat) = +dG*wsw + dcdr_local(:, iat, iat)
+               dcdr_local(:, jat, jat) = -dG*wsw + dcdr_local(:, jat, jat)
+               dcdL_local(:, :, jat) = +dS*wsw + dcdL_local(:, :, jat)
+               dcdL_local(:, :, iat) = +dS*wsw + dcdL_local(:, :, iat)
+            end do
+         end do
+         ! These contributions should be 0
+         ! rvdw = self%rvdw(iat, iat)
+         ! wsw = 1/real(wsc%nimg(iat, iat), wp)
+         ! do img = 1, wsc%nimg(iat, iat)
+         !    vec = wsc%trans(:, wsc%tridx(img, iat, iat))
+         ! end do
+      end do
+      !$omp end do
+      !$omp critical (get_dcmat_3d_)
+      dcdr(:, :, :) = dcdr(:, :, :) + dcdr_local(:, :, :)
+      dcdL(:, :, :) = dcdL(:, :, :) + dcdL_local(:, :, :)
+      !$omp end critical (get_dcmat_3d_)
+      deallocate (dcdL_local, dcdr_local)
+      !$omp end parallel
+
+   end subroutine get_dcmat_3d
+
+   subroutine get_dcpair_dir(kbc, vec, trans, rvdw, capi, capj, dgpair, dspair)
+      real(wp), intent(in) :: vec(3), capi, capj, rvdw, kbc, trans(:, :)
+      real(wp), intent(out) :: dgpair(3)
+      real(wp), intent(out) :: dspair(3, 3)
+
+      integer :: itr
+      real(wp) :: r1, arg, dtmp
+
+      r1 = norm2(vec)
+
+      do itr = 1, size(trans, 2)
+         ! Capacitance of bond between atom i and j
+         arg = -(kbc*(r1 - rvdw)/rvdw)**2
+         dtmp = sqrt(capi*capj)*kbc*exp(arg)/(sqrtpi*rvdw)
+         dgpair = dtmp*vec/r1
+         dspair = spread(dgpair, 1, 3)*spread(vec, 2, 3)
+      end do
+   end subroutine get_dcpair_dir
 
    subroutine write_2d_matrix(matrix, name, unit, step)
       implicit none
