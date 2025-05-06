@@ -18,7 +18,7 @@ project(
   'fortran',
   version: '0.4.0',
   license: 'Apache-2.0',
-  meson_version: '>=0.55',
+  meson_version: '>=0.55,!=1.8.0',
   default_options: [
     'buildtype=debugoptimized',
     'default_library=both',

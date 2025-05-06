@@ -12,7 +12,7 @@ Electronegativity equilibration model for atomic partial charges.
 
 To build this project from the source code in this repository you need to have
 a Fortran compiler supporting Fortran 2008 and one of the supported build systems:
-- [meson](https://mesonbuild.com) version 0.53 or newer, with
+- [meson](https://mesonbuild.com) version 0.53 or newer (except 1.8.0), with
   a build-system backend, *i.e.* [ninja](https://ninja-build.org) version 1.7 or newer
 - [cmake](https://cmake.org) version 3.14 or newer, with
   a build-system backend, *i.e.* [ninja](https://ninja-build.org) version 1.10 or newer
