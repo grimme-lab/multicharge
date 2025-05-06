@@ -18,12 +18,17 @@ project(
   'fortran',
   version: '0.4.0',
   license: 'Apache-2.0',
-  meson_version : ['>=0.55', '!=1.8.0'], 
+  meson_version: '>=0.55',
   default_options: [
     'buildtype=debugoptimized',
     'default_library=both',
   ],
 )
+
+if meson.version().version_compare('==1.8.0')
+  error('Meson version 1.8.0 has a known issue — please use any other version ≥ 0.55.0')
+endif
+
 install = not (meson.is_subproject() and get_option('default_library') == 'static')
 has_cc = add_languages('c', required: false, native: false)
 
