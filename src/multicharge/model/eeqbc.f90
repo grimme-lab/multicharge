@@ -232,9 +232,12 @@ contains
 
          ! Get full cmat sum over all WSC images (for get_xvec and xvec_derivs)
          call self%get_cmat_3d(mol, ptr%wsc, ptr%cmat)
-         ! if (grad) then
-         ! call self%get_dcmat_3d()
-         ! end if
+         if (grad) then
+            if (.not. allocated(ptr%dcdr) .and. .not. allocated(ptr%dcdL)) then
+               allocate (ptr%dcdr(3, mol%nat, mol%nat + 1), ptr%dcdL(3, 3, mol%nat + 1))
+            end if
+            call self%get_dcmat_3d(mol, ptr%dcdr, ptr%dcdL)
+         end if
       else
          call self%get_cmat_0d(mol, ptr%cmat)
 
@@ -724,9 +727,9 @@ contains
       real(wp), intent(out) :: atrace(:, :)
 
       integer :: iat, jat, izp, jzp, img
-      real(wp) :: vec(3), r2, gam, arg, dtmp, norm_cn, rvdw, wsw, dgam, dgamtmp, cii
-      real(wp) :: radi, radj, dradi, dradj, dG(3), dGtmp(3), dS(3, 3), dStmp(3, 3), dc, dctmp, ctmp
-      real(wp) :: dgamdL(3, 3), capi, capj, dr, drtmp, dGc(3), dSc(3, 3), dGctmp(3), dSctmp(3, 3)
+      real(wp) :: vec(3), r2, gam, arg, dtmp, norm_cn, rvdw, wsw, dgam
+      real(wp) :: radi, radj, dradi, dradj, dG(3), dS(3, 3)
+      real(wp) :: dgamdL(3, 3), capi, capj
       real(wp), allocatable :: dgamdr(:, :), dtrans(:, :)
 
       ! Thread-private arrays for reduction
@@ -742,11 +745,11 @@ contains
       dadL(:, :, :) = 0.0_wp
 
       !$omp parallel default(none) &
-      !$omp shared(self, mol, cn, qloc, qvec, wsc, dGc, dSc, dGctmp, dSctmp, dadr, dadL, atrace) &
-      !$omp shared (cmat, dcdr, dcdL, dcndr, dcndL, dqlocdr, dqlocdL, dGtmp, dStmp, dtrans) &
+      !$omp shared(self, mol, cn, qloc, qvec, wsc, dadr, dadL, atrace) &
+      !$omp shared (cmat, dcdr, dcdL, dcndr, dcndL, dqlocdr, dqlocdL, dtrans) &
       !$omp private(iat, izp, jat, jzp, img, gam, vec, r2, dtmp, norm_cn, arg, rvdw) &
       !$omp private(radi, radj, dradi, dradj, capi, capj, dgamdr, dgamdL, dG, dS, wsw) &
-      !$omp private(dgamtmp, dctmp, dgam, dc, dadr_local, dadL_local, atrace_local)
+      !$omp private(dgam, dadr_local, dadL_local, atrace_local)
       allocate (atrace_local, source=atrace)
       allocate (dadr_local, source=dadr)
       allocate (dadL_local, source=dadL)
@@ -805,102 +808,35 @@ contains
                dS = dS*wsw
 
                ! Capacitance derivative off-diagonal
-               ! potentially switch indices for dcdr (now this means reversing signs)
+               ! potentially switch indices for dcdr (now this means switching signs because dcdr(i, j) = -dcdr(j, i))
                atrace_local(:, iat) = -qvec(jat)*dG(:) + atrace_local(:, iat)
-               atrace_local(:, jat) = +qvec(iat)*dG(:) + atrace_local(:, jat) ! reverse sign
+               atrace_local(:, jat) = +qvec(iat)*dG(:) + atrace_local(:, jat) ! switch sign
                dadr_local(:, jat, iat) = +qvec(jat)*dG(:) + dadr_local(:, jat, iat)
-               dadr_local(:, iat, jat) = -qvec(iat)*dG(:) + dadr_local(:, iat, jat) ! reverse sign
+               dadr_local(:, iat, jat) = -qvec(iat)*dG(:) + dadr_local(:, iat, jat) ! switch sign
                dadL_local(:, :, jat) = +qvec(iat)*dS(:, :) + dadL_local(:, :, jat)
                dadL_local(:, :, iat) = +qvec(jat)*dS(:, :) + dadL_local(:, :, iat)
 
-               ! ---- questionable start ----
+               call get_dcpair_dir(self%kbc, vec, dtrans, rvdw, capi, capj, dG, dS)
+               dG = dG*wsw
 
                ! Capacitance derivative diagonal
                dtmp = (self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi)*qvec(iat)
-               dadr_local(:, jat, iat) = -dtmp*dGc(:) + dadr_local(:, jat, iat)
+               dadr_local(:, jat, iat) = -dtmp*dG(:) + dadr_local(:, jat, iat)
                dtmp = (self%eta(jzp) + self%kqeta(jzp)*qloc(jat) + sqrt2pi/radj)*qvec(jat)
-               dadr_local(:, iat, jat) = +dtmp*dGc(:) + dadr_local(:, iat, jat) ! reverse sign because dcdr(i, j) = -dcdr(j, i)
+               dadr_local(:, iat, jat) = +dtmp*dG(:) + dadr_local(:, iat, jat) ! switch sign
             end do
          end do
 
-         ! Diagonal image contributions
-         rvdw = self%rvdw(iat, jat)
-         ! Coulomb interaction of Gaussian charges
-         gam = 1.0_wp/sqrt(radi**2 + radi**2)
-         dgamdr(:, :) = -(radi*dradi*dcndr(:, :, iat) + radi*dradi*dcndr(:, :, iat)) &
-                       & *gam**3.0_wp
-         dgamdL(:, :) = -(radi*dradi*dcndL(:, :, iat) + radi*dradi*dcndL(:, :, iat)) &
-                       & *gam**3.0_wp
-
-         dG(:) = 0.0_wp
-         dS(:, :) = 0.0_wp
+         ! Effective charge width derivative for quasi-diagonal terms
+         dtmp = -sqrt2pi*dradi/(radi**2)*qvec(iat)
+         rvdw = self%rvdw(iat, iat)
          wsw = 1.0_wp/real(wsc%nimg(iat, iat), wp)
          do img = 1, wsc%nimg(iat, iat)
             vec = wsc%trans(:, wsc%tridx(img, iat, iat))
-
-            ! Explicit derivative
-            call get_damat_dir_3d(vec, dtrans, gam, dGtmp, dStmp, dgamtmp, dctmp)
-            dG(:) = dG(:) + dGtmp(:)*wsw
-            dS(:, :) = dS(:, :) + dStmp(:, :)*wsw
-
-            ! Effective charge width derivative
-            dgam = dgam + dgamtmp*wsw
-
-            ! Capacitance derivative off-diagonal
-            dc = dc + dctmp*wsw
-            call get_dcpair_3d(self%kbc, vec, dtrans, rvdw, capi, capi, dGctmp, dSctmp)
-            dGc(:) = dGc(:) + dGctmp(:)*wsw
-            dSc(:, :) = dSc(:, :) + dSctmp(:, :)*wsw
-         end do
-
-         ! Explicit derivative
-         atrace_local(:, iat) = +dG*qvec(jat)*cmat(iat, iat) + atrace_local(:, iat)
-         atrace_local(:, jat) = -dG*qvec(iat)*cmat(iat, iat) + atrace_local(:, jat)
-         dadr_local(:, iat, iat) = +dG*qvec(iat)*cmat(iat, iat) + dadr_local(:, iat, iat)
-         dadL_local(:, :, jat) = +dS*qvec(iat)*cmat(iat, iat) + dadL_local(:, :, jat)
-         dadL_local(:, :, iat) = +dS*qvec(jat)*cmat(iat, iat) + dadL_local(:, :, iat)
-
-         ! Effective charge width derivative
-         atrace_local(:, iat) = -dgam*qvec(jat)*dgamdr(:, jat)*cmat(iat, iat) + atrace_local(:, iat)
-         atrace_local(:, jat) = -dgam*qvec(iat)*dgamdr(:, iat)*cmat(iat, iat) + atrace_local(:, jat)
-         dadr_local(:, iat, iat) = +dgam*qvec(iat)*dgamdr(:, iat)*cmat(iat, iat) + dadr_local(:, iat, iat)
-         dadL_local(:, :, jat) = +dgam*qvec(iat)*dgamdL(:, :)*cmat(iat, iat) + dadL_local(:, :, jat)
-         dadL_local(:, :, iat) = +dgam*qvec(jat)*dgamdL(:, :)*cmat(iat, iat) + dadL_local(:, :, iat)
-
-         ! Capacitance derivative off-diagonal
-         ! potentially switch indices for dcdr (now this means reversing signs)
-         atrace_local(:, iat) = -dc*qvec(jat)*dGc(:) + atrace_local(:, iat)
-         atrace_local(:, jat) = +dc*qvec(iat)*dGc(:) + atrace_local(:, jat) ! reverse sign
-         dadr_local(:, iat, iat) = +dc*qvec(iat)*dGc(:) + dadr_local(:, iat, iat)
-         dadL_local(:, :, jat) = +dc*qvec(iat)*dSc(:, :) + dadL_local(:, :, jat)
-         dadL_local(:, :, iat) = +dc*qvec(jat)*dSc(:, :) + dadL_local(:, :, iat)
-
-         ! Capacitance derivative diagonal
-         dtmp = (self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi)*qvec(iat)
-         dadr_local(:, iat, iat) = -dtmp*dGc(:) + dadr_local(:, iat, iat)
-
-         ! ---- questionable end ----
-
-         ! Diagonal image contributions
-         ! Only charge width derivative remains
-         rvdw = self%rvdw(iat, jat)
-
-         ! Coulomb interaction of Gaussian charges
-         gam = 1.0_wp/sqrt(radi**2 + radi**2)
-         dgamdr(:, :) = -(radi*dradi*dcndr(:, :, iat) + radi*dradi*dcndr(:, :, iat)) &
-                       & *gam**3.0_wp
-         dgamdL(:, :) = -(radi*dradi*dcndL(:, :, iat) + radi*dradi*dcndL(:, :, iat)) &
-                       & *gam**3.0_wp
-
-         wsw = 1.0_wp/real(wsc%nimg(iat, iat), wp)
-         do img = 1, wsc%nimg(iat, iat)
-            vec = wsc%trans(:, wsc%tridx(img, iat, iat))
-
-            ! Explicit derivative
-            call get_damat_dir(vec, dtrans, gam, dGtmp, dStmp, dgamtmp, dctmp)
-
-            ! Effective charge width derivative
-            dgam = dgam + dgamtmp*wsw
+            call get_damat_dir(vec, dtrans, capi, capi, rvdw, self%kbc, gam, dG, dS, dgam)
+            ! atrace_local(:, iat)
+            dadr_local(:, :, iat) = +dtmp*dcndr(:, :, iat)*dgam*wsw + dadr_local(:, :, iat) ! questionable sign
+            dadL_local(:, :, iat) = +dtmp*dcndr(:, :, iat)*dgam*wsw + dadL_local(:, :, iat)
          end do
 
          ! True diagonal contributions
@@ -1255,12 +1191,6 @@ contains
                dcdL_local(:, :, iat) = +dS*wsw + dcdL_local(:, :, iat)
             end do
          end do
-         ! These contributions should be 0
-         ! rvdw = self%rvdw(iat, iat)
-         ! wsw = 1/real(wsc%nimg(iat, iat), wp)
-         ! do img = 1, wsc%nimg(iat, iat)
-         !    vec = wsc%trans(:, wsc%tridx(img, iat, iat))
-         ! end do
       end do
       !$omp end do
       !$omp critical (get_dcmat_3d_)
