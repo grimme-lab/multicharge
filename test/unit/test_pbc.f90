@@ -14,6 +14,9 @@
 ! limitations under the License.
 
 module test_pbc
+
+   use iso_fortran_env, only: output_unit
+
    use mctc_env, only: wp
    use mctc_env_testing, only: new_unittest, unittest_type, error_type, &
       & test_failed
@@ -21,7 +24,8 @@ module test_pbc
    use mctc_cutoff, only: get_lattice_points
    use mstore, only: get_structure
    use multicharge_model, only: mchrg_model_type
-   use multicharge_param, only: new_eeq2019_model
+   use multicharge_param, only: new_eeq2019_model, new_eeqbc2024_model
+   use multicharge_model_cache, only: cache_container
    implicit none
    private
 
@@ -39,12 +43,15 @@ contains
       type(unittest_type), allocatable, intent(out) :: testsuite(:)
 
       testsuite = [ &
-         & new_unittest("charges-cyanamide", test_q_cyanamide), &
-         & new_unittest("energy-formamide", test_e_formamide), &
-         & new_unittest("gradient-co2", test_g_co2), &
-         & new_unittest("sigma-ice", test_s_ice), &
-         & new_unittest("dqdr-urea", test_dqdr_urea), &
-         & new_unittest("dqdL-oxacb", test_dqdL_oxacb) &
+         & new_unittest("eeq-charges-cyanamide", test_eeq_q_cyanamide), &
+         & new_unittest("eeq-energy-formamide", test_eeq_e_formamide), &
+         & new_unittest("eeq-dbdr-co2", test_eeq_dbdr_co2), &
+         & new_unittest("eeq-gradient-co2", test_eeq_g_co2), &
+         & new_unittest("eeq-sigma-ice", test_eeq_s_ice), &
+         & new_unittest("eeq-dqdr-urea", test_eeq_dqdr_urea), &
+         & new_unittest("eeq-dqdL-oxacb", test_eeq_dqdL_oxacb), &
+         & new_unittest("eeqbc-dbdr-co2", test_eeqbc_dbdr_co2), &
+         & new_unittest("eeqbc-gradient-co2", test_eeqbc_g_co2) &
          & ]
 
    end subroutine collect_pbc
@@ -115,6 +122,50 @@ contains
       end if
 
    end subroutine gen_test
+
+   subroutine write_2d_matrix(matrix, name, unit, step)
+      implicit none
+      real(wp), intent(in) :: matrix(:, :)
+      character(len=*), intent(in), optional :: name
+      integer, intent(in), optional :: unit
+      integer, intent(in), optional :: step
+      integer :: d1, d2
+      integer :: i, j, k, l, istep, iunit
+
+      d1 = size(matrix, dim=1)
+      d2 = size(matrix, dim=2)
+
+      if (present(unit)) then
+         iunit = unit
+      else
+         iunit = output_unit
+      end if
+
+      if (present(step)) then
+         istep = step
+      else
+         istep = 6
+      end if
+
+      if (present(name)) write (iunit, '(/,"matrix printed:",1x,a)') name
+
+      do i = 1, d2, istep
+         l = min(i + istep - 1, d2)
+         write (iunit, '(/,6x)', advance='no')
+         do k = i, l
+            write (iunit, '(6x,i7,3x)', advance='no') k
+         end do
+         write (iunit, '(a)')
+         do j = 1, d1
+            write (iunit, '(i6)', advance='no') j
+            do k = i, l
+               write (iunit, '(1x,f15.8)', advance='no') matrix(j, k)
+            end do
+            write (iunit, '(a)')
+         end do
+      end do
+
+   end subroutine write_2d_matrix
 
    subroutine test_numgrad(error, mol, model)
 
@@ -264,6 +315,77 @@ contains
 
    end subroutine test_numsigma
 
+   subroutine test_dbdr(error, mol, model)
+
+      !> Molecular structure data
+      type(structure_type), intent(inout) :: mol
+
+      !> Electronegativity equilibration model
+      class(mchrg_model_type), intent(in) :: model
+
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      integer :: iat, ic
+      real(wp), parameter :: cutoff = 25.0_wp
+      real(wp), parameter :: step = 1.0e-6_wp
+      real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :), trans(:, :)
+      real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
+      real(wp), allocatable :: dbdr(:, :, :), dbdL(:, :, :)
+      real(wp), allocatable :: numgrad(:, :, :), xvecr(:), xvecl(:)
+      type(cache_container), allocatable :: cache
+      allocate (cache)
+
+      call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+
+      allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
+         & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
+         & xvecr(mol%nat + 1), xvecl(mol%nat + 1), numgrad(3, mol%nat, mol%nat + 1), &
+         & dbdr(3, mol%nat, mol%nat + 1), dbdL(3, 3, mol%nat + 1))
+
+      lp: do iat = 1, mol%nat
+         do ic = 1, 3
+            ! Right-hand side
+            xvecr(:) = 0.0_wp
+            mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
+            call model%ncoord%get_coordination_number(mol, trans, cn)
+            call model%local_charge(mol, trans, qloc)
+            call model%update(mol, cache, cn, qloc)
+            call model%get_xvec(mol, cache, xvecr)
+
+            ! Left-hand side
+            xvecl(:) = 0.0_wp
+            mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
+            call model%ncoord%get_coordination_number(mol, trans, cn)
+            call model%local_charge(mol, trans, qloc)
+            call model%update(mol, cache, cn, qloc)
+            call model%get_xvec(mol, cache, xvecl)
+
+            mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
+            numgrad(ic, iat, :) = 0.5_wp*(xvecr(:) - xvecl(:))/step
+         end do
+      end do lp
+
+      ! Analytical gradient
+      call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
+      call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
+      call model%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
+      call model%get_xvec(mol, cache, xvecl) ! need to call this for xtmp in cache (eeqbc)
+      call model%get_xvec_derivs(mol, cache, dbdr, dbdL)
+
+      if (any(abs(dbdr(:, :, :) - numgrad(:, :, :)) > thr2)) then
+         call test_failed(error, "Derivative of the b vector does not match")
+         print'(a)', "dbdr:"
+         print'(3es21.14)', dbdr
+         print'(a)', "numgrad:"
+         print'(3es21.14)', numgrad
+         print'(a)', "diff:"
+         print'(3es21.14)', dbdr - numgrad
+         call write_2d_matrix(dbdr(1, :, :) - numgrad(1, :, :))
+      end if
+
+   end subroutine test_dbdr
+
    subroutine test_numdqdr(error, mol, model)
 
       !> Molecular structure data
@@ -396,7 +518,7 @@ contains
 
    end subroutine test_numdqdL
 
-   subroutine test_q_cyanamide(error)
+   subroutine test_eeq_q_cyanamide(error)
 
       !> Error handling
       type(error_type), allocatable, intent(out) :: error
@@ -424,9 +546,9 @@ contains
       if (allocated(error)) return
       call gen_test(error, mol, model, qref=ref)
 
-   end subroutine test_q_cyanamide
+   end subroutine test_eeq_q_cyanamide
 
-   subroutine test_e_formamide(error)
+   subroutine test_eeq_e_formamide(error)
 
       !> Error handling
       type(error_type), allocatable, intent(out) :: error
@@ -448,9 +570,24 @@ contains
       if (allocated(error)) return
       call gen_test(error, mol, model, eref=ref)
 
-   end subroutine test_e_formamide
+   end subroutine test_eeq_e_formamide
 
-   subroutine test_g_co2(error)
+   subroutine test_eeq_dbdr_co2(error)
+
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      type(structure_type) :: mol
+      class(mchrg_model_type), allocatable :: model
+
+      call get_structure(mol, "X23", "CO2")
+      call new_eeq2019_model(mol, model, error)
+      if (allocated(error)) return
+      call test_dbdr(error, mol, model)
+
+   end subroutine test_eeq_dbdr_co2
+
+   subroutine test_eeq_g_co2(error)
 
       !> Error handling
       type(error_type), allocatable, intent(out) :: error
@@ -463,9 +600,9 @@ contains
       if (allocated(error)) return
       call test_numgrad(error, mol, model)
 
-   end subroutine test_g_co2
+   end subroutine test_eeq_g_co2
 
-   subroutine test_s_ice(error)
+   subroutine test_eeq_s_ice(error)
 
       !> Error handling
       type(error_type), allocatable, intent(out) :: error
@@ -478,9 +615,9 @@ contains
       if (allocated(error)) return
       call test_numsigma(error, mol, model)
 
-   end subroutine test_s_ice
+   end subroutine test_eeq_s_ice
 
-   subroutine test_dqdr_urea(error)
+   subroutine test_eeq_dqdr_urea(error)
 
       !> Error handling
       type(error_type), allocatable, intent(out) :: error
@@ -493,9 +630,9 @@ contains
       if (allocated(error)) return
       call test_numdqdr(error, mol, model)
 
-   end subroutine test_dqdr_urea
+   end subroutine test_eeq_dqdr_urea
 
-   subroutine test_dqdL_oxacb(error)
+   subroutine test_eeq_dqdL_oxacb(error)
 
       !> Error handling
       type(error_type), allocatable, intent(out) :: error
@@ -508,6 +645,36 @@ contains
       if (allocated(error)) return
       call test_numdqdL(error, mol, model)
 
-   end subroutine test_dqdL_oxacb
+   end subroutine test_eeq_dqdL_oxacb
+
+   subroutine test_eeqbc_dbdr_co2(error)
+
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      type(structure_type) :: mol
+      class(mchrg_model_type), allocatable :: model
+
+      call get_structure(mol, "X23", "CO2")
+      call new_eeqbc2024_model(mol, model, error)
+      if (allocated(error)) return
+      call test_dbdr(error, mol, model)
+
+   end subroutine test_eeqbc_dbdr_co2
+
+   subroutine test_eeqbc_g_co2(error)
+
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      type(structure_type) :: mol
+      class(mchrg_model_type), allocatable :: model
+
+      call get_structure(mol, "X23", "CO2")
+      call new_eeqbc2024_model(mol, model, error)
+      if (allocated(error)) return
+      call test_numgrad(error, mol, model)
+
+   end subroutine test_eeqbc_g_co2
 
 end module test_pbc

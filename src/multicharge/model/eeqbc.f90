@@ -90,7 +90,8 @@ module multicharge_model_eeqbc
       procedure :: get_cmat_3d
       !> Calculate constraint matrix derivatives (molecular)
       procedure :: get_dcmat_0d
-      ! procedure :: get_dcmat_3d
+      !> Calculate constraint matrix derivatives (periodic)
+      procedure :: get_dcmat_3d
    end type eeqbc_model
 
    real(wp), parameter :: sqrtpi = sqrt(pi)
@@ -236,7 +237,7 @@ contains
             if (.not. allocated(ptr%dcdr) .and. .not. allocated(ptr%dcdL)) then
                allocate (ptr%dcdr(3, mol%nat, mol%nat + 1), ptr%dcdL(3, 3, mol%nat + 1))
             end if
-            call self%get_dcmat_3d(mol, ptr%dcdr, ptr%dcdL)
+            call self%get_dcmat_3d(mol, ptr%wsc, ptr%dcdr, ptr%dcdL)
          end if
       else
          call self%get_cmat_0d(mol, ptr%cmat)
@@ -266,8 +267,6 @@ contains
 
       call view(cache, ptr)
 
-      call get_dir_trans(mol%lattice, dtrans)
-
       !$omp parallel do default(none) schedule(runtime) &
       !$omp shared(mol, self, ptr) private(iat, izp)
       do iat = 1, mol%nat
@@ -280,6 +279,7 @@ contains
       call gemv(ptr%cmat, ptr%xtmp, xvec)
 
       if (any(mol%periodic)) then
+         call get_dir_trans(mol%lattice, dtrans)
          !$omp parallel do default(none) schedule(runtime) &
          !$omp shared(mol, self, ptr, xvec, dtrans) private(iat, izp, img, wsw) &
          !$omp private(capi, vec, rvdw, ctmp)
@@ -308,8 +308,8 @@ contains
 
       type(eeqbc_cache), pointer :: ptr
 
-      integer :: iat, izp, jat
-      real(wp) :: tmp(3)
+      integer :: iat, izp, jat, img
+      real(wp) :: tmp(3), capi, wsw, vec(3), ctmp, rvdw
       real(wp), allocatable :: dtmpdr(:, :, :), dtmpdL(:, :, :), dtrans(:, :)
 
       ! Thread-private arrays for reduction
@@ -317,8 +317,6 @@ contains
 
       call view(cache, ptr)
       allocate (dtmpdr(3, mol%nat, mol%nat + 1), dtmpdL(3, 3, mol%nat + 1))
-
-      call get_dir_trans(mol%lattice, dtrans)
 
       dxdr(:, :, :) = 0.0_wp
       dxdL(:, :, :) = 0.0_wp
@@ -341,8 +339,9 @@ contains
       call gemm(dtmpdL, ptr%cmat, dxdL)
 
       if (any(mol%periodic)) then
+         call get_dir_trans(mol%lattice, dtrans)
          !$omp parallel do default(none) schedule(runtime) &
-         !$omp shared(mol, self, ptr, dtmpdr, dtrans) private(iat, izp, img, wsw) &
+         !$omp shared(mol, self, ptr, dxdr, dxdL, dtrans) private(iat, izp, img, wsw) &
          !$omp private(capi, vec, rvdw, ctmp)
          do iat = 1, mol%nat
             izp = mol%id(iat)
@@ -354,7 +353,8 @@ contains
                vec = ptr%wsc%trans(:, ptr%wsc%tridx(img, iat, iat))
 
                call get_cpair_dir(self%kbc, vec, dtrans, rvdw, capi, capi, ctmp)
-               dtmpdr(:, :, iat) = dtmpdr(:, :, iat) + wsw*ctmp*(self%kcnchi(izp)*ptr%dcndr(:, :, iat))
+               dxdr(:, :, iat) = dxdr(:, :, iat) - wsw*ctmp*(self%kcnchi(izp)*ptr%dcndr(:, :, iat))
+               ! dxdL
             end do
          end do
       end if
@@ -836,7 +836,7 @@ contains
             call get_damat_dir(vec, dtrans, capi, capi, rvdw, self%kbc, gam, dG, dS, dgam)
             ! atrace_local(:, iat)
             dadr_local(:, :, iat) = +dtmp*dcndr(:, :, iat)*dgam*wsw + dadr_local(:, :, iat) ! questionable sign
-            dadL_local(:, :, iat) = +dtmp*dcndr(:, :, iat)*dgam*wsw + dadL_local(:, :, iat)
+            dadL_local(:, :, iat) = +dtmp*dcndL(:, :, iat)*dgam*wsw + dadL_local(:, :, iat)
          end do
 
          ! True diagonal contributions
@@ -911,7 +911,7 @@ contains
       real(wp), intent(out) :: dS(3, 3)
 
       integer :: itr
-      real(wp) :: vec(3), r1, gtmp, stmp, tmp
+      real(wp) :: vec(3), r1, gtmp(3), stmp(3, 3), tmp
 
       dG(:) = 0.0_wp
       dS(:, :) = 0.0_wp
@@ -923,7 +923,7 @@ contains
          call get_dcpair(kbc, vec, rvdw, capi, capj, gtmp, stmp)
          tmp = erf(gam*r1)/r1
          dG(:) = dG(:) + tmp*gtmp
-         dS(:) = dS(:, :) + tmp*stmp
+         dS(:, :) = dS(:, :) + tmp*stmp
       end do
 
    end subroutine get_damat_dc_dir
@@ -1142,14 +1142,15 @@ contains
 
    end subroutine get_dcmat_0d
 
-   subroutine get_dcmat_3d(self, mol, dcdr, dcdL)
+   subroutine get_dcmat_3d(self, mol, wsc, dcdr, dcdL)
       class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
+      type(wignerseitz_cell_type), intent(in) :: wsc
       real(wp), intent(out) :: dcdr(:, :, :)
       real(wp), intent(out) :: dcdL(:, :, :)
 
-      integer :: iat, jat, izp, jzp
-      real(wp) :: vec(3), r2, rvdw, dtmp, arg, dG(3), dS(3, 3), capi, capj
+      integer :: iat, jat, izp, jzp, img
+      real(wp) :: vec(3), r2, rvdw, dtmp, arg, dG(3), dS(3, 3), capi, capj, wsw
       real(wp), allocatable :: dtrans(:, :)
 
       ! Thread-private arrays for reduction
@@ -1161,9 +1162,9 @@ contains
       dcdL(:, :, :) = 0.0_wp
 
       !$omp parallel default(none) &
-      !$omp shared(dcdr, dcdL, mol, self, dtrans) &
+      !$omp shared(dcdr, dcdL, mol, self, dtrans, wsc) &
       !$omp private(iat, izp, jat, jzp, r2, vec, rvdw) &
-      !$omp private(dG, dS, dtmp, arg, capi, capj) &
+      !$omp private(dG, dS, dtmp, arg, capi, capj, wsw) &
       !$omp private(dcdr_local, dcdL_local)
       allocate (dcdr_local, source=dcdr)
       allocate (dcdL_local, source=dcdL)
