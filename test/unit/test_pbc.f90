@@ -375,12 +375,11 @@ contains
 
       if (any(abs(dbdr(:, :, :) - numgrad(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the b vector does not match")
-         print'(a)', "dbdr:"
-         print'(3es21.14)', dbdr
          print'(a)', "numgrad:"
-         print'(3es21.14)', numgrad
+         call write_2d_matrix(numgrad(1, :, :))
+         print'(a)', "absdiff:"
+         print'(3es21.14)', sum(abs(dbdr(:, :, :) - numgrad(:, :, :)))
          print'(a)', "diff:"
-         print'(3es21.14)', dbdr - numgrad
          call write_2d_matrix(dbdr(1, :, :) - numgrad(1, :, :))
       end if
 

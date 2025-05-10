@@ -309,7 +309,7 @@ contains
       type(eeqbc_cache), pointer :: ptr
 
       integer :: iat, izp, jat, img
-      real(wp) :: tmp(3), capi, wsw, vec(3), ctmp, rvdw
+      real(wp) :: tmp(3), capi, wsw, vec(3), ctmp, rvdw, dG(3), dS(3, 3)
       real(wp), allocatable :: dtmpdr(:, :, :), dtmpdL(:, :, :), dtrans(:, :)
 
       ! Thread-private arrays for reduction
@@ -342,7 +342,7 @@ contains
          call get_dir_trans(mol%lattice, dtrans)
          !$omp parallel do default(none) schedule(runtime) &
          !$omp shared(mol, self, ptr, dxdr, dxdL, dtrans) private(iat, izp, img, wsw) &
-         !$omp private(capi, vec, rvdw, ctmp)
+         !$omp private(capi, vec, rvdw, ctmp, dG, dS)
          do iat = 1, mol%nat
             izp = mol%id(iat)
             capi = self%cap(izp)
@@ -491,7 +491,7 @@ contains
             gam = 1.0_wp/sqrt(radi**2 + radj**2)
             wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
             do img = 1, wsc%nimg(jat, iat)
-               vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
+               vec = mol%xyz(:, jat) - mol%xyz(:, iat) + wsc%trans(:, wsc%tridx(img, jat, iat))
                call get_amat_dir_3d(vec, gam, dtrans, self%kbc, rvdw, capi, capj, dtmp)
                amat_local(jat, iat) = amat_local(jat, iat) + dtmp*wsw
                amat_local(iat, jat) = amat_local(iat, jat) + dtmp*wsw
@@ -780,7 +780,7 @@ contains
 
             wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
             do img = 1, wsc%nimg(jat, iat)
-               vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
+               vec = mol%xyz(:, jat) - mol%xyz(:, iat) + wsc%trans(:, wsc%tridx(img, jat, iat))
 
                call get_damat_dir(vec, dtrans, capi, capj, rvdw, self%kbc, gam, dG, dS, dgam)
                dG = dG*wsw
@@ -1203,22 +1203,23 @@ contains
 
    end subroutine get_dcmat_3d
 
-   subroutine get_dcpair_dir(kbc, vec, trans, rvdw, capi, capj, dgpair, dspair)
-      real(wp), intent(in) :: vec(3), capi, capj, rvdw, kbc, trans(:, :)
+   subroutine get_dcpair_dir(kbc, rij, trans, rvdw, capi, capj, dgpair, dspair)
+      real(wp), intent(in) :: rij(3), capi, capj, rvdw, kbc, trans(:, :)
       real(wp), intent(out) :: dgpair(3)
       real(wp), intent(out) :: dspair(3, 3)
 
       integer :: itr
-      real(wp) :: r1, arg, dtmp
+      real(wp) :: r1, arg, dtmp, dgtmp(3), dstmp(3, 3), vec(3)
 
-      r1 = norm2(vec)
-
+      dgpair(:) = 0.0_wp
+      dspair(:, :) = 0.0_wp
       do itr = 1, size(trans, 2)
-         ! Capacitance of bond between atom i and j
-         arg = -(kbc*(r1 - rvdw)/rvdw)**2
-         dtmp = sqrt(capi*capj)*kbc*exp(arg)/(sqrtpi*rvdw)
-         dgpair = dtmp*vec/r1
-         dspair = spread(dgpair, 1, 3)*spread(vec, 2, 3)
+         vec(:) = rij + trans(:, itr)
+         r1 = norm2(vec)
+         if (r1 < eps) cycle
+         call get_dcpair(kbc, vec, rvdw, capi, capj, dgtmp, dstmp)
+         dgpair(:) = dgpair + dgtmp
+         dspair(:, :) = dspair + dstmp
       end do
    end subroutine get_dcpair_dir
 
