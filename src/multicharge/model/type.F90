@@ -122,8 +122,8 @@ module multicharge_model_type
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
          type(cache_container), intent(inout) :: cache
-         real(wp), intent(out) :: dxdr(:, :, :)
-         real(wp), intent(out) :: dxdL(:, :, :)
+         real(wp), intent(out), contiguous :: dxdr(:, :, :)
+         real(wp), intent(out), contiguous :: dxdL(:, :, :)
       end subroutine get_xvec_derivs
 
       !subroutine get_amat_0d(self, mol, amat, cn, qloc, cmat)

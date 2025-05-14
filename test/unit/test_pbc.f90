@@ -52,8 +52,11 @@ contains
          & new_unittest("eeq-dqdr-urea", test_eeq_dqdr_urea), &
          & new_unittest("eeq-dqdL-oxacb", test_eeq_dqdL_oxacb), &
          & new_unittest("eeqbc-dbdr-co2", test_eeqbc_dbdr_co2), &
-         & new_unittest("eeq-dadr-ice", test_eeqbc_dadr_ice), &
-         & new_unittest("eeqbc-gradient-co2", test_eeqbc_g_co2) &
+         & new_unittest("eeqbc-dadr-ice", test_eeqbc_dadr_ice), &
+         & new_unittest("eeqbc-gradient-co2", test_eeqbc_g_co2), &
+         ! & new_unittest("eeqbc-sigma-ice", test_eeqbc_s_ice), &
+         & new_unittest("eeqbc-dqdr-urea", test_eeqbc_dqdr_urea) &
+         ! & new_unittest("eeqbc-dqdL-oxacb", test_eeqbc_dqdL_oxacb) &
          & ]
 
    end subroutine collect_pbc
@@ -313,6 +316,12 @@ contains
 
       if (any(abs(sigma(:, :) - numsigma(:, :)) > thr2)) then
          call test_failed(error, "Derivative of energy does not match")
+         print'(a)', "sigma:"
+         call write_2d_matrix(sigma(:, :))
+         print'(a)', "numgrad:"
+         call write_2d_matrix(numsigma(:, :))
+         print'(a)', "diff:"
+         call write_2d_matrix(sigma(:, :) - numsigma(:, :))
       end if
 
    end subroutine test_numsigma
@@ -817,5 +826,50 @@ contains
       call test_numgrad(error, mol, model)
 
    end subroutine test_eeqbc_g_co2
+
+   subroutine test_eeqbc_s_ice(error)
+
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      type(structure_type) :: mol
+      class(mchrg_model_type), allocatable :: model
+
+      call get_structure(mol, "ICE10", "vi")
+      call new_eeqbc2024_model(mol, model, error)
+      if (allocated(error)) return
+      call test_numsigma(error, mol, model)
+
+   end subroutine test_eeqbc_s_ice
+
+   subroutine test_eeqbc_dqdr_urea(error)
+
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      type(structure_type) :: mol
+      class(mchrg_model_type), allocatable :: model
+
+      call get_structure(mol, "X23", "urea")
+      call new_eeqbc2024_model(mol, model, error)
+      if (allocated(error)) return
+      call test_numdqdr(error, mol, model)
+
+   end subroutine test_eeqbc_dqdr_urea
+
+   subroutine test_eeqbc_dqdL_oxacb(error)
+
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      type(structure_type) :: mol
+      class(mchrg_model_type), allocatable :: model
+
+      call get_structure(mol, "X23", "oxacb")
+      call new_eeqbc2024_model(mol, model, error)
+      if (allocated(error)) return
+      call test_numdqdL(error, mol, model)
+
+   end subroutine test_eeqbc_dqdL_oxacb
 
 end module test_pbc

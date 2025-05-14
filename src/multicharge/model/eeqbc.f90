@@ -303,14 +303,15 @@ contains
       class(eeqbc_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
       type(cache_container), intent(inout) :: cache
-      real(wp), intent(out) :: dxdr(:, :, :)
-      real(wp), intent(out) :: dxdL(:, :, :)
+      real(wp), intent(out), contiguous :: dxdr(:, :, :)
+      real(wp), intent(out), contiguous :: dxdL(:, :, :)
 
       type(eeqbc_cache), pointer :: ptr
 
       integer :: iat, izp, jat, img
       real(wp) :: tmp(3), capi, wsw, vec(3), ctmp, rvdw, dG(3), dS(3, 3)
-      real(wp), allocatable :: dtmpdr(:, :, :), dtmpdL(:, :, :), dtrans(:, :)
+      real(wp), allocatable :: dtmpdr(:, :, :), dtmpdL(:, :, :)
+      real(wp), allocatable :: dtrans(:, :)
 
       ! Thread-private arrays for reduction
       real(wp), allocatable :: dxdr_local(:, :, :), dxdL_local(:, :, :)
@@ -836,7 +837,7 @@ contains
          do img = 1, wsc%nimg(iat, iat)
             vec = wsc%trans(:, wsc%tridx(img, iat, iat))
             call get_damat_dir(vec, dtrans, capi, capi, rvdw, self%kbc, gam, dG, dS, dgam)
-            ! atrace_local(:, iat) =  + atrace_local(:, iat)
+            atrace_local(:, iat) = -dtmp*dcndr(:, iat, iat)*dgam*wsw + atrace_local(:, iat) ! questionable
             dadr_local(:, :, iat) = +dtmp*dcndr(:, :, iat)*dgam*wsw + dadr_local(:, :, iat) ! questionable sign
             dadL_local(:, :, iat) = +dtmp*dcndL(:, :, iat)*dgam*wsw + dadL_local(:, :, iat)
          end do

@@ -117,7 +117,7 @@ contains
       call model%ncoord%get_coordination_number(mol, trans, cn)
       call model%local_charge(mol, trans, qloc)
       call model%solve(mol, error, cn, qloc, qvec=qvec)
-      if(allocated(error)) return
+      if (allocated(error)) return
 
       numgrad = 0.0_wp
 
@@ -140,14 +140,14 @@ contains
             call model%get_coulomb_matrix(mol, cache, amatl)
 
             mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
-            
+
             do kat = 1, mol%nat
                do jat = 1, mol%nat
                   ! Numerical gradient of the A matrix
                   numgrad(ic, iat, kat) = 0.5_wp*qvec(jat)*(amatr(kat, jat) - amatl(kat, jat))/step &
-                     & + numgrad(ic, iat, kat) 
-               end do 
-            end do 
+                     & + numgrad(ic, iat, kat)
+               end do
+            end do
          end do
       end do lp
 
@@ -160,7 +160,7 @@ contains
       ! Add trace of the A matrix
       do iat = 1, mol%nat
          dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
-      end do 
+      end do
 
       if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the A matrix does not match")
@@ -226,7 +226,7 @@ contains
       call model%ncoord%get_coordination_number(mol, trans, cn)
       call model%local_charge(mol, trans, qloc)
       call model%solve(mol, error, cn, qloc, qvec=qvec)
-      if(allocated(error)) return
+      if (allocated(error)) return
 
       qvec = 1.0_wp
 
@@ -840,7 +840,7 @@ contains
       if (allocated(error)) return
 
       ! Check wrapper functions
-      allocate (qvec(mol%nat), source = 0.0_wp)
+      allocate (qvec(mol%nat), source=0.0_wp)
       call get_charges(model, mol, error, qvec)
       if (allocated(error)) return
 
@@ -853,7 +853,7 @@ contains
       end if
       if (allocated(error)) return
 
-      qvec = 0.0_wp 
+      qvec = 0.0_wp
       call get_eeq_charges(mol, error, qvec)
       if (allocated(error)) return
 
@@ -1334,7 +1334,7 @@ contains
       call gen_test(error, mol, model, qref=ref)
 
       ! Check wrapper functions
-      allocate (qvec(mol%nat), source = 0.0_wp)
+      allocate (qvec(mol%nat), source=0.0_wp)
       call get_charges(model, mol, error, qvec)
       if (allocated(error)) return
 
@@ -1347,7 +1347,7 @@ contains
       end if
       if (allocated(error)) return
 
-      qvec = 0.0_wp 
+      qvec = 0.0_wp
       call get_eeqbc_charges(mol, error, qvec)
       if (allocated(error)) return
 

@@ -157,8 +157,8 @@ contains
       class(eeq_model), intent(in) :: self
       type(structure_type), intent(in) :: mol
       type(cache_container), intent(inout) :: cache
-      real(wp), intent(out) :: dxdr(:, :, :)
-      real(wp), intent(out) :: dxdL(:, :, :)
+      real(wp), intent(out), contiguous :: dxdr(:, :, :)
+      real(wp), intent(out), contiguous :: dxdL(:, :, :)
       real(wp), parameter :: reg = 1.0e-14_wp
 
       integer :: iat, izp
