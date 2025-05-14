@@ -44,7 +44,7 @@ contains
 
       testsuite = [ &
          & new_unittest("eeq-dadr-mb01", test_eeq_dadr_mb01), &
-         ! !& new_unittest("eeq-dadL-mb01", test_eeq_dadL_mb01), &
+         & new_unittest("eeq-dadL-mb01", test_eeq_dadL_mb01), &
          & new_unittest("eeq-dbdr-mb01", test_eeq_dbdr_mb01), &
          & new_unittest("eeq-charges-mb01", test_eeq_q_mb01), &
          & new_unittest("eeq-charges-mb02", test_eeq_q_mb02), &
@@ -64,8 +64,8 @@ contains
          & new_unittest("eeq-dbdr-znooh", test_eeq_dbdr_znooh), &
          & new_unittest("gradient-znooh", test_g_znooh), &
          & new_unittest("dqdr-znooh", test_dqdr_znooh), &
-         !& new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), &
-         !& new_unittest("eeqbc-dadL-mb01", test_eeqbc_dadL_mb01), &
+      ! & new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), & ! does not pass even though error is basically 0
+         & new_unittest("eeqbc-dadL-mb01", test_eeqbc_dadL_mb01), &
          & new_unittest("eeqbc-dbdr-mb01", test_eeqbc_dbdr_mb01), &
          & new_unittest("eeqbc-dadr-mb05", test_eeqbc_dadr_mb05), &
          & new_unittest("eeqbc-dbdr-mb05", test_eeqbc_dbdr_mb05), &
@@ -76,8 +76,8 @@ contains
          & new_unittest("eeqbc-energy-mb04", test_eeqbc_e_mb04), &
          & new_unittest("eeqbc-gradient-mb05", test_eeqbc_g_mb05), &
          & new_unittest("eeqbc-gradient-mb06", test_eeqbc_g_mb06), &
-         !& new_unittest("eeqbc-sigma-mb07", test_eeqbc_s_mb07), &
-         !& new_unittest("eeqbc-sigma-mb08", test_eeqbc_s_mb08), &
+         ! & new_unittest("eeqbc-sigma-mb07", test_eeqbc_s_mb07), &
+         ! & new_unittest("eeqbc-sigma-mb08", test_eeqbc_s_mb08), &
          & new_unittest("eeqbc-dqdr-mb09", test_eeqbc_dqdr_mb09), &
          & new_unittest("eeqbc-dqdr-mb10", test_eeqbc_dqdr_mb10) &
          !& new_unittest("eeqbc-dqdL-mb11", test_eeqbc_dqdL_mb11), &
@@ -211,7 +211,7 @@ contains
       real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :)
       real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
       real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
-      real(wp), allocatable :: lattr(:, :), xyz(:, :)
+      real(wp), allocatable :: xyz(:, :)
       real(wp), allocatable :: qvec(:), numsigma(:, :, :), amatr(:, :), amatl(:, :)
       real(wp) :: eps(3, 3)
       type(cache_container), allocatable :: cache
@@ -228,17 +228,15 @@ contains
       call model%solve(mol, error, cn, qloc, qvec=qvec)
       if (allocated(error)) return
 
-      qvec = 1.0_wp
+      numsigma = 0.0_wp
 
       eps(:, :) = unity
       xyz(:, :) = mol%xyz
-      lattr = trans
       lp: do ic = 1, 3
          do jc = 1, 3
             amatr(:, :) = 0.0_wp
             eps(jc, ic) = eps(jc, ic) + step
             mol%xyz(:, :) = matmul(eps, xyz)
-            lattr(:, :) = matmul(eps, trans)
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
             call model%update(mol, cache, cn, qloc)
@@ -248,7 +246,6 @@ contains
             amatl(:, :) = 0.0_wp
             eps(jc, ic) = eps(jc, ic) - 2*step
             mol%xyz(:, :) = matmul(eps, xyz)
-            lattr(:, :) = matmul(eps, trans)
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
             call model%update(mol, cache, cn, qloc)
@@ -257,7 +254,6 @@ contains
 
             eps(jc, ic) = eps(jc, ic) + step
             mol%xyz(:, :) = xyz
-            lattr(:, :) = trans
             do iat = 1, mol%nat
                ! Numerical sigma of the a matrix
                numsigma(jc, ic, :) = 0.5_wp*qvec(iat)*(amatr(iat, :) - amatl(iat, :))/step + numsigma(jc, ic, :)
@@ -294,10 +290,12 @@ contains
 
       if (any(abs(dadL(:, :, :) - numsigma(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the A matrix does not match")
-         !print'(a)', "dadr:"
-         !print'(3es21.14)', dadr
-         !print'(a)', "diff:"
-         !print'(3es21.14)', dadr - numsigma
+         print'(a)', "dadL:"
+         call write_2d_matrix(dadL(1, :, :))
+         print'(a)', "numsigma:"
+         call write_2d_matrix(numsigma(1, :, :))
+         print'(a)', "diff:"
+         call write_2d_matrix(dadL(1, :, :) - numsigma(1, :, :))
       end if
 
    end subroutine test_dadL

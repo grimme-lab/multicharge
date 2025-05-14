@@ -355,8 +355,9 @@ contains
 
                call get_cpair_dir(self%kbc, vec, dtrans, rvdw, capi, capi, ctmp)
                dxdr(:, :, iat) = dxdr(:, :, iat) - wsw*ctmp*self%kcnchi(izp)*ptr%dcndr(:, :, iat)
+               dxdL(:, :, iat) = dxdL(:, :, iat) - wsw*ctmp*self%kcnchi(izp)*ptr%dcndL(:, :, iat)
                dxdr(:, :, iat) = dxdr(:, :, iat) - wsw*ctmp*self%kqchi(izp)*ptr%dqlocdr(:, :, iat)
-               ! dxdL
+               dxdL(:, :, iat) = dxdL(:, :, iat) - wsw*ctmp*self%kqchi(izp)*ptr%dqlocdL(:, :, iat)
             end do
          end do
       end if
@@ -605,8 +606,11 @@ contains
       allocate (dgamdr(3, mol%nat))
 
       atrace(:, :) = 0.0_wp
-      dadr(:, :, :) = 0.0_wp
-      dadL(:, :, :) = 0.0_wp
+      dadr(:, :, :) = 0.0_wp ! confirmed working
+      dadL(:, :, :) = 0.0_wp ! needs to be checked
+      ! NOTE: possible error sources:
+      ! - wrong sign
+      ! - missing terms
 
       !$omp parallel default(none) &
       !$omp shared(atrace, dadr, dadL, mol, self, cn, qloc, qvec) &
@@ -677,6 +681,7 @@ contains
             dadr_local(:, jat, iat) = -dtmp*dcdr(:, jat, iat) + dadr_local(:, jat, iat)
             dtmp = (self%eta(jzp) + self%kqeta(jzp)*qloc(jat) + sqrt2pi/radj)*qvec(jat)
             dadr_local(:, iat, jat) = -dtmp*dcdr(:, iat, jat) + dadr_local(:, iat, jat)
+            ! NOTE: dL contributions here?
          end do
 
          ! Hardness derivative
@@ -840,6 +845,7 @@ contains
             atrace_local(:, iat) = -dtmp*dcndr(:, iat, iat)*dgam*wsw + atrace_local(:, iat) ! questionable
             dadr_local(:, :, iat) = +dtmp*dcndr(:, :, iat)*dgam*wsw + dadr_local(:, :, iat) ! questionable sign
             dadL_local(:, :, iat) = +dtmp*dcndL(:, :, iat)*dgam*wsw + dadL_local(:, :, iat)
+            ! NOTE: we also need dadL contributions from C_ii^T terms
          end do
 
          ! True diagonal contributions
