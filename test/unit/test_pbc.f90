@@ -46,11 +46,13 @@ contains
          & new_unittest("eeq-charges-cyanamide", test_eeq_q_cyanamide), &
          & new_unittest("eeq-energy-formamide", test_eeq_e_formamide), &
          & new_unittest("eeq-dbdr-co2", test_eeq_dbdr_co2), &
+         & new_unittest("eeq-dadr-ice", test_eeq_dadr_ice), &
          & new_unittest("eeq-gradient-co2", test_eeq_g_co2), &
          & new_unittest("eeq-sigma-ice", test_eeq_s_ice), &
          & new_unittest("eeq-dqdr-urea", test_eeq_dqdr_urea), &
          & new_unittest("eeq-dqdL-oxacb", test_eeq_dqdL_oxacb), &
          & new_unittest("eeqbc-dbdr-co2", test_eeqbc_dbdr_co2), &
+         & new_unittest("eeq-dadr-ice", test_eeqbc_dadr_ice), &
          & new_unittest("eeqbc-gradient-co2", test_eeqbc_g_co2) &
          & ]
 
@@ -385,6 +387,116 @@ contains
 
    end subroutine test_dbdr
 
+   subroutine test_dadr(error, mol, model)
+
+      !> Molecular structure data
+      type(structure_type), intent(inout) :: mol
+
+      !> Electronegativity equilibration model
+      class(mchrg_model_type), intent(in) :: model
+
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      integer :: iat, ic, jat, kat
+      real(wp), parameter :: cutoff = 25.0_wp
+      real(wp), parameter :: step = 1.0e-6_wp
+      real(wp), allocatable :: cn(:)
+      real(wp), allocatable :: qloc(:)
+      real(wp), allocatable :: trans(:, :)
+      real(wp), allocatable :: dcndr(:, :, :), dcndL(:, :, :), dqlocdr(:, :, :), dqlocdL(:, :, :)
+      real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
+      real(wp), allocatable :: qvec(:), numgrad(:, :, :), amatr(:, :), amatl(:, :), numtrace(:, :)
+      type(cache_container), allocatable :: cache
+      allocate (cache)
+
+      allocate (cn(mol%nat), qloc(mol%nat), amatr(mol%nat + 1, mol%nat + 1), amatl(mol%nat + 1, mol%nat + 1), &
+         & dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), dqlocdr(3, mol%nat, mol%nat), &
+         & dqlocdL(3, 3, mol%nat), dadr(3, mol%nat, mol%nat + 1), dadL(3, 3, mol%nat + 1), &
+         & atrace(3, mol%nat), numtrace(3, mol%nat), numgrad(3, mol%nat, mol%nat + 1), qvec(mol%nat))
+
+      call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+
+      ! Obtain the vector of charges
+      call model%ncoord%get_coordination_number(mol, trans, cn)
+      call model%local_charge(mol, trans, qloc)
+      call model%solve(mol, error, cn, qloc, qvec=qvec)
+      if (allocated(error)) return
+
+      numgrad = 0.0_wp
+
+      lp: do iat = 1, mol%nat
+         do ic = 1, 3
+            ! Right-hand side
+            amatr(:, :) = 0.0_wp
+            mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
+            call model%ncoord%get_coordination_number(mol, trans, cn)
+            call model%local_charge(mol, trans, qloc)
+            call model%update(mol, cache, cn, qloc)
+            call model%get_coulomb_matrix(mol, cache, amatr)
+
+            ! Left-hand side
+            amatl(:, :) = 0.0_wp
+            mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
+            call model%ncoord%get_coordination_number(mol, trans, cn)
+            call model%local_charge(mol, trans, qloc)
+            call model%update(mol, cache, cn, qloc)
+            call model%get_coulomb_matrix(mol, cache, amatl)
+
+            mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
+
+            do kat = 1, mol%nat
+               do jat = 1, mol%nat
+                  ! Numerical gradient of the A matrix
+                  numgrad(ic, iat, kat) = 0.5_wp*qvec(jat)*(amatr(kat, jat) - amatl(kat, jat))/step &
+                     & + numgrad(ic, iat, kat)
+               end do
+            end do
+         end do
+      end do lp
+
+      ! Analytical gradient
+      call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
+      call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
+      call model%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
+      call model%get_coulomb_derivs(mol, cache, qvec, dadr, dadL, atrace)
+
+      ! Add trace of the A matrix
+      do iat = 1, mol%nat
+         dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
+      end do
+
+      if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2)) then
+         call test_failed(error, "Derivative of the A matrix does not match")
+         print'(a)', "dadr:"
+         call write_2d_matrix(dadr(1, :, :))
+         print'(a)', "numgrad:"
+         call write_2d_matrix(numgrad(1, :, :))
+         print'(a)', "diff:"
+         call write_2d_matrix(dadr(1, :, :) - numgrad(1, :, :))
+      end if
+
+      ! numtrace(:, :) = 0.0_wp
+      ! do iat = 1, mol%nat
+      !    do jat = 1, iat - 1
+      !       ! Numerical trace of the a matrix
+      !       numtrace(:, iat) = - numgrad(:, jat, iat) + numtrace(:, iat)
+      !       numtrace(:, jat) = - numgrad(:, iat, jat) + numtrace(:, jat)
+      !    end do
+      ! end do
+
+      ! if (any(abs(atrace(:, :) - numtrace(:, :)) > thr2)) then
+      !    call test_failed(error, "Derivative of the A matrix trace does not match")
+      !    print'(a)', "atrace:"
+      !    print'(3es21.14)', atrace
+      !    print'(a)', "numtrace:"
+      !    print'(3es21.14)', numtrace
+      !    print'(a)', "diff:"
+      !    print'(3es21.14)', atrace - numtrace
+      ! end if
+
+   end subroutine test_dadr
+
    subroutine test_numdqdr(error, mol, model)
 
       !> Molecular structure data
@@ -586,6 +698,21 @@ contains
 
    end subroutine test_eeq_dbdr_co2
 
+   subroutine test_eeq_dadr_ice(error)
+
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      type(structure_type) :: mol
+      class(mchrg_model_type), allocatable :: model
+
+      call get_structure(mol, "ICE10", "vi")
+      call new_eeq2019_model(mol, model, error)
+      if (allocated(error)) return
+      call test_dadr(error, mol, model)
+
+   end subroutine test_eeq_dadr_ice
+
    subroutine test_eeq_g_co2(error)
 
       !> Error handling
@@ -660,6 +787,21 @@ contains
       call test_dbdr(error, mol, model)
 
    end subroutine test_eeqbc_dbdr_co2
+
+   subroutine test_eeqbc_dadr_ice(error)
+
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      type(structure_type) :: mol
+      class(mchrg_model_type), allocatable :: model
+
+      call get_structure(mol, "ICE10", "vi")
+      call new_eeqbc2024_model(mol, model, error)
+      if (allocated(error)) return
+      call test_dadr(error, mol, model)
+
+   end subroutine test_eeqbc_dadr_ice
 
    subroutine test_eeqbc_g_co2(error)
 
