@@ -293,7 +293,7 @@ contains
                vec = ptr%wsc%trans(:, ptr%wsc%tridx(img, iat, iat))
 
                call get_cpair_dir(self%kbc, vec, dtrans, rvdw, capi, capi, ctmp)
-               xvec(iat) = xvec(iat) - wsw*ctmp*ptr%xtmp(iat)
+               xvec(iat) = xvec(iat) + wsw*ctmp*ptr%xtmp(iat)
             end do
          end do
       end if
@@ -353,8 +353,8 @@ contains
                vec = ptr%wsc%trans(:, ptr%wsc%tridx(img, iat, iat))
 
                call get_cpair_dir(self%kbc, vec, dtrans, rvdw, capi, capi, ctmp)
-               dxdr(:, :, iat) = dxdr(:, :, iat) - wsw*ctmp*self%kcnchi(izp)*ptr%dcndr(:, :, iat)
-               dxdr(:, :, iat) = dxdr(:, :, iat) - wsw*ctmp*self%kqchi(izp)*ptr%dqlocdr(:, :, iat)
+               dxdr(:, :, iat) = dxdr(:, :, iat) + wsw*ctmp*self%kcnchi(izp)*ptr%dcndr(:, :, iat)
+               dxdr(:, :, iat) = dxdr(:, :, iat) + wsw*ctmp*self%kqchi(izp)*ptr%dqlocdr(:, :, iat)
                ! dxdL
             end do
          end do
@@ -546,7 +546,7 @@ contains
          r1 = norm2(vec)
          if (r1 < eps) cycle
          call get_cpair(kbc, ctmp, r1, rvdw, capi, capj)
-         tmp = -ctmp*erf(gam*r1)/r1
+         tmp = ctmp*erf(gam*r1)/r1
          amat = amat + tmp
       end do
 
@@ -897,9 +897,9 @@ contains
          r2 = r1*r1
          call get_cpair(kbc, cmat, r1, rvdw, capi, capj)
          gtmp = 2.0_wp*gam*exp(-r2*gam2)/(sqrtpi*r2) - erf(r1*gam)/(r2*r1)
-         dG(:) = dG + cmat*gtmp*vec
-         dS(:, :) = dS + cmat*gtmp*spread(vec, 1, 3)*spread(vec, 2, 3)
-         dgam = dgam + cmat*2.0_wp*exp(-gam2*r2)/sqrtpi
+         dG(:) = dG - cmat*gtmp*vec
+         dS(:, :) = dS - cmat*gtmp*spread(vec, 1, 3)*spread(vec, 2, 3)
+         dgam = dgam - cmat*2.0_wp*exp(-gam2*r2)/sqrtpi
       end do
 
    end subroutine get_damat_dir
@@ -962,11 +962,11 @@ contains
             call get_cpair(self%kbc, tmp, r1, rvdw, capi, capj)
 
             ! Off-diagonal elements
-            cmat_local(jat, iat) = -tmp
-            cmat_local(iat, jat) = -tmp
+            cmat_local(jat, iat) = tmp
+            cmat_local(iat, jat) = tmp
             ! Diagonal elements
-            cmat_local(iat, iat) = cmat_local(iat, iat) + tmp
-            cmat_local(jat, jat) = cmat_local(jat, jat) + tmp
+            cmat_local(iat, iat) = cmat_local(iat, iat) - tmp
+            cmat_local(jat, jat) = cmat_local(jat, jat) - tmp
          end do
       end do
       !$omp end do
@@ -1017,13 +1017,13 @@ contains
                call get_cpair_dir(self%kbc, vec, dtrans, rvdw, capi, capj, tmp)
 
                ! Off-diagonal elements
-               cmat_local(jat, iat) = cmat_local(jat, iat) - tmp*wsw
-               cmat_local(iat, jat) = cmat_local(iat, jat) - tmp*wsw
+               cmat_local(jat, iat) = cmat_local(jat, iat) + tmp*wsw
+               cmat_local(iat, jat) = cmat_local(iat, jat) + tmp*wsw
                ! Diagonal elements
                !$omp atomic
-               cmat_local(iat, iat) = cmat_local(iat, iat) + tmp*wsw
+               cmat_local(iat, iat) = cmat_local(iat, iat) - tmp*wsw
                !$omp atomic
-               cmat_local(jat, jat) = cmat_local(jat, jat) + tmp*wsw
+               cmat_local(jat, jat) = cmat_local(jat, jat) - tmp*wsw
             end do
          end do
 
@@ -1055,7 +1055,7 @@ contains
 
       ! Capacitance of bond between atom i and j
       arg = -kbc*(r1 - rvdw)/rvdw
-      cpair = sqrt(capi*capj)*0.5_wp*(1.0_wp + erf(arg))
+      cpair = -sqrt(capi*capj)*0.5_wp*(1.0_wp + erf(arg))
    end subroutine get_cpair
 
    subroutine get_cpair_dir(kbc, rij, trans, rvdw, capi, capj, cpair)
