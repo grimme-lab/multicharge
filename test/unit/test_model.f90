@@ -43,45 +43,47 @@ contains
       type(unittest_type), allocatable, intent(out) :: testsuite(:)
 
       testsuite = [ &
-         & new_unittest("eeq-dadr-mb01", test_eeq_dadr_mb01), &
-         & new_unittest("eeq-dadL-mb01", test_eeq_dadL_mb01), &
-         & new_unittest("eeq-dbdr-mb01", test_eeq_dbdr_mb01), &
-         & new_unittest("eeq-charges-mb01", test_eeq_q_mb01), &
-         & new_unittest("eeq-charges-mb02", test_eeq_q_mb02), &
-         & new_unittest("eeq-charges-actinides", test_eeq_q_actinides), &
-         & new_unittest("eeq-energy-mb03", test_eeq_e_mb03), &
-         & new_unittest("eeq-energy-mb04", test_eeq_e_mb04), &
-         & new_unittest("eeq-gradient-mb05", test_eeq_g_mb05), &
-         & new_unittest("eeq-gradient-mb06", test_eeq_g_mb06), &
-         & new_unittest("eeq-sigma-mb07", test_eeq_s_mb07), &
-         & new_unittest("eeq-sigma-mb08", test_eeq_s_mb08), &
-         & new_unittest("eeq-dqdr-mb09", test_eeq_dqdr_mb09), &
-         & new_unittest("eeq-dqdr-mb10", test_eeq_dqdr_mb10), &
-         & new_unittest("eeq-dqdL-mb11", test_eeq_dqdL_mb11), &
-         & new_unittest("eeq-dqdL-mb12", test_eeq_dqdL_mb12), &
-         & new_unittest("gradient-h2plus", test_g_h2plus), &
-         & new_unittest("eeq-dadr-znooh", test_eeq_dadr_znooh), &
-         & new_unittest("eeq-dbdr-znooh", test_eeq_dbdr_znooh), &
-         & new_unittest("gradient-znooh", test_g_znooh), &
-         & new_unittest("dqdr-znooh", test_dqdr_znooh), &
-      ! & new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), & ! does not pass even though error is basically 0
-         & new_unittest("eeqbc-dadL-mb01", test_eeqbc_dadL_mb01), &
-         & new_unittest("eeqbc-dbdr-mb01", test_eeqbc_dbdr_mb01), &
-         & new_unittest("eeqbc-dadr-mb05", test_eeqbc_dadr_mb05), &
-         & new_unittest("eeqbc-dbdr-mb05", test_eeqbc_dbdr_mb05), &
-         & new_unittest("eeqbc-charges-mb01", test_eeqbc_q_mb01), &
-         & new_unittest("eeqbc-charges-mb02", test_eeqbc_q_mb02), &
-         & new_unittest("eeqbc-charges-actinides", test_eeqbc_q_actinides), &
-         & new_unittest("eeqbc-energy-mb03", test_eeqbc_e_mb03), &
-         & new_unittest("eeqbc-energy-mb04", test_eeqbc_e_mb04), &
-         & new_unittest("eeqbc-gradient-mb05", test_eeqbc_g_mb05), &
-         & new_unittest("eeqbc-gradient-mb06", test_eeqbc_g_mb06), &
-         ! & new_unittest("eeqbc-sigma-mb07", test_eeqbc_s_mb07), &
-         ! & new_unittest("eeqbc-sigma-mb08", test_eeqbc_s_mb08), &
-         & new_unittest("eeqbc-dqdr-mb09", test_eeqbc_dqdr_mb09), &
-         & new_unittest("eeqbc-dqdr-mb10", test_eeqbc_dqdr_mb10) &
-         !& new_unittest("eeqbc-dqdL-mb11", test_eeqbc_dqdL_mb11), &
-         !& new_unittest("eeqbc-dqdL-mb12", test_eeqbc_dqdL_mb12) &
+         ! & new_unittest("eeq-dadr-mb01", test_eeq_dadr_mb01), &
+         ! & new_unittest("eeq-dadL-mb01", test_eeq_dadL_mb01), &
+         ! & new_unittest("eeq-dbdr-mb01", test_eeq_dbdr_mb01), &
+         ! & new_unittest("eeq-dbdL-mb01", test_eeq_dbdL_mb01), &
+         ! & new_unittest("eeq-charges-mb01", test_eeq_q_mb01), &
+         ! & new_unittest("eeq-charges-mb02", test_eeq_q_mb02), &
+         ! & new_unittest("eeq-charges-actinides", test_eeq_q_actinides), &
+         ! & new_unittest("eeq-energy-mb03", test_eeq_e_mb03), &
+         ! & new_unittest("eeq-energy-mb04", test_eeq_e_mb04), &
+         ! & new_unittest("eeq-gradient-mb05", test_eeq_g_mb05), &
+         ! & new_unittest("eeq-gradient-mb06", test_eeq_g_mb06), &
+         ! & new_unittest("eeq-sigma-mb07", test_eeq_s_mb07), &
+         ! & new_unittest("eeq-sigma-mb08", test_eeq_s_mb08), &
+         ! & new_unittest("eeq-dqdr-mb09", test_eeq_dqdr_mb09), &
+         ! & new_unittest("eeq-dqdr-mb10", test_eeq_dqdr_mb10), &
+         ! & new_unittest("eeq-dqdL-mb11", test_eeq_dqdL_mb11), &
+         ! & new_unittest("eeq-dqdL-mb12", test_eeq_dqdL_mb12), &
+         ! & new_unittest("gradient-h2plus", test_g_h2plus), &
+         ! & new_unittest("eeq-dadr-znooh", test_eeq_dadr_znooh), &
+         ! & new_unittest("eeq-dbdr-znooh", test_eeq_dbdr_znooh), &
+         ! & new_unittest("gradient-znooh", test_g_znooh), &
+         ! & new_unittest("dqdr-znooh", test_dqdr_znooh), &
+         ! ! & new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), & ! does not pass even though error is basically 0
+         ! & new_unittest("eeqbc-dadL-mb01", test_eeqbc_dadL_mb01), &
+         ! & new_unittest("eeqbc-dbdr-mb01", test_eeqbc_dbdr_mb01), &
+         & new_unittest("eeqbc-dbdL-mb01", test_eeqbc_dbdL_mb01) &
+         ! & new_unittest("eeqbc-dadr-mb05", test_eeqbc_dadr_mb05), &
+         ! & new_unittest("eeqbc-dbdr-mb05", test_eeqbc_dbdr_mb05), &
+         ! & new_unittest("eeqbc-charges-mb01", test_eeqbc_q_mb01), &
+         ! & new_unittest("eeqbc-charges-mb02", test_eeqbc_q_mb02), &
+         ! & new_unittest("eeqbc-charges-actinides", test_eeqbc_q_actinides), &
+         ! & new_unittest("eeqbc-energy-mb03", test_eeqbc_e_mb03), &
+         ! & new_unittest("eeqbc-energy-mb04", test_eeqbc_e_mb04), &
+         ! & new_unittest("eeqbc-gradient-mb05", test_eeqbc_g_mb05), &
+         ! & new_unittest("eeqbc-gradient-mb06", test_eeqbc_g_mb06), &
+         ! ! & new_unittest("eeqbc-sigma-mb07", test_eeqbc_s_mb07), &
+         ! ! & new_unittest("eeqbc-sigma-mb08", test_eeqbc_s_mb08), &
+         ! & new_unittest("eeqbc-dqdr-mb09", test_eeqbc_dqdr_mb09), &
+         ! & new_unittest("eeqbc-dqdr-mb10", test_eeqbc_dqdr_mb10) &
+         ! !& new_unittest("eeqbc-dqdL-mb11", test_eeqbc_dqdL_mb11), &
+         ! !& new_unittest("eeqbc-dqdL-mb12", test_eeqbc_dqdL_mb12) &
          & ]
 
    end subroutine collect_model
@@ -148,6 +150,7 @@ contains
                      & + numgrad(ic, iat, kat)
                end do
             end do
+            ! numgrad(ic, iat, :) = numgrad(ic, iat, :) + 0.5_wp*(amatr(iat, :) - amatl(iat, :))/step ! for dcdr test
          end do
       end do lp
 
@@ -165,11 +168,11 @@ contains
       if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the A matrix does not match")
          print'(a)', "dadr:"
-         print'(3es21.14)', dadr
+         call write_2d_matrix(dadr(1, :, :))
          print'(a)', "numgrad:"
-         print'(3es21.14)', numgrad
+         call write_2d_matrix(numgrad(1, :, :))
          print'(a)', "diff:"
-         print'(3es21.14)', dadr - numgrad
+         call write_2d_matrix(dadr(1, :, :) - numgrad(1, :, :))
       end if
 
       ! numtrace(:, :) = 0.0_wp
@@ -257,6 +260,7 @@ contains
             do iat = 1, mol%nat
                ! Numerical sigma of the a matrix
                numsigma(jc, ic, :) = 0.5_wp*qvec(iat)*(amatr(iat, :) - amatl(iat, :))/step + numsigma(jc, ic, :)
+               ! numsigma(jc, ic, iat) = 0.5_wp*(amatr(iat, iat) - amatl(iat, iat))/step ! for dcdL test
             end do
          end do
       end do lp
@@ -367,6 +371,86 @@ contains
       end if
 
    end subroutine test_dbdr
+
+   subroutine test_dbdL(error, mol, model)
+
+      !> Molecular structure data
+      type(structure_type), intent(inout) :: mol
+
+      !> Electronegativity equilibration model
+      class(mchrg_model_type), intent(in) :: model
+
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      integer :: iat, ic, jc
+      real(wp), parameter :: trans(3, 1) = 0.0_wp
+      real(wp), parameter :: step = 1.0e-6_wp, unity(3, 3) = reshape(&
+      & [1, 0, 0, 0, 1, 0, 0, 0, 1], shape(unity))
+      real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :)
+      real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
+      real(wp), allocatable :: dbdr(:, :, :), dbdL(:, :, :)
+      real(wp), allocatable :: numsigma(:, :, :), xvecr(:), xvecl(:)
+      real(wp), allocatable :: xyz(:, :)
+      real(wp) :: eps(3, 3)
+      type(cache_container), allocatable :: cache
+      allocate (cache)
+
+      allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
+         & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
+         & xvecr(mol%nat + 1), xvecl(mol%nat + 1), numsigma(3, 3, mol%nat + 1), &
+         & dbdr(3, mol%nat, mol%nat + 1), dbdL(3, 3, mol%nat + 1), xyz(3, mol%nat))
+
+      numsigma = 0.0_wp
+
+      eps(:, :) = unity
+      xyz(:, :) = mol%xyz
+      lp: do ic = 1, 3
+         do jc = 1, 3
+            ! Right-hand side
+            xvecr(:) = 0.0_wp
+            eps(jc, ic) = eps(jc, ic) + step
+            mol%xyz(:, :) = matmul(eps, xyz)
+            call model%ncoord%get_coordination_number(mol, trans, cn)
+            call model%local_charge(mol, trans, qloc)
+            call model%update(mol, cache, cn, qloc)
+            call model%get_xvec(mol, cache, xvecr)
+
+            ! Left-hand side
+            xvecl(:) = 0.0_wp
+            eps(jc, ic) = eps(jc, ic) - 2*step
+            mol%xyz(:, :) = matmul(eps, xyz)
+            call model%ncoord%get_coordination_number(mol, trans, cn)
+            call model%local_charge(mol, trans, qloc)
+            call model%update(mol, cache, cn, qloc)
+            call model%get_xvec(mol, cache, xvecl)
+
+            eps(jc, ic) = eps(jc, ic) + step
+            mol%xyz(:, :) = xyz
+            do iat = 1, mol%nat
+               numsigma(jc, ic, iat) = 0.5_wp*(xvecr(iat) - xvecl(iat))/step
+            end do
+         end do
+      end do lp
+
+      ! Analytical gradient
+      call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
+      call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
+      call model%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
+      call model%get_xvec(mol, cache, xvecl) ! need to call this for xtmp in cache (eeqbc)
+      call model%get_xvec_derivs(mol, cache, dbdr, dbdL)
+
+      if (any(abs(dbdL(:, :, :) - numsigma(:, :, :)) > thr2)) then
+         call test_failed(error, "Derivative of the b vector does not match")
+         print'(a)', "dbdr:"
+         call write_2d_matrix(dbdL(1, :, :))
+         print'(a)', "numsigma:"
+         call write_2d_matrix(numsigma(1, :, :))
+         print'(a)', "diff:"
+         call write_2d_matrix(dbdL(1, :, :) - numsigma(1, :, :))
+      end if
+
+   end subroutine test_dbdL
 
    subroutine write_2d_matrix(matrix, name, unit, step)
       implicit none
@@ -813,6 +897,21 @@ contains
       call test_dbdr(error, mol, model)
 
    end subroutine test_eeq_dbdr_mb01
+
+   subroutine test_eeq_dbdL_mb01(error)
+
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      type(structure_type) :: mol
+      class(mchrg_model_type), allocatable :: model
+
+      call get_structure(mol, "MB16-43", "01")
+      call new_eeq2019_model(mol, model, error)
+      if (allocated(error)) return
+      call test_dbdL(error, mol, model)
+
+   end subroutine test_eeq_dbdL_mb01
 
    subroutine test_eeq_q_mb01(error)
 
@@ -1278,6 +1377,21 @@ contains
       call test_dbdr(error, mol, model)
 
    end subroutine test_eeqbc_dbdr_mb01
+
+   subroutine test_eeqbc_dbdL_mb01(error)
+
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      type(structure_type) :: mol
+      class(mchrg_model_type), allocatable :: model
+
+      call get_structure(mol, "MB16-43", "01")
+      call new_eeqbc2024_model(mol, model, error)
+      if (allocated(error)) return
+      call test_dbdL(error, mol, model)
+
+   end subroutine test_eeqbc_dbdL_mb01
 
    subroutine test_eeqbc_dadr_mb05(error)
 

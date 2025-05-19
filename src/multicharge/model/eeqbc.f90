@@ -1137,8 +1137,8 @@ contains
             ! Positive diagonal elements
             dcdr_local(:, iat, iat) = +dG + dcdr_local(:, iat, iat)
             dcdr_local(:, jat, jat) = -dG + dcdr_local(:, jat, jat)
-            dcdL_local(:, :, jat) = +dS + dcdL_local(:, :, jat)
-            dcdL_local(:, :, iat) = +dS + dcdL_local(:, :, iat)
+            dcdL_local(:, :, jat) = -dS + dcdL_local(:, :, jat)
+            dcdL_local(:, :, iat) = -dS + dcdL_local(:, :, iat)
          end do
       end do
       !$omp end do
