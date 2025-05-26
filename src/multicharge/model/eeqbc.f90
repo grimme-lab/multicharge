@@ -309,7 +309,7 @@ contains
       type(eeqbc_cache), pointer :: ptr
 
       integer :: iat, izp, jat, img
-      real(wp) :: tmp(3), capi, wsw, vec(3), ctmp, rvdw, dG(3), dS(3, 3)
+      real(wp) :: capi, wsw, vec(3), ctmp, rvdw, dG(3), dS(3, 3)
       real(wp), allocatable :: dtmpdr(:, :, :), dtmpdL(:, :, :)
       real(wp), allocatable :: dtrans(:, :)
 
@@ -363,18 +363,17 @@ contains
       end if
 
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(mol, self, ptr, dxdr) &
-      !$omp private(iat, izp, tmp)
+      !$omp shared(mol, self, ptr, dxdr, dxdL) &
+      !$omp private(iat, izp)
       do iat = 1, mol%nat
-         tmp = 0.0_wp
          do jat = 1, mol%nat
             ! Diagonal elements
-            tmp(:) = tmp(:) + ptr%xtmp(jat)*ptr%dcdr(:, iat, jat)
+            dxdr(:, iat, iat) = dxdr(:, iat, iat) + ptr%xtmp(jat)*ptr%dcdr(:, iat, jat)
             ! Derivative of capacitance matrix
             dxdr(:, iat, jat) = (ptr%xtmp(iat) - ptr%xtmp(jat))*ptr%dcdr(:, iat, jat) &
                & + dxdr(:, iat, jat)
+            ! TODO: dxdL still wrong
          end do
-         dxdr(:, iat, iat) = dxdr(:, iat, iat) + tmp(:)
       end do
 
    end subroutine get_xvec_derivs
@@ -606,11 +605,8 @@ contains
       allocate (dgamdr(3, mol%nat))
 
       atrace(:, :) = 0.0_wp
-      dadr(:, :, :) = 0.0_wp ! confirmed working
-      dadL(:, :, :) = 0.0_wp ! needs to be checked
-      ! NOTE: possible error sources:
-      ! - wrong sign
-      ! - missing terms
+      dadr(:, :, :) = 0.0_wp
+      dadL(:, :, :) = 0.0_wp ! needs to be checked (*almost* correct)
 
       !$omp parallel default(none) &
       !$omp shared(atrace, dadr, dadL, mol, self, cn, qloc, qvec) &
@@ -648,14 +644,14 @@ contains
             arg = gam*gam*r2
             dtmp = 2.0_wp*gam*exp(-arg)/(sqrtpi*r2) &
                & - erf(sqrt(arg))/(r2*sqrt(r2))
-            dG(:) = -dtmp*vec ! questionable sign
+            dG(:) = -dtmp*vec
             dS(:, :) = spread(dG, 1, 3)*spread(vec, 2, 3)
             atrace_local(:, iat) = +dG*qvec(jat)*cmat(jat, iat) + atrace_local(:, iat)
             atrace_local(:, jat) = -dG*qvec(iat)*cmat(iat, jat) + atrace_local(:, jat)
             dadr_local(:, iat, jat) = +dG*qvec(iat)*cmat(iat, jat) + dadr_local(:, iat, jat)
             dadr_local(:, jat, iat) = -dG*qvec(jat)*cmat(jat, iat) + dadr_local(:, jat, iat)
-            dadL_local(:, :, jat) = +dS*qvec(iat)*cmat(iat, jat) + dadL_local(:, :, jat)
-            dadL_local(:, :, iat) = +dS*qvec(jat)*cmat(jat, iat) + dadL_local(:, :, iat)
+            dadL_local(:, :, iat) = -dS*qvec(jat)*cmat(jat, iat) + dadL_local(:, :, iat)
+            dadL_local(:, :, jat) = -dS*qvec(iat)*cmat(iat, jat) + dadL_local(:, :, jat)
 
             ! Effective charge width derivative
             dtmp = 2.0_wp*exp(-arg)/(sqrtpi)
@@ -663,8 +659,8 @@ contains
             atrace_local(:, jat) = -dtmp*qvec(iat)*dgamdr(:, iat)*cmat(iat, jat) + atrace_local(:, jat)
             dadr_local(:, iat, jat) = +dtmp*qvec(iat)*dgamdr(:, iat)*cmat(iat, jat) + dadr_local(:, iat, jat)
             dadr_local(:, jat, iat) = +dtmp*qvec(jat)*dgamdr(:, jat)*cmat(jat, iat) + dadr_local(:, jat, iat)
-            dadL_local(:, :, jat) = +dtmp*qvec(iat)*dgamdL(:, :)*cmat(iat, jat) + dadL_local(:, :, jat)
             dadL_local(:, :, iat) = +dtmp*qvec(jat)*dgamdL(:, :)*cmat(jat, iat) + dadL_local(:, :, iat)
+            dadL_local(:, :, jat) = +dtmp*qvec(iat)*dgamdL(:, :)*cmat(iat, jat) + dadL_local(:, :, jat)
 
             ! Capacitance derivative off-diagonal
             dtmp = erf(sqrt(r2)*gam)/(sqrt(r2))
@@ -673,8 +669,8 @@ contains
             atrace_local(:, jat) = -dtmp*qvec(iat)*dcdr(:, iat, jat) + atrace_local(:, jat)
             dadr_local(:, iat, jat) = +dtmp*qvec(iat)*dcdr(:, iat, jat) + dadr_local(:, iat, jat)
             dadr_local(:, jat, iat) = +dtmp*qvec(jat)*dcdr(:, jat, iat) + dadr_local(:, jat, iat)
-            dadL_local(:, :, jat) = +dtmp*qvec(iat)*dcdL(:, :, iat) + dadL_local(:, :, jat)
             dadL_local(:, :, iat) = +dtmp*qvec(jat)*dcdL(:, :, jat) + dadL_local(:, :, iat)
+            dadL_local(:, :, jat) = +dtmp*qvec(iat)*dcdL(:, :, iat) + dadL_local(:, :, jat)
 
             ! Capacitance derivative diagonal
             dtmp = (self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi)*qvec(iat)
@@ -1137,8 +1133,8 @@ contains
             ! Positive diagonal elements
             dcdr_local(:, iat, iat) = +dG + dcdr_local(:, iat, iat)
             dcdr_local(:, jat, jat) = -dG + dcdr_local(:, jat, jat)
-            dcdL_local(:, :, jat) = -dS + dcdL_local(:, :, jat)
             dcdL_local(:, :, iat) = -dS + dcdL_local(:, :, iat)
+            dcdL_local(:, :, jat) = -dS + dcdL_local(:, :, jat)
          end do
       end do
       !$omp end do
@@ -1197,8 +1193,8 @@ contains
                ! Positive diagonal elements
                dcdr_local(:, iat, iat) = +dG*wsw + dcdr_local(:, iat, iat)
                dcdr_local(:, jat, jat) = -dG*wsw + dcdr_local(:, jat, jat)
-               dcdL_local(:, :, jat) = +dS*wsw + dcdL_local(:, :, jat)
-               dcdL_local(:, :, iat) = +dS*wsw + dcdL_local(:, :, iat)
+               dcdL_local(:, :, jat) = -dS*wsw + dcdL_local(:, :, jat)
+               dcdL_local(:, :, iat) = -dS*wsw + dcdL_local(:, :, iat)
             end do
          end do
       end do
