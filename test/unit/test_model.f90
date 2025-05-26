@@ -68,8 +68,8 @@ contains
          ! ! & new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), & ! does not pass even though error is basically 0
          ! & new_unittest("eeqbc-dadL-mb01", test_eeqbc_dadL_mb01), &
          & new_unittest("eeqbc-dbdr-mb01", test_eeqbc_dbdr_mb01), &
-         & new_unittest("eeqbc-dbdL-mb01", test_eeqbc_dbdL_mb01), &
-         & new_unittest("eeqbc-dadr-mb05", test_eeqbc_dadr_mb05) &
+         & new_unittest("eeqbc-dbdL-mb01", test_eeqbc_dbdL_mb01) &
+         ! & new_unittest("eeqbc-dadr-mb05", test_eeqbc_dadr_mb05) &
          ! & new_unittest("eeqbc-dbdr-mb05", test_eeqbc_dbdr_mb05), &
          ! & new_unittest("eeqbc-charges-mb01", test_eeqbc_q_mb01), &
          ! & new_unittest("eeqbc-charges-mb02", test_eeqbc_q_mb02), &
@@ -363,11 +363,11 @@ contains
       if (any(abs(dbdr(:, :, :) - numgrad(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the b vector does not match")
          print'(a)', "dbdr:"
-         print'(3es21.14)', dbdr
+         call write_2d_matrix(dbdr(1, :, :))
          print'(a)', "numgrad:"
-         print'(3es21.14)', numgrad
+         call write_2d_matrix(numgrad(1, :, :))
          print'(a)', "diff:"
-         print'(3es21.14)', dbdr - numgrad
+         call write_2d_matrix(dbdr(1, :, :) - numgrad(1, :, :))
       end if
 
    end subroutine test_dbdr

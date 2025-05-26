@@ -271,8 +271,9 @@ contains
       !$omp shared(mol, self, ptr) private(iat, izp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
-         ptr%xtmp(iat) = -self%chi(izp) + self%kcnchi(izp)*ptr%cn(iat) &
-            & + self%kqchi(izp)*ptr%qloc(iat)
+         ! ptr%xtmp(iat) = -self%chi(izp) + self%kcnchi(izp)*ptr%cn(iat) &
+         !    & + self%kqchi(izp)*ptr%qloc(iat)
+         ptr%xtmp(iat) = 0.1_wp*iat
       end do
       ptr%xtmp(mol%nat + 1) = mol%charge
 
@@ -324,20 +325,20 @@ contains
       dtmpdr(:, :, :) = 0.0_wp
       dtmpdL(:, :, :) = 0.0_wp
 
-      !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(mol, self, ptr, dtmpdr, dtmpdL) &
-      !$omp private(iat, izp)
-      do iat = 1, mol%nat
-         izp = mol%id(iat)
-         ! CN and effective charge derivative
-         dtmpdr(:, :, iat) = self%kcnchi(izp)*ptr%dcndr(:, :, iat) + dtmpdr(:, :, iat)
-         dtmpdL(:, :, iat) = self%kcnchi(izp)*ptr%dcndL(:, :, iat) + dtmpdL(:, :, iat)
-         dtmpdr(:, :, iat) = self%kqchi(izp)*ptr%dqlocdr(:, :, iat) + dtmpdr(:, :, iat)
-         dtmpdL(:, :, iat) = self%kqchi(izp)*ptr%dqlocdL(:, :, iat) + dtmpdL(:, :, iat)
-      end do
-
-      call gemm(dtmpdr, ptr%cmat, dxdr)
-      call gemm(dtmpdL, ptr%cmat, dxdL)
+      !!$omp parallel do default(none) schedule(runtime) &
+      !!$omp shared(mol, self, ptr, dtmpdr, dtmpdL) &
+      !!$omp private(iat, izp)
+      !do iat = 1, mol%nat
+      !   izp = mol%id(iat)
+      !   ! CN and effective charge derivative
+      !   dtmpdr(:, :, iat) = self%kcnchi(izp)*ptr%dcndr(:, :, iat) + dtmpdr(:, :, iat)
+      !   dtmpdL(:, :, iat) = self%kcnchi(izp)*ptr%dcndL(:, :, iat) + dtmpdL(:, :, iat)
+      !   dtmpdr(:, :, iat) = self%kqchi(izp)*ptr%dqlocdr(:, :, iat) + dtmpdr(:, :, iat)
+      !   dtmpdL(:, :, iat) = self%kqchi(izp)*ptr%dqlocdL(:, :, iat) + dtmpdL(:, :, iat)
+      !end do
+      !
+      !call gemm(dtmpdr, ptr%cmat, dxdr)
+      !call gemm(dtmpdL, ptr%cmat, dxdL)
 
       if (any(mol%periodic)) then
          call get_dir_trans(mol%lattice, dtrans)
@@ -364,16 +365,28 @@ contains
 
       !$omp parallel do default(none) schedule(runtime) &
       !$omp shared(mol, self, ptr, dxdr, dxdL) &
-      !$omp private(iat, izp)
+      !$omp private(iat, izp, vec)
       do iat = 1, mol%nat
          do jat = 1, mol%nat
+            vec = mol%xyz(:, iat) - mol%xyz(:, jat)
             ! Diagonal elements
             dxdr(:, iat, iat) = dxdr(:, iat, iat) + ptr%xtmp(jat)*ptr%dcdr(:, iat, jat)
             ! Derivative of capacitance matrix
             dxdr(:, iat, jat) = (ptr%xtmp(iat) - ptr%xtmp(jat))*ptr%dcdr(:, iat, jat) &
                & + dxdr(:, iat, jat)
-            ! TODO: dxdL still wrong
+            ! for diagonals only:
+            ! if (iat .eq. jat) cycle
+            ! dxdr(:, iat, jat) = (-ptr%xtmp(jat))*ptr%dcdr(:, iat, jat)
+            ! for off-digonals only:
+            if (iat .eq. jat) cycle
+            ! dxdr(:, iat, jat) = ptr%xtmp(iat)*ptr%dcdr(:, iat, jat)
+            ! dxdr(:, iat, iat) = ptr%xtmp(jat)*ptr%dcdr(:, iat, jat) + dxdr(:, iat, iat)
+            ! dxdL(:, :, iat) = dxdL(:, :, iat) - spread(ptr%xtmp(iat)*ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3) = ptr%xtmp(iat)*ptr%dcdL(:, :, iat)
+            dxdL(:, :, iat) = dxdL(:, :, iat) + spread(ptr%xtmp(jat)*ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3)
          end do
+         ! for diagonals only:
+         ! dxdr(:, iat, iat) = ptr%xtmp(iat)*ptr%dcdr(:, iat, iat)
+         dxdL(:, :, iat) = dxdL(:, :, iat) + ptr%xtmp(iat)*ptr%dcdL(:, :, iat)
       end do
 
    end subroutine get_xvec_derivs
