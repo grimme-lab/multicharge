@@ -43,47 +43,47 @@ contains
       type(unittest_type), allocatable, intent(out) :: testsuite(:)
 
       testsuite = [ &
-         ! & new_unittest("eeq-dadr-mb01", test_eeq_dadr_mb01), &
-         ! & new_unittest("eeq-dadL-mb01", test_eeq_dadL_mb01), &
-         ! & new_unittest("eeq-dbdr-mb01", test_eeq_dbdr_mb01), &
-         ! & new_unittest("eeq-dbdL-mb01", test_eeq_dbdL_mb01), &
-         ! & new_unittest("eeq-charges-mb01", test_eeq_q_mb01), &
-         ! & new_unittest("eeq-charges-mb02", test_eeq_q_mb02), &
-         ! & new_unittest("eeq-charges-actinides", test_eeq_q_actinides), &
-         ! & new_unittest("eeq-energy-mb03", test_eeq_e_mb03), &
-         ! & new_unittest("eeq-energy-mb04", test_eeq_e_mb04), &
-         ! & new_unittest("eeq-gradient-mb05", test_eeq_g_mb05), &
-         ! & new_unittest("eeq-gradient-mb06", test_eeq_g_mb06), &
-         ! & new_unittest("eeq-sigma-mb07", test_eeq_s_mb07), &
-         ! & new_unittest("eeq-sigma-mb08", test_eeq_s_mb08), &
-         ! & new_unittest("eeq-dqdr-mb09", test_eeq_dqdr_mb09), &
-         ! & new_unittest("eeq-dqdr-mb10", test_eeq_dqdr_mb10), &
-         ! & new_unittest("eeq-dqdL-mb11", test_eeq_dqdL_mb11), &
-         ! & new_unittest("eeq-dqdL-mb12", test_eeq_dqdL_mb12), &
-         ! & new_unittest("gradient-h2plus", test_g_h2plus), &
-         ! & new_unittest("eeq-dadr-znooh", test_eeq_dadr_znooh), &
-         ! & new_unittest("eeq-dbdr-znooh", test_eeq_dbdr_znooh), &
-         ! & new_unittest("gradient-znooh", test_g_znooh), &
-         ! & new_unittest("dqdr-znooh", test_dqdr_znooh), &
-         ! ! & new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), & ! does not pass even though error is basically 0
-         ! & new_unittest("eeqbc-dadL-mb01", test_eeqbc_dadL_mb01), &
+         & new_unittest("eeq-dadr-mb01", test_eeq_dadr_mb01), &
+         & new_unittest("eeq-dadL-mb01", test_eeq_dadL_mb01), &
+         & new_unittest("eeq-dbdr-mb01", test_eeq_dbdr_mb01), &
+         & new_unittest("eeq-dbdL-mb01", test_eeq_dbdL_mb01), &
+         & new_unittest("eeq-charges-mb01", test_eeq_q_mb01), &
+         & new_unittest("eeq-charges-mb02", test_eeq_q_mb02), &
+         & new_unittest("eeq-charges-actinides", test_eeq_q_actinides), &
+         & new_unittest("eeq-energy-mb03", test_eeq_e_mb03), &
+         & new_unittest("eeq-energy-mb04", test_eeq_e_mb04), &
+         & new_unittest("eeq-gradient-mb05", test_eeq_g_mb05), &
+         & new_unittest("eeq-gradient-mb06", test_eeq_g_mb06), &
+         & new_unittest("eeq-sigma-mb07", test_eeq_s_mb07), &
+         & new_unittest("eeq-sigma-mb08", test_eeq_s_mb08), &
+         & new_unittest("eeq-dqdr-mb09", test_eeq_dqdr_mb09), &
+         & new_unittest("eeq-dqdr-mb10", test_eeq_dqdr_mb10), &
+         & new_unittest("eeq-dqdL-mb11", test_eeq_dqdL_mb11), &
+         & new_unittest("eeq-dqdL-mb12", test_eeq_dqdL_mb12), &
+         & new_unittest("gradient-h2plus", test_g_h2plus), &
+         & new_unittest("eeq-dadr-znooh", test_eeq_dadr_znooh), &
+         & new_unittest("eeq-dbdr-znooh", test_eeq_dbdr_znooh), &
+         & new_unittest("gradient-znooh", test_g_znooh), &
+         & new_unittest("dqdr-znooh", test_dqdr_znooh), &
+         ! & new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), & ! does not pass even though error is basically 0
+         & new_unittest("eeqbc-dadL-mb01", test_eeqbc_dadL_mb01), &
          & new_unittest("eeqbc-dbdr-mb01", test_eeqbc_dbdr_mb01), &
-         & new_unittest("eeqbc-dbdL-mb01", test_eeqbc_dbdL_mb01) &
-         ! & new_unittest("eeqbc-dadr-mb05", test_eeqbc_dadr_mb05) &
-         ! & new_unittest("eeqbc-dbdr-mb05", test_eeqbc_dbdr_mb05), &
-         ! & new_unittest("eeqbc-charges-mb01", test_eeqbc_q_mb01), &
-         ! & new_unittest("eeqbc-charges-mb02", test_eeqbc_q_mb02), &
-         ! & new_unittest("eeqbc-charges-actinides", test_eeqbc_q_actinides), &
-         ! & new_unittest("eeqbc-energy-mb03", test_eeqbc_e_mb03), &
-         ! & new_unittest("eeqbc-energy-mb04", test_eeqbc_e_mb04), &
-         ! & new_unittest("eeqbc-gradient-mb05", test_eeqbc_g_mb05), &
-         ! & new_unittest("eeqbc-gradient-mb06", test_eeqbc_g_mb06), &
-         ! ! & new_unittest("eeqbc-sigma-mb07", test_eeqbc_s_mb07), &
-         ! ! & new_unittest("eeqbc-sigma-mb08", test_eeqbc_s_mb08), &
-         ! & new_unittest("eeqbc-dqdr-mb09", test_eeqbc_dqdr_mb09), &
-         ! & new_unittest("eeqbc-dqdr-mb10", test_eeqbc_dqdr_mb10) &
-         ! !& new_unittest("eeqbc-dqdL-mb11", test_eeqbc_dqdL_mb11), &
-         ! !& new_unittest("eeqbc-dqdL-mb12", test_eeqbc_dqdL_mb12) &
+         & new_unittest("eeqbc-dbdL-mb01", test_eeqbc_dbdL_mb01), &
+         & new_unittest("eeqbc-dadr-mb05", test_eeqbc_dadr_mb05), &
+         & new_unittest("eeqbc-dbdr-mb05", test_eeqbc_dbdr_mb05), &
+         & new_unittest("eeqbc-charges-mb01", test_eeqbc_q_mb01), &
+         & new_unittest("eeqbc-charges-mb02", test_eeqbc_q_mb02), &
+         & new_unittest("eeqbc-charges-actinides", test_eeqbc_q_actinides), &
+         & new_unittest("eeqbc-energy-mb03", test_eeqbc_e_mb03), &
+         & new_unittest("eeqbc-energy-mb04", test_eeqbc_e_mb04), &
+         & new_unittest("eeqbc-gradient-mb05", test_eeqbc_g_mb05), &
+         & new_unittest("eeqbc-gradient-mb06", test_eeqbc_g_mb06), &
+         & new_unittest("eeqbc-sigma-mb07", test_eeqbc_s_mb07), &
+         & new_unittest("eeqbc-sigma-mb08", test_eeqbc_s_mb08), &
+         & new_unittest("eeqbc-dqdr-mb09", test_eeqbc_dqdr_mb09), &
+         & new_unittest("eeqbc-dqdr-mb10", test_eeqbc_dqdr_mb10), &
+         & new_unittest("eeqbc-dqdL-mb11", test_eeqbc_dqdL_mb11), &
+         & new_unittest("eeqbc-dqdL-mb12", test_eeqbc_dqdL_mb12) &
          & ]
 
    end subroutine collect_model
@@ -106,11 +106,12 @@ contains
       real(wp), allocatable :: qloc(:)
       real(wp), allocatable :: dcndr(:, :, :), dcndL(:, :, :), dqlocdr(:, :, :), dqlocdL(:, :, :)
       real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
-      real(wp), allocatable :: qvec(:), numgrad(:, :, :), amatr(:, :), amatl(:, :), numtrace(:, :)
+      real(wp), allocatable :: qvec(:), numgrad(:, :, :), amatr1(:, :), amatr2(:, :), amatl1(:, :), amatl2(:, :), numtrace(:, :)
       type(cache_container), allocatable :: cache
       allocate (cache)
 
-      allocate (cn(mol%nat), qloc(mol%nat), amatr(mol%nat + 1, mol%nat + 1), amatl(mol%nat + 1, mol%nat + 1), &
+      allocate (cn(mol%nat), qloc(mol%nat), amatr1(mol%nat + 1, mol%nat + 1), amatl1(mol%nat + 1, mol%nat + 1), &
+         & amatr2(mol%nat + 1, mol%nat + 1), amatl2(mol%nat + 1, mol%nat + 1), &
          & dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), dqlocdr(3, mol%nat, mol%nat), &
          & dqlocdL(3, 3, mol%nat), dadr(3, mol%nat, mol%nat + 1), dadL(3, 3, mol%nat + 1), &
          & atrace(3, mol%nat), numtrace(3, mol%nat), numgrad(3, mol%nat, mol%nat + 1), qvec(mol%nat))
@@ -125,32 +126,57 @@ contains
 
       lp: do iat = 1, mol%nat
          do ic = 1, 3
-            ! Right-hand side
-            amatr(:, :) = 0.0_wp
+            amatr1(:, :) = 0.0_wp
+            amatr2(:, :) = 0.0_wp
+            amatl1(:, :) = 0.0_wp
+            amatl2(:, :) = 0.0_wp
+
+            ! First right-hand side (x+h)
             mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
             call model%update(mol, cache, cn, qloc)
-            call model%get_coulomb_matrix(mol, cache, amatr)
+            call model%get_coulomb_matrix(mol, cache, amatr1)
 
-            ! Left-hand side
-            amatl(:, :) = 0.0_wp
+            ! Second right-hand side (x+2h)
+            mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
+            call model%ncoord%get_coordination_number(mol, trans, cn)
+            call model%local_charge(mol, trans, qloc)
+            call model%update(mol, cache, cn, qloc)
+            call model%get_coulomb_matrix(mol, cache, amatr2)
+
+            ! Return to original position before calculating left sides
             mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
+
+            ! First left-hand side (x-h)
+            mol%xyz(ic, iat) = mol%xyz(ic, iat) - step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
             call model%update(mol, cache, cn, qloc)
-            call model%get_coulomb_matrix(mol, cache, amatl)
+            call model%get_coulomb_matrix(mol, cache, amatl1)
 
-            mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
+            ! Second left-hand side (x-2h)
+            mol%xyz(ic, iat) = mol%xyz(ic, iat) - step
+            call model%ncoord%get_coordination_number(mol, trans, cn)
+            call model%local_charge(mol, trans, qloc)
+            call model%update(mol, cache, cn, qloc)
+            call model%get_coulomb_matrix(mol, cache, amatl2)
+
+            ! Return to original position
+            mol%xyz(ic, iat) = mol%xyz(ic, iat) + 2*step
 
             do kat = 1, mol%nat
                do jat = 1, mol%nat
-                  ! Numerical gradient of the A matrix
-                  numgrad(ic, iat, kat) = 0.5_wp*qvec(jat)*(amatr(kat, jat) - amatl(kat, jat))/step &
-                     & + numgrad(ic, iat, kat)
+                  ! Numerical gradient using 4-step central difference formula
+                  ! f'(x) ≈ [f(x-2h) - 8f(x-h) + 8f(x+h) - f(x+2h)]/(12h)
+                  numgrad(ic, iat, kat) = numgrad(ic, iat, kat) + &
+                     & qvec(jat)*(amatl2(kat, jat) - 8.0_wp*amatl1(kat, jat) + &
+                     & 8.0_wp*amatr1(kat, jat) - amatr2(kat, jat))/(12.0_wp*step)
                end do
             end do
-            ! numgrad(ic, iat, :) = numgrad(ic, iat, :) + 0.5_wp*(amatr(iat, :) - amatl(iat, :))/step ! for dcdr test
+            ! For dcdr test
+            ! numgrad(ic, iat, :) = numgrad(ic, iat, :) + &
+            !    & (amatl2(iat, :) - 8.0_wp*amatl1(iat, :) + 8.0_wp*amatr1(iat, :) - amatr2(iat, :))/(12.0_wp*step)
          end do
       end do lp
 

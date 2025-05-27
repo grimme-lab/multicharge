@@ -380,12 +380,11 @@ contains
             if (iat .eq. jat) cycle
             ! dxdr(:, iat, jat) = ptr%xtmp(iat)*ptr%dcdr(:, iat, jat)
             ! dxdr(:, iat, iat) = ptr%xtmp(jat)*ptr%dcdr(:, iat, jat) + dxdr(:, iat, iat)
-            ! dxdL(:, :, iat) = dxdL(:, :, iat) - spread(ptr%xtmp(iat)*ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3) = ptr%xtmp(iat)*ptr%dcdL(:, :, iat)
-            dxdL(:, :, iat) = dxdL(:, :, iat) + spread(ptr%xtmp(jat)*ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3)
+            dxdL(:, :, iat) = dxdL(:, :, iat) + ptr%xtmp(jat)*spread(ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3)
          end do
          ! for diagonals only:
          ! dxdr(:, iat, iat) = ptr%xtmp(iat)*ptr%dcdr(:, iat, iat)
-         dxdL(:, :, iat) = dxdL(:, :, iat) + ptr%xtmp(iat)*ptr%dcdL(:, :, iat)
+         dxdL(:, :, iat) = dxdL(:, :, iat) + ptr%xtmp(iat)*ptr%dcdL(:, :, iat) ! = sum(- ptr%xtmp(iat)*spread(ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3)) for i != j
       end do
 
    end subroutine get_xvec_derivs
@@ -443,8 +442,8 @@ contains
             ! Coulomb interaction of Gaussian charges
             gam2 = 1.0_wp/(radi**2 + radj**2)
             tmp = erf(sqrt(r2*gam2))/sqrt(r2)*cmat(jat, iat)
-            amat_local(jat, iat) = amat_local(jat, iat) + tmp
-            amat_local(iat, jat) = amat_local(iat, jat) + tmp
+            amat_local(jat, iat) = tmp
+            amat_local(iat, jat) = tmp
          end do
          ! Effective hardness
          tmp = self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi
@@ -618,7 +617,7 @@ contains
 
       atrace(:, :) = 0.0_wp
       dadr(:, :, :) = 0.0_wp
-      dadL(:, :, :) = 0.0_wp ! needs to be checked (*almost* correct)
+      dadL(:, :, :) = 0.0_wp
 
       !$omp parallel default(none) &
       !$omp shared(atrace, dadr, dadL, mol, self, cn, qloc, qvec) &
@@ -656,14 +655,14 @@ contains
             arg = gam*gam*r2
             dtmp = 2.0_wp*gam*exp(-arg)/(sqrtpi*r2) &
                & - erf(sqrt(arg))/(r2*sqrt(r2))
-            dG(:) = -dtmp*vec
+            dG(:) = dtmp*vec
             dS(:, :) = spread(dG, 1, 3)*spread(vec, 2, 3)
-            atrace_local(:, iat) = +dG*qvec(jat)*cmat(jat, iat) + atrace_local(:, iat)
-            atrace_local(:, jat) = -dG*qvec(iat)*cmat(iat, jat) + atrace_local(:, jat)
-            dadr_local(:, iat, jat) = +dG*qvec(iat)*cmat(iat, jat) + dadr_local(:, iat, jat)
-            dadr_local(:, jat, iat) = -dG*qvec(jat)*cmat(jat, iat) + dadr_local(:, jat, iat)
-            dadL_local(:, :, iat) = -dS*qvec(jat)*cmat(jat, iat) + dadL_local(:, :, iat)
-            dadL_local(:, :, jat) = -dS*qvec(iat)*cmat(iat, jat) + dadL_local(:, :, jat)
+            atrace_local(:, iat) = -dG*qvec(jat)*cmat(jat, iat) + atrace_local(:, iat)
+            atrace_local(:, jat) = +dG*qvec(iat)*cmat(iat, jat) + atrace_local(:, jat)
+            dadr_local(:, iat, jat) = -dG*qvec(iat)*cmat(iat, jat) + dadr_local(:, iat, jat)
+            dadr_local(:, jat, iat) = +dG*qvec(jat)*cmat(jat, iat) + dadr_local(:, jat, iat)
+            dadL_local(:, :, iat) = +dS*qvec(jat)*cmat(jat, iat) + dadL_local(:, :, iat)
+            dadL_local(:, :, jat) = +dS*qvec(iat)*cmat(iat, jat) + dadL_local(:, :, jat)
 
             ! Effective charge width derivative
             dtmp = 2.0_wp*exp(-arg)/(sqrtpi)
@@ -681,15 +680,17 @@ contains
             atrace_local(:, jat) = -dtmp*qvec(iat)*dcdr(:, iat, jat) + atrace_local(:, jat)
             dadr_local(:, iat, jat) = +dtmp*qvec(iat)*dcdr(:, iat, jat) + dadr_local(:, iat, jat)
             dadr_local(:, jat, iat) = +dtmp*qvec(jat)*dcdr(:, jat, iat) + dadr_local(:, jat, iat)
-            dadL_local(:, :, iat) = +dtmp*qvec(jat)*dcdL(:, :, jat) + dadL_local(:, :, iat)
-            dadL_local(:, :, jat) = +dtmp*qvec(iat)*dcdL(:, :, iat) + dadL_local(:, :, jat)
+            ! dadL_local(:, :, iat) = +dtmp*qvec(jat)*dcdL(:, :, jat) + dadL_local(:, :, iat)
+            ! dadL_local(:, :, jat) = +dtmp*qvec(iat)*dcdL(:, :, iat) + dadL_local(:, :, jat)
+            dadL_local(:, :, iat) = dadL_local(:, :, iat) - dtmp*qvec(jat)*spread(dcdr(:, iat, jat), 2, 3)*spread(vec, 1, 3)
+            dadL_local(:, :, jat) = dadL_local(:, :, jat) - dtmp*qvec(iat)*spread(dcdr(:, iat, jat), 2, 3)*spread(vec, 1, 3)
 
             ! Capacitance derivative diagonal
             dtmp = (self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi)*qvec(iat)
             dadr_local(:, jat, iat) = -dtmp*dcdr(:, jat, iat) + dadr_local(:, jat, iat)
+
             dtmp = (self%eta(jzp) + self%kqeta(jzp)*qloc(jat) + sqrt2pi/radj)*qvec(jat)
             dadr_local(:, iat, jat) = -dtmp*dcdr(:, iat, jat) + dadr_local(:, iat, jat)
-            ! NOTE: dL contributions here?
          end do
 
          ! Hardness derivative
@@ -803,10 +804,10 @@ contains
                dgam = dgam*wsw
 
                ! Explicit derivative
-               atrace_local(:, iat) = +dG*qvec(jat) + atrace_local(:, iat)
-               atrace_local(:, jat) = -dG*qvec(iat) + atrace_local(:, jat)
-               dadr_local(:, iat, jat) = +dG*qvec(iat) + dadr_local(:, iat, jat)
-               dadr_local(:, jat, iat) = -dG*qvec(jat) + dadr_local(:, jat, iat)
+               atrace_local(:, iat) = -dG*qvec(jat) + atrace_local(:, iat)
+               atrace_local(:, jat) = +dG*qvec(iat) + atrace_local(:, jat)
+               dadr_local(:, iat, jat) = -dG*qvec(iat) + dadr_local(:, iat, jat)
+               dadr_local(:, jat, iat) = +dG*qvec(jat) + dadr_local(:, jat, iat)
                dadL_local(:, :, jat) = +dS*qvec(iat) + dadL_local(:, :, jat)
                dadL_local(:, :, iat) = +dS*qvec(jat) + dadL_local(:, :, iat)
 

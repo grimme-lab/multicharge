@@ -277,7 +277,7 @@ contains
             gam = 1.0_wp/sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
             wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
             do img = 1, wsc%nimg(jat, iat)
-               vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
+               vec = mol%xyz(:, jat) - mol%xyz(:, iat) + wsc%trans(:, wsc%tridx(img, jat, iat))
                call get_amat_dir_3d(vec, gam, alpha, dtrans, dtmp)
                call get_amat_rec_3d(vec, vol, alpha, rtrans, rtmp)
                amat_local(jat, iat) = amat_local(jat, iat) + (dtmp + rtmp)*wsw
@@ -404,17 +404,17 @@ contains
          izp = mol%id(iat)
          do jat = 1, iat - 1
             jzp = mol%id(jat)
-            vec = mol%xyz(:, iat) - mol%xyz(:, jat)
+            vec = mol%xyz(:, jat) - mol%xyz(:, iat)
             r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
             gam = 1.0_wp/sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
             arg = gam*gam*r2
             dtmp = 2.0_wp*gam*exp(-arg)/(sqrtpi*r2) - erf(sqrt(arg))/(r2*sqrt(r2))
             dG = dtmp*vec
             dS = spread(dG, 1, 3)*spread(vec, 2, 3)
-            atrace_local(:, iat) = +dG*qvec(jat) + atrace_local(:, iat)
-            atrace_local(:, jat) = -dG*qvec(iat) + atrace_local(:, jat)
-            dadr_local(:, iat, jat) = +dG*qvec(iat)
-            dadr_local(:, jat, iat) = -dG*qvec(jat)
+            atrace_local(:, iat) = -dG*qvec(jat) + atrace_local(:, iat)
+            atrace_local(:, jat) = +dG*qvec(iat) + atrace_local(:, jat)
+            dadr_local(:, iat, jat) = -dG*qvec(iat)
+            dadr_local(:, jat, iat) = +dG*qvec(jat)
             dadL_local(:, :, jat) = +dS*qvec(iat) + dadL_local(:, :, jat)
             dadL_local(:, :, iat) = +dS*qvec(jat) + dadL_local(:, :, iat)
          end do
@@ -475,16 +475,16 @@ contains
             gam = 1.0_wp/sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
             wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
             do img = 1, wsc%nimg(jat, iat)
-               vec = mol%xyz(:, iat) - mol%xyz(:, jat) - wsc%trans(:, wsc%tridx(img, jat, iat))
+               vec = mol%xyz(:, jat) - mol%xyz(:, iat) + wsc%trans(:, wsc%tridx(img, jat, iat))
                call get_damat_dir_3d(vec, gam, alpha, dtrans, dGd, dSd)
                call get_damat_rec_3d(vec, vol, alpha, rtrans, dGr, dSr)
                dG = dG + (dGd + dGr)*wsw
                dS = dS + (dSd + dSr)*wsw
             end do
-            atrace_local(:, iat) = +dG*qvec(jat) + atrace_local(:, iat)
-            atrace_local(:, jat) = -dG*qvec(iat) + atrace_local(:, jat)
-            dadr_local(:, iat, jat) = +dG*qvec(iat) + dadr_local(:, iat, jat)
-            dadr_local(:, jat, iat) = -dG*qvec(jat) + dadr_local(:, jat, iat)
+            atrace_local(:, iat) = -dG*qvec(jat) + atrace_local(:, iat)
+            atrace_local(:, jat) = +dG*qvec(iat) + atrace_local(:, jat)
+            dadr_local(:, iat, jat) = -dG*qvec(iat) + dadr_local(:, iat, jat)
+            dadr_local(:, jat, iat) = +dG*qvec(jat) + dadr_local(:, jat, iat)
             dadL_local(:, :, jat) = +dS*qvec(iat) + dadL_local(:, :, jat)
             dadL_local(:, :, iat) = +dS*qvec(jat) + dadL_local(:, :, iat)
          end do
