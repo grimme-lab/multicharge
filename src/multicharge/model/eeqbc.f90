@@ -854,7 +854,6 @@ contains
             atrace_local(:, iat) = -dtmp*dcndr(:, iat, iat)*dgam*wsw + atrace_local(:, iat) ! questionable
             dadr_local(:, :, iat) = +dtmp*dcndr(:, :, iat)*dgam*wsw + dadr_local(:, :, iat) ! questionable sign
             dadL_local(:, :, iat) = +dtmp*dcndL(:, :, iat)*dgam*wsw + dadL_local(:, :, iat)
-            ! NOTE: we also need dadL contributions from C_ii^T terms
          end do
 
          ! True diagonal contributions
