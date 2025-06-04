@@ -267,6 +267,7 @@ contains
 
       call view(cache, ptr)
 
+      xvec(:) = 0.0_wp
       !$omp parallel do default(none) schedule(runtime) &
       !$omp shared(mol, self, ptr) private(iat, izp)
       do iat = 1, mol%nat
@@ -308,8 +309,8 @@ contains
 
       type(eeqbc_cache), pointer :: ptr
 
-      integer :: iat, izp, jat, img
-      real(wp) :: capi, wsw, vec(3), ctmp, rvdw, dG(3), dS(3, 3)
+      integer :: iat, izp, jat, jzp, img
+      real(wp) :: capi, capj, wsw, vec(3), ctmp, rvdw, dG(3), dS(3, 3)
       real(wp), allocatable :: dtmpdr(:, :, :), dtmpdL(:, :, :)
       real(wp), allocatable :: dtrans(:, :)
 
@@ -342,50 +343,72 @@ contains
       if (any(mol%periodic)) then
          call get_dir_trans(mol%lattice, dtrans)
          !$omp parallel do default(none) schedule(runtime) &
-         !$omp shared(mol, self, ptr, dxdr, dxdL, dtrans) private(iat, izp, img, wsw) &
-         !$omp private(capi, vec, rvdw, ctmp, dG, dS)
+         !$omp shared(mol, self, ptr, dxdr, dxdL, dtrans) &
+         !$omp private(iat, izp, jat, jzp, img, wsw) &
+         !$omp private(capi, capj, vec, rvdw, ctmp, dG, dS)
          do iat = 1, mol%nat
             izp = mol%id(iat)
             capi = self%cap(izp)
-            ! add quasi off-diagonal (i = j, T != 0)
+            do jat = 1, mol%nat
+               ! Diagonal elements
+               dxdr(:, iat, iat) = dxdr(:, iat, iat) + ptr%xtmp(jat)*ptr%dcdr(:, iat, jat)
+               ! Derivative of capacitance matrix
+               dxdr(:, iat, jat) = (ptr%xtmp(iat) - ptr%xtmp(jat))*ptr%dcdr(:, iat, jat) &
+               & + dxdr(:, iat, jat)
+               if (iat .eq. jat) cycle
+               jzp = mol%id(jat)
+               capj = self%cap(jzp)
+               rvdw = self%rvdw(iat, jat)
+               wsw = 1.0_wp/real(ptr%wsc%nimg(iat, jat), wp)
+               do img = 1, ptr%wsc%nimg(iat, jat)
+                  vec = mol%xyz(:, jat) - mol%xyz(:, iat) + ptr%wsc%trans(:, ptr%wsc%tridx(img, jat, iat))
+                  call get_dcpair_dir(self%kbc, vec, dtrans, rvdw, capi, capj, dG, dS)
+                  dxdL(:, :, iat) = dxdL(:, :, iat) + wsw*dS*ptr%xtmp(jat)
+               end do
+            end do
+            dxdL(:, :, iat) = dxdL(:, :, iat) + ptr%xtmp(iat)*ptr%dcdL(:, :, iat) ! = sum(- ptr%xtmp(iat)*spread(ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3)) for i != j
+
+            ! Capacitance terms for i = j, T != 0
             rvdw = self%rvdw(iat, iat)
             wsw = 1.0_wp/real(ptr%wsc%nimg(iat, iat), wp)
             do img = 1, ptr%wsc%nimg(iat, iat)
                vec = ptr%wsc%trans(:, ptr%wsc%tridx(img, iat, iat))
 
                call get_cpair_dir(self%kbc, vec, dtrans, rvdw, capi, capi, ctmp)
-               dxdr(:, :, iat) = dxdr(:, :, iat) - wsw*ctmp*self%kcnchi(izp)*ptr%dcndr(:, :, iat)
-               dxdL(:, :, iat) = dxdL(:, :, iat) - wsw*ctmp*self%kcnchi(izp)*ptr%dcndL(:, :, iat)
-               dxdr(:, :, iat) = dxdr(:, :, iat) - wsw*ctmp*self%kqchi(izp)*ptr%dqlocdr(:, :, iat)
-               dxdL(:, :, iat) = dxdL(:, :, iat) - wsw*ctmp*self%kqchi(izp)*ptr%dqlocdL(:, :, iat)
+               ctmp = ctmp*wsw
+               ! EN derivative
+               dxdr(:, :, iat) = dxdr(:, :, iat) - ctmp*self%kcnchi(izp)*ptr%dcndr(:, :, iat)
+               dxdL(:, :, iat) = dxdL(:, :, iat) - ctmp*self%kcnchi(izp)*ptr%dcndL(:, :, iat)
+               dxdr(:, :, iat) = dxdr(:, :, iat) - ctmp*self%kqchi(izp)*ptr%dqlocdr(:, :, iat)
+               dxdL(:, :, iat) = dxdL(:, :, iat) - ctmp*self%kqchi(izp)*ptr%dqlocdL(:, :, iat)
             end do
          end do
-      end if
-
-      !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(mol, self, ptr, dxdr, dxdL) &
-      !$omp private(iat, izp, vec)
-      do iat = 1, mol%nat
-         do jat = 1, mol%nat
-            vec = mol%xyz(:, iat) - mol%xyz(:, jat)
-            ! Diagonal elements
-            dxdr(:, iat, iat) = dxdr(:, iat, iat) + ptr%xtmp(jat)*ptr%dcdr(:, iat, jat)
-            ! Derivative of capacitance matrix
-            dxdr(:, iat, jat) = (ptr%xtmp(iat) - ptr%xtmp(jat))*ptr%dcdr(:, iat, jat) &
+      else
+         !$omp parallel do default(none) schedule(runtime) &
+         !$omp shared(mol, self, ptr, dxdr, dxdL) &
+         !$omp private(iat, izp, vec)
+         do iat = 1, mol%nat
+            do jat = 1, mol%nat
+               vec = mol%xyz(:, iat) - mol%xyz(:, jat)
+               ! Diagonal elements
+               dxdr(:, iat, iat) = dxdr(:, iat, iat) + ptr%xtmp(jat)*ptr%dcdr(:, iat, jat)
+               ! Derivative of capacitance matrix
+               dxdr(:, iat, jat) = (ptr%xtmp(iat) - ptr%xtmp(jat))*ptr%dcdr(:, iat, jat) &
                & + dxdr(:, iat, jat)
+               ! for diagonals only:
+               ! if (iat .eq. jat) cycle
+               ! dxdr(:, iat, jat) = (-ptr%xtmp(jat))*ptr%dcdr(:, iat, jat)
+               ! for off-digonals only:
+               if (iat .eq. jat) cycle
+               ! dxdr(:, iat, jat) = ptr%xtmp(iat)*ptr%dcdr(:, iat, jat)
+               ! dxdr(:, iat, iat) = ptr%xtmp(jat)*ptr%dcdr(:, iat, jat) + dxdr(:, iat, iat)
+               dxdL(:, :, iat) = dxdL(:, :, iat) + ptr%xtmp(jat)*spread(ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3)
+            end do
             ! for diagonals only:
-            ! if (iat .eq. jat) cycle
-            ! dxdr(:, iat, jat) = (-ptr%xtmp(jat))*ptr%dcdr(:, iat, jat)
-            ! for off-digonals only:
-            if (iat .eq. jat) cycle
-            ! dxdr(:, iat, jat) = ptr%xtmp(iat)*ptr%dcdr(:, iat, jat)
-            ! dxdr(:, iat, iat) = ptr%xtmp(jat)*ptr%dcdr(:, iat, jat) + dxdr(:, iat, iat)
-            dxdL(:, :, iat) = dxdL(:, :, iat) + ptr%xtmp(jat)*spread(ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3)
+            ! dxdr(:, iat, iat) = ptr%xtmp(iat)*ptr%dcdr(:, iat, iat)
+            dxdL(:, :, iat) = dxdL(:, :, iat) + ptr%xtmp(iat)*ptr%dcdL(:, :, iat) ! = sum(- ptr%xtmp(iat)*spread(ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3)) for i != j
          end do
-         ! for diagonals only:
-         ! dxdr(:, iat, iat) = ptr%xtmp(iat)*ptr%dcdr(:, iat, iat)
-         dxdL(:, :, iat) = dxdL(:, :, iat) + ptr%xtmp(iat)*ptr%dcdL(:, :, iat) ! = sum(- ptr%xtmp(iat)*spread(ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3)) for i != j
-      end do
+      end if
 
    end subroutine get_xvec_derivs
 
@@ -843,7 +866,6 @@ contains
             end do
          end do
 
-         ! Effective charge width derivative for quasi-diagonal terms
          gam = 1.0_wp/sqrt(2.0_wp*radi**2)
          dtmp = -sqrt2pi*dradi/(radi**2)*qvec(iat)
          rvdw = self%rvdw(iat, iat)
@@ -851,12 +873,22 @@ contains
          do img = 1, wsc%nimg(iat, iat)
             vec = wsc%trans(:, wsc%tridx(img, iat, iat))
             call get_damat_dir(vec, dtrans, capi, capi, rvdw, self%kbc, gam, dG, dS, dgam)
-            atrace_local(:, iat) = -dtmp*dcndr(:, iat, iat)*dgam*wsw + atrace_local(:, iat) ! questionable
-            dadr_local(:, :, iat) = +dtmp*dcndr(:, :, iat)*dgam*wsw + dadr_local(:, :, iat) ! questionable sign
-            dadL_local(:, :, iat) = +dtmp*dcndL(:, :, iat)*dgam*wsw + dadL_local(:, :, iat)
+            dgam = dgam*wsw
+
+            ! Explicit derivative
+            dadL_local(:, :, iat) = +dS*wsw*qvec(iat) + dadL_local(:, :, iat)
+
+            ! Effective charge width derivative
+            atrace_local(:, iat) = -dtmp*dcndr(:, iat, iat)*dgam + atrace_local(:, iat) ! questionable
+            dadr_local(:, :, iat) = +dtmp*dcndr(:, :, iat)*dgam + dadr_local(:, :, iat) ! questionable sign
+            dadL_local(:, :, iat) = +dtmp*dcndL(:, :, iat)*dgam + dadL_local(:, :, iat)
+
+            ! True diagonal contributions
+            ! Capacitance derivative
+
+            ! Hardness derivative
          end do
 
-         ! True diagonal contributions
          ! Hardness derivative
          dtmp = self%kqeta(izp)*qvec(iat)*cmat(iat, iat)
          !atrace_local(:, iat)    = +dtmp*dqlocdr(:, iat, iat) + atrace_local(:, iat)
@@ -1010,7 +1042,7 @@ contains
 
       call get_dir_trans(mol%lattice, dtrans)
 
-      cmat(:, :) = 0.0_wp
+      cmat(:, :) = 0.0_wp!1.0_wp/real(25, wp)
 
       !$omp parallel default(none) &
       !$omp shared(cmat, mol, self, wsc, dtrans) &
