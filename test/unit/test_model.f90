@@ -65,7 +65,7 @@ contains
          & new_unittest("eeq-dbdr-znooh", test_eeq_dbdr_znooh), &
          & new_unittest("gradient-znooh", test_g_znooh), &
          & new_unittest("dqdr-znooh", test_dqdr_znooh), &
-         ! & new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), & ! does not pass even though error is basically 0
+         ! & new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), & ! fails randomly due to numerical noise?
          & new_unittest("eeqbc-dadL-mb01", test_eeqbc_dadL_mb01), &
          & new_unittest("eeqbc-dbdr-mb01", test_eeqbc_dbdr_mb01), &
          & new_unittest("eeqbc-dbdL-mb01", test_eeqbc_dbdL_mb01), &
