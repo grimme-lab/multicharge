@@ -70,6 +70,7 @@ contains
          & new_unittest("eeqbc-dbdr-mb01", test_eeqbc_dbdr_mb01), &
          & new_unittest("eeqbc-dbdL-mb01", test_eeqbc_dbdL_mb01), &
          & new_unittest("eeqbc-dadr-mb05", test_eeqbc_dadr_mb05), &
+         & new_unittest("eeqbc-dadL-mb05", test_eeqbc_dadL_mb05), &
          & new_unittest("eeqbc-dbdr-mb05", test_eeqbc_dbdr_mb05), &
          & new_unittest("eeqbc-charges-mb01", test_eeqbc_q_mb01), &
          & new_unittest("eeqbc-charges-mb02", test_eeqbc_q_mb02), &
@@ -1433,6 +1434,21 @@ contains
       call test_dadr(error, mol, model)
 
    end subroutine test_eeqbc_dadr_mb05
+
+   subroutine test_eeqbc_dadL_mb05(error)
+
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      type(structure_type) :: mol
+      class(mchrg_model_type), allocatable :: model
+
+      call get_structure(mol, "MB16-43", "05")
+      call new_eeqbc2024_model(mol, model, error)
+      if (allocated(error)) return
+      call test_dadL(error, mol, model)
+
+   end subroutine test_eeqbc_dadL_mb05
 
    subroutine test_eeqbc_dbdr_mb05(error)
 
