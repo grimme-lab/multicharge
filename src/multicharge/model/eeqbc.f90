@@ -355,7 +355,6 @@ contains
                ! Derivative of capacitance matrix
                dxdr(:, iat, jat) = (ptr%xtmp(iat) - ptr%xtmp(jat))*ptr%dcdr(:, iat, jat) &
                & + dxdr(:, iat, jat)
-               if (iat .eq. jat) cycle
                jzp = mol%id(jat)
                capj = self%cap(jzp)
                rvdw = self%rvdw(iat, jat)
@@ -366,7 +365,7 @@ contains
                   dxdL(:, :, iat) = dxdL(:, :, iat) + wsw*dS*ptr%xtmp(jat)
                end do
             end do
-            dxdL(:, :, iat) = dxdL(:, :, iat) + ptr%xtmp(iat)*ptr%dcdL(:, :, iat) ! = sum(- ptr%xtmp(iat)*spread(ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3)) for i != j
+            dxdL(:, :, iat) = dxdL(:, :, iat) + ptr%xtmp(iat)*ptr%dcdL(:, :, iat)
 
             ! Capacitance terms for i = j, T != 0
             rvdw = self%rvdw(iat, iat)
@@ -876,16 +875,16 @@ contains
             dgam = dgam*wsw
 
             ! Explicit derivative
-            dadL_local(:, :, iat) = -dS*wsw*qvec(iat) + dadL_local(:, :, iat)
+            dadL_local(:, :, iat) = +dS*wsw*qvec(iat) + dadL_local(:, :, iat)
 
             ! Effective charge width derivative
-            atrace_local(:, iat) = -dtmp*dcndr(:, iat, iat)*dgam + atrace_local(:, iat)
-            dadr_local(:, :, iat) = +dtmp*dcndr(:, :, iat)*dgam + dadr_local(:, :, iat)
-            dadL_local(:, :, iat) = +dtmp*dcndL(:, :, iat)*dgam + dadL_local(:, :, iat)
+            atrace_local(:, iat) = +dtmp*dcndr(:, iat, iat)*dgam + atrace_local(:, iat)
+            dadr_local(:, iat, iat) = -dtmp*dcndr(:, iat, iat)*dgam + dadr_local(:, iat, iat)
+            dadL_local(:, :, iat) = -dtmp*dcndL(:, :, iat)*dgam + dadL_local(:, :, iat)
 
             ! Capacitance derivative
             call get_damat_dc_dir(vec, dtrans, capi, capi, rvdw, self%kbc, gam, dG, dS)
-            dadL_local(:, :, iat) = -qvec(jat)*dS*wsw + dadL_local(:, :, iat)
+            dadL_local(:, :, iat) = +qvec(iat)*dS*wsw + dadL_local(:, :, iat)
          end do
 
          ! Hardness derivative
@@ -900,7 +899,6 @@ contains
          dadr_local(:, :, iat) = +dtmp*dcndr(:, :, iat) + dadr_local(:, :, iat)
          dadL_local(:, :, iat) = +dtmp*dcndL(:, :, iat) + dadL_local(:, :, iat)
 
-         ! Capacitance derivative
          dtmp = (self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi)*qvec(iat)
          !atrace_local(:, iat)    = -dtmp*dcdr(:, iat, iat) + atrace_local(:, iat)
          dadr_local(:, iat, iat) = +dtmp*dcdr(:, iat, iat) + dadr_local(:, iat, iat)
@@ -1128,6 +1126,9 @@ contains
 
       real(wp) :: r1, arg, dtmp
 
+      dgpair(:) = 0.0_wp
+      dspair(:, :) = 0.0_wp
+
       r1 = norm2(vec)
       ! Capacitance of bond between atom i and j
       arg = -(kbc*(r1 - rvdw)/rvdw)**2
@@ -1239,6 +1240,17 @@ contains
                dcdL_local(:, :, jat) = -dS*wsw + dcdL_local(:, :, jat)
                dcdL_local(:, :, iat) = -dS*wsw + dcdL_local(:, :, iat)
             end do
+         end do
+
+         rvdw = self%rvdw(iat, iat)
+         wsw = 1/real(wsc%nimg(iat, iat), wp)
+         do img = 1, wsc%nimg(iat, iat)
+            vec = wsc%trans(:, wsc%tridx(img, iat, iat))
+
+            call get_dcpair_dir(self%kbc, vec, dtrans, rvdw, capi, capi, dG, dS)
+
+            ! Positive diagonal elements
+            dcdL_local(:, :, iat) = -dS*wsw + dcdL_local(:, :, iat)
          end do
       end do
       !$omp end do

@@ -56,11 +56,11 @@ contains
          & new_unittest("eeqbc-dbdr-co2", test_eeqbc_dbdr_co2), &
          & new_unittest("eeqbc-dbdL-co2", test_eeqbc_dbdL_co2), &
          ! & new_unittest("eeqbc-dadr-ice", test_eeqbc_dadr_ice), & ! fails randomly probably due to numerical noise?
-         & new_unittest("eeqbc-dadL-ice", test_eeqbc_dadL_ice) &
-         ! & new_unittest("eeqbc-gradient-co2", test_eeqbc_g_co2), &
-         ! & new_unittest("eeqbc-sigma-ice", test_eeqbc_s_ice), &
-         ! & new_unittest("eeqbc-dqdr-urea", test_eeqbc_dqdr_urea) &
-         ! & new_unittest("eeqbc-dqdL-oxacb", test_eeqbc_dqdL_oxacb) &
+         & new_unittest("eeqbc-dadL-ice", test_eeqbc_dadL_ice), &
+         & new_unittest("eeqbc-gradient-co2", test_eeqbc_g_co2), &
+         & new_unittest("eeqbc-sigma-ice", test_eeqbc_s_ice), &
+         & new_unittest("eeqbc-dqdr-urea", test_eeqbc_dqdr_urea), &
+         & new_unittest("eeqbc-dqdL-oxacb", test_eeqbc_dqdL_oxacb) &
          & ]
 
    end subroutine collect_pbc
@@ -239,6 +239,12 @@ contains
 
       if (any(abs(gradient(:, :) - numgrad(:, :)) > thr2)) then
          call test_failed(error, "Derivative of energy does not match")
+         print'(a)', "gradient:"
+         call write_2d_matrix(gradient)
+         print'(a)', "numgrad:"
+         call write_2d_matrix(numgrad)
+         print'(a)', "diff:"
+         call write_2d_matrix(gradient - numgrad)
       end if
 
    end subroutine test_numgrad
@@ -558,6 +564,8 @@ contains
                      & + numgrad(ic, iat, kat)
                end do
             end do
+            ! For dcdr test
+            ! numgrad(ic, iat, :) = numgrad(ic, iat, :) + 0.5_wp*(amatr(iat, :) - amatl(iat, :))/step
          end do
       end do lp
 
@@ -571,8 +579,6 @@ contains
       do iat = 1, mol%nat
          dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
       end do
-
-      call write_2d_matrix(amatr)
 
       if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the A matrix does not match")
@@ -680,6 +686,7 @@ contains
             do iat = 1, mol%nat
                ! Numerical sigma of the a matrix
                numsigma(jc, ic, :) = 0.5_wp*qvec(iat)*(amatr(iat, :) - amatl(iat, :))/step + numsigma(jc, ic, :)
+               ! numsigma(jc, ic, iat) = 0.5_wp*(amatr(iat, iat) - amatl(iat, iat))/step ! for dcdL test
             end do
          end do
       end do lp
@@ -777,6 +784,12 @@ contains
 
       if (any(abs(dqdr(:, :, :) - numdr(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of charges does not match")
+         print'(a)', "dqdr:"
+         call write_2d_matrix(dqdr(1, :, :))
+         print'(a)', "numdr:"
+         call write_2d_matrix(numdr(1, :, :))
+         print'(a)', "diff:"
+         call write_2d_matrix(dqdr(1, :, :) - numdr(1, :, :))
       end if
 
    end subroutine test_numdqdr
@@ -851,6 +864,12 @@ contains
 
       if (any(abs(dqdL(:, :, :) - numdL(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of charges does not match")
+         print'(a)', "dqdL:"
+         call write_2d_matrix(dqdL(1, :, :))
+         print'(a)', "numdL:"
+         call write_2d_matrix(numdL(1, :, :))
+         print'(a)', "diff:"
+         call write_2d_matrix(dqdL(1, :, :) - numdL(1, :, :))
       end if
 
    end subroutine test_numdqdL
