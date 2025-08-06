@@ -156,7 +156,7 @@ chemrxiv: [10.26434/chemrxiv.10299428](https://doi.org/10.26434/chemrxiv.1029942
 
 <br>
 
-For the bond capacity  electronegativity equilibration charge model (EEQ:sub:`BC`): 
+For the bond capacity electronegativity equilibration charge model (EEQ<sub>BC</sub>): 
 
 Thomas Froitzheim, Marcel Müller, Andreas Hansen, and Stefan Grimme, *J. Chem. Phys.*, **2025**, 162, 214109.
 DOI: [10.1039/10.1063/5.0268978](https://doi.org/10.1063/5.0268978)
