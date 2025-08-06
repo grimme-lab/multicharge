@@ -19,7 +19,7 @@ program main
    use mctc_io, only: structure_type, read_structure, filetype, get_filetype
    use mctc_cutoff, only : get_lattice_points
    use multicharge, only: mchrg_model_type, mchargeModel, new_eeq2019_model, &
-      & new_eeqbc2024_model, get_multicharge_version, &
+      & new_eeqbc2025_model, get_multicharge_version, &
       & write_ascii_model, write_ascii_properties, write_ascii_results
    use multicharge_output, only: json_results
    implicit none
@@ -82,8 +82,8 @@ program main
 
    if (model_id == mchargeModel%eeq2019) then
       call new_eeq2019_model(mol, model, error)
-   else if (model_id == mchargeModel%eeqbc2024) then
-      call new_eeqbc2024_model(mol, model, error)
+   else if (model_id == mchargeModel%eeqbc2025) then
+      call new_eeqbc2025_model(mol, model, error)
    else
       call fatal_error(error, "Invalid model was choosen.")
    end if
@@ -228,8 +228,8 @@ contains
             end if
             if (arg == "eeq2019" .or. arg == "eeq") then
                model_id = mchargeModel%eeq2019
-            else if (arg == "eeqbc2024" .or. arg == "eeqbc") then
-               model_id = mchargeModel%eeqbc2024
+            else if (arg == "eeqbc2025" .or. arg == "eeqbc") then
+               model_id = mchargeModel%eeqbc2025
             else
                call fatal_error(error, "Invalid model")
                exit

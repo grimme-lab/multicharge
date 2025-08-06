@@ -16,7 +16,11 @@
 !> @file multicharge/model/eeqbc.f90
 !> Provides implementation of the bond capacitor electronegativity equilibration model (EEQ_BC)
 
-!> Bond capacitor electronegativity equilibration charge model
+!> Bond capacitor electronegativity equilibration charge model published in
+!> 
+!> Thomas Froitzheim, Marcel Müller, Andreas Hansen, and Stefan Grimme, 
+!> *J. Chem. Phys.*, **2025**, 162, 214109.
+!> DOI: [10.1063/5.0268978](https://dx.doi.org/10.1063/5.0268978)
 module multicharge_model_eeqbc
 
    use iso_fortran_env, only: output_unit

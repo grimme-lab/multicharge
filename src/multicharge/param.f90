@@ -22,20 +22,20 @@ module multicharge_param
       & new_eeq_model, eeq_model, new_eeqbc_model, eeqbc_model
    use multicharge_param_eeq2019, only: get_eeq_chi, get_eeq_eta, &
       & get_eeq_rad, get_eeq_kcnchi
-   use multicharge_param_eeqbc2024, only: get_eeqbc_chi, get_eeqbc_eta, &
+   use multicharge_param_eeqbc2025, only: get_eeqbc_chi, get_eeqbc_eta, &
       & get_eeqbc_rad, get_eeqbc_kcnchi, get_eeqbc_kqchi, get_eeqbc_kqeta, &
       & get_eeqbc_cap, get_eeqbc_cov_radii, get_eeqbc_avg_cn
    implicit none
    private
 
-   public :: new_eeq2019_model, new_eeqbc2024_model, mchargeModel
+   public :: new_eeq2019_model, new_eeqbc2025_model, mchargeModel
 
    !> Possible charge models enumerator
    type :: TMchargeModelEnum
       !> Classic electronegativity equilibration model
       integer :: eeq2019 = 1
       !> Bond-capacitor corrected electronegativity equilibration model
-      integer :: eeqbc2024 = 2
+      integer :: eeqbc2025 = 2
    end type TMchargeModelEnum
 
    !> Actual charge model enumerator
@@ -72,7 +72,7 @@ contains
 
    end subroutine new_eeq2019_model
 
-   subroutine new_eeqbc2024_model(mol, model, error)
+   subroutine new_eeqbc2025_model(mol, model, error)
       !> Molecular structure data
       type(structure_type), intent(in) :: mol
       !> Electronegativity equilibration model
@@ -122,6 +122,6 @@ contains
          & norm_exp=norm_exp, rvdw=rvdw)
       call move_alloc(eeqbc, model)
 
-   end subroutine new_eeqbc2024_model
+   end subroutine new_eeqbc2025_model
 
 end module multicharge_param

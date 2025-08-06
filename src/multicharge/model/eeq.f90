@@ -16,7 +16,11 @@
 !> @file multicharge/model/eeq.f90
 !> Provides implementation of the electronegativity equilibration model (EEQ)
 
-!> Electronegativity equlibration charge model
+!> Electronegativity equlibration charge model published in
+!> 
+!> E. Caldeweyher, S. Ehlert, A. Hansen, H. Neugebauer, S. Spicher, C. Bannwarth
+!> and S. Grimme, *J. Chem. Phys.*, **2019**, 150, 154122.
+!> DOI: [10.1063/1.5090222](https://dx.doi.org/10.1063/1.5090222)
 module multicharge_model_eeq
    use mctc_env, only: error_type, wp
    use mctc_io, only: structure_type
