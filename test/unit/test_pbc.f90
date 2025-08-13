@@ -760,13 +760,13 @@ contains
       lp: do iat = 1, mol%nat
          do ic = 1, 3
             qr = 0.0_wp
-            ql = 0.0_wp
             mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
             call model%solve(mol, error, cn, qloc, qvec=qr)
             if (allocated(error)) exit lp
 
+            ql = 0.0_wp
             mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
@@ -866,9 +866,6 @@ contains
       call model%solve(mol, error, cn, qloc, dcndr, dcndL, &
          & dqlocdr, dqlocdL, dqdr=dqdr, dqdL=dqdL)
       if (allocated(error)) return
-
-      call write_2d_matrix(dqdL(1, :, :), "dqdL")
-      call write_2d_matrix(numdL(1, :, :), "numdL")
 
       if (any(abs(dqdL(:, :, :) - numdL(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of charges does not match")
