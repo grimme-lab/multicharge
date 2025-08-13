@@ -291,7 +291,7 @@ contains
             mol%lattice(:, :) = matmul(eps, lattice)
             lattr(:, :) = matmul(eps, trans)
             call model%ncoord%get_coordination_number(mol, lattr, cn)
-            call model%local_charge(mol, trans, qloc)
+            call model%local_charge(mol, lattr, qloc)
             call model%solve(mol, error, cn, qloc, energy=energy)
             if (allocated(error)) exit lp
             er = sum(energy)
@@ -302,7 +302,7 @@ contains
             mol%lattice(:, :) = matmul(eps, lattice)
             lattr(:, :) = matmul(eps, trans)
             call model%ncoord%get_coordination_number(mol, lattr, cn)
-            call model%local_charge(mol, trans, qloc)
+            call model%local_charge(mol, lattr, qloc)
             call model%solve(mol, error, cn, qloc, energy=energy)
             if (allocated(error)) exit lp
             el = sum(energy)
@@ -833,7 +833,7 @@ contains
             mol%lattice(:, :) = matmul(eps, lattice)
             lattr(:, :) = matmul(eps, trans)
             call model%ncoord%get_coordination_number(mol, lattr, cn)
-            call model%local_charge(mol, trans, qloc)
+            call model%local_charge(mol, lattr, qloc)
             call model%solve(mol, error, cn, qloc, qvec=qr)
             if (allocated(error)) exit lp
 
@@ -842,7 +842,7 @@ contains
             mol%lattice(:, :) = matmul(eps, lattice)
             lattr(:, :) = matmul(eps, trans)
             call model%ncoord%get_coordination_number(mol, lattr, cn)
-            call model%local_charge(mol, trans, qloc)
+            call model%local_charge(mol, lattr, qloc)
             call model%solve(mol, error, cn, qloc, qvec=ql)
             if (allocated(error)) exit lp
 
@@ -861,6 +861,9 @@ contains
       call model%solve(mol, error, cn, qloc, dcndr, dcndL, &
          & dqlocdr, dqlocdL, dqdr=dqdr, dqdL=dqdL)
       if (allocated(error)) return
+
+      call write_2d_matrix(dqdL(1, :, :), "dqdL")
+      call write_2d_matrix(numdL(1, :, :), "numdL")
 
       if (any(abs(dqdL(:, :, :) - numdL(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of charges does not match")
