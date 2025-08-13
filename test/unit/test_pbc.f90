@@ -582,7 +582,7 @@ contains
          dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
       end do
 
-      ! 2*thr2 because the test seems to be more unstable numerically
+      ! increased error tolerance to account for numerical noise
       if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > 2.0_wp*thr2)) then
          call test_failed(error, "Derivative of the A matrix does not match")
          print'(a)', "dadr:"
