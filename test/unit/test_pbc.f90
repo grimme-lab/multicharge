@@ -208,6 +208,7 @@ contains
       lp: do iat = 1, mol%nat
          do ic = 1, 3
             energy(:) = 0.0_wp
+            er = 0.0_wp
             mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
@@ -216,6 +217,7 @@ contains
             er = sum(energy)
 
             energy(:) = 0.0_wp
+            el = 0.0_wp
             mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
