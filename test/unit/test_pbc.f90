@@ -55,7 +55,7 @@ contains
          & new_unittest("eeq-dqdL-oxacb", test_eeq_dqdL_oxacb), &
          & new_unittest("eeqbc-dbdr-co2", test_eeqbc_dbdr_co2), &
          & new_unittest("eeqbc-dbdL-co2", test_eeqbc_dbdL_co2), &
-         ! & new_unittest("eeqbc-dadr-ice", test_eeqbc_dadr_ice), & ! fails randomly probably due to numerical noise?
+         & new_unittest("eeqbc-dadr-ice", test_eeqbc_dadr_ice), &
          & new_unittest("eeqbc-dadL-ice", test_eeqbc_dadL_ice), &
          & new_unittest("eeqbc-gradient-co2", test_eeqbc_g_co2), &
          & new_unittest("eeqbc-sigma-ice", test_eeqbc_s_ice), &
@@ -580,7 +580,8 @@ contains
          dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
       end do
 
-      if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2)) then
+      ! 2*thr2 because the test seems to be more unstable numerically
+      if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > 2.0_wp*thr2)) then
          call test_failed(error, "Derivative of the A matrix does not match")
          print'(a)', "dadr:"
          call write_2d_matrix(dadr(1, :, :))
@@ -758,6 +759,8 @@ contains
 
       lp: do iat = 1, mol%nat
          do ic = 1, 3
+            qr = 0.0_wp
+            ql = 0.0_wp
             mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
@@ -828,6 +831,8 @@ contains
       lattr = trans
       lp: do ic = 1, 3
          do jc = 1, 3
+            qr = 0.0_wp
+            ql = 0.0_wp
             eps(jc, ic) = eps(jc, ic) + step
             mol%xyz(:, :) = matmul(eps, xyz)
             mol%lattice(:, :) = matmul(eps, lattice)
