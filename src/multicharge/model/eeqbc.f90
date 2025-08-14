@@ -424,19 +424,19 @@ contains
          dxdL_local(:, :, :) = 0.0_wp
          !$omp do schedule(runtime)
          do iat = 1, mol%nat
-            do jat = 1, mol%nat
-               vec = mol%xyz(:, iat) - mol%xyz(:, jat)
-               ! Derivative of capacitance matrix
-               dxdr_local(:, iat, jat) = (ptr%xtmp(iat) - ptr%xtmp(jat))*ptr%dcdr(:, iat, jat) + dxdr_local(:, iat, jat)
-
-               if (iat .eq. jat) cycle
-               dxdL_local(:, :, iat) = dxdL_local(:, :, iat) + ptr%xtmp(jat)*spread(ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3)
-               ! dxdL_local(:, :, iat) = dxdL_local(:, :, iat) - ptr%xtmp(iat)*spread(ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3) ! A
-            end do
             do jat = 1, iat - 1
                ! Diagonal elements
                dxdr_local(:, iat, iat) = dxdr_local(:, iat, iat) + ptr%xtmp(jat)*ptr%dcdr(:, iat, jat)
                dxdr_local(:, jat, jat) = dxdr_local(:, jat, jat) + ptr%xtmp(iat)*ptr%dcdr(:, jat, iat)
+
+               ! Derivative of capacitance matrix
+               dxdr_local(:, iat, jat) = (ptr%xtmp(iat) - ptr%xtmp(jat))*ptr%dcdr(:, iat, jat) + dxdr_local(:, iat, jat)
+               dxdr_local(:, jat, iat) = (ptr%xtmp(jat) - ptr%xtmp(iat))*ptr%dcdr(:, jat, iat) + dxdr_local(:, jat, iat)
+
+               vec = mol%xyz(:, iat) - mol%xyz(:, jat)
+               dxdL_local(:, :, iat) = dxdL_local(:, :, iat) + ptr%xtmp(jat)*spread(ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3)
+               dxdL_local(:, :, jat) = dxdL_local(:, :, jat) + ptr%xtmp(iat)*spread(ptr%dcdr(:, jat, iat), 1, 3)*spread(-vec, 2, 3)
+               ! dxdL_local(:, :, iat) = dxdL_local(:, :, iat) - ptr%xtmp(iat)*spread(ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3) ! A
             end do
             dxdr_local(:, iat, iat) = dxdr_local(:, iat, iat) + ptr%xtmp(iat)*ptr%dcdr(:, iat, iat)
             dxdL_local(:, :, iat) = dxdL_local(:, :, iat) + ptr%xtmp(iat)*ptr%dcdL(:, :, iat) ! remove if using A
