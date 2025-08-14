@@ -738,7 +738,6 @@ contains
 
             ! Capacitance derivative off-diagonal
             dtmp = erf(sqrt(r2)*gam)/(sqrt(r2))
-            ! potentially switch indices for dcdr
             atrace_local(:, iat) = -dtmp*qvec(jat)*dcdr(:, jat, iat) + atrace_local(:, iat)
             atrace_local(:, jat) = -dtmp*qvec(iat)*dcdr(:, iat, jat) + atrace_local(:, jat)
             dadr_local(:, iat, jat) = +dtmp*qvec(iat)*dcdr(:, iat, jat) + dadr_local(:, iat, jat)
