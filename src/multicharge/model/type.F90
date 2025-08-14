@@ -23,8 +23,6 @@
 !> General charge model
 module multicharge_model_type
 
-   use iso_fortran_env, only: output_unit
-
    use mctc_env, only: error_type, fatal_error, wp, ik => IK
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
@@ -381,49 +379,5 @@ contains
       qloc = qloc + mol%charge/real(mol%nat, wp)
 
    end subroutine local_charge
-
-   subroutine write_2d_matrix(matrix, name, unit, step)
-      implicit none
-      real(wp), intent(in) :: matrix(:, :)
-      character(len=*), intent(in), optional :: name
-      integer, intent(in), optional :: unit
-      integer, intent(in), optional :: step
-      integer :: d1, d2
-      integer :: i, j, k, l, istep, iunit
-
-      d1 = size(matrix, dim=1)
-      d2 = size(matrix, dim=2)
-
-      if (present(unit)) then
-         iunit = unit
-      else
-         iunit = output_unit
-      end if
-
-      if (present(step)) then
-         istep = step
-      else
-         istep = 6
-      end if
-
-      if (present(name)) write (iunit, '(/,"matrix printed:",1x,a)') name
-
-      do i = 1, d2, istep
-         l = min(i + istep - 1, d2)
-         write (iunit, '(/,6x)', advance='no')
-         do k = i, l
-            write (iunit, '(6x,i7,3x)', advance='no') k
-         end do
-         write (iunit, '(a)')
-         do j = 1, d1
-            write (iunit, '(i6)', advance='no') j
-            do k = i, l
-               write (iunit, '(1x,f15.8)', advance='no') matrix(j, k)
-            end do
-            write (iunit, '(a)')
-         end do
-      end do
-
-   end subroutine write_2d_matrix
 
 end module multicharge_model_type
