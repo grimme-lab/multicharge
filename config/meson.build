@@ -114,9 +114,10 @@ elif lapack_vendor == 'custom'
       'If this is not intended, please specify custom libraries using the "-Dcustom_libraries" option.'
     )
   elif libs[0].startswith('-L')
+    libdir = libs[0].substring(2)
     foreach lib: libs
       if lib != libs[0]
-        custom_deps += cc.find_library(lib, dirs: libs[0].substring(2))
+        custom_deps += cc.find_library(lib, dirs: libdir)
       endif
     endforeach
   else
