@@ -442,7 +442,7 @@ contains
                ! dxdL_local(:, :, iat) = dxdL_local(:, :, iat) - ptr%xtmp(iat)*spread(ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3) ! A
             end do
             dxdr_local(:, iat, iat) = dxdr_local(:, iat, iat) + ptr%xtmp(iat)*ptr%dcdr(:, iat, iat)
-            dxdL_local(:, :, iat) = dxdL_local(:, :, iat) + ptr%xtmp(iat)*ptr%dcdL(:, :, iat) ! remove if using A
+            dxdL_local(:, :, iat) = dxdL_local(:, :, iat) + ptr%xtmp(iat)*ptr%dcdL(:, :, iat)
          end do
          !$omp end do
          !$omp critical (get_xvec_derivs_)
