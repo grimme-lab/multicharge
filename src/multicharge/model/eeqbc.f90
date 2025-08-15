@@ -22,7 +22,6 @@
 !> *J. Chem. Phys.*, **2025**, 162, 214109.
 !> DOI: [10.1063/5.0268978](https://dx.doi.org/10.1063/5.0268978)
 module multicharge_model_eeqbc
-
    use mctc_env, only: error_type, wp
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
