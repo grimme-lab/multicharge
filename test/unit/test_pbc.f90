@@ -14,9 +14,6 @@
 ! limitations under the License.
 
 module test_pbc
-
-   use iso_fortran_env, only: output_unit
-
    use mctc_env, only: wp
    use mctc_env_testing, only: new_unittest, unittest_type, error_type, &
       & test_failed
@@ -132,50 +129,6 @@ contains
 
    end subroutine gen_test
 
-   subroutine write_2d_matrix(matrix, name, unit, step)
-      implicit none
-      real(wp), intent(in) :: matrix(:, :)
-      character(len=*), intent(in), optional :: name
-      integer, intent(in), optional :: unit
-      integer, intent(in), optional :: step
-      integer :: d1, d2
-      integer :: i, j, k, l, istep, iunit
-
-      d1 = size(matrix, dim=1)
-      d2 = size(matrix, dim=2)
-
-      if (present(unit)) then
-         iunit = unit
-      else
-         iunit = output_unit
-      end if
-
-      if (present(step)) then
-         istep = step
-      else
-         istep = 6
-      end if
-
-      if (present(name)) write (iunit, '(/,"matrix printed:",1x,a)') name
-
-      do i = 1, d2, istep
-         l = min(i + istep - 1, d2)
-         write (iunit, '(/,6x)', advance='no')
-         do k = i, l
-            write (iunit, '(6x,i7,3x)', advance='no') k
-         end do
-         write (iunit, '(a)')
-         do j = 1, d1
-            write (iunit, '(i6)', advance='no') j
-            do k = i, l
-               write (iunit, '(1x,f15.8)', advance='no') matrix(j, k)
-            end do
-            write (iunit, '(a)')
-         end do
-      end do
-
-   end subroutine write_2d_matrix
-
    subroutine test_numgrad(error, mol, model)
 
       !> Molecular structure data
@@ -242,11 +195,11 @@ contains
       if (any(abs(gradient(:, :) - numgrad(:, :)) > thr2)) then
          call test_failed(error, "Derivative of energy does not match")
          print'(a)', "gradient:"
-         call write_2d_matrix(gradient)
+         print'(3es21.14)', gradient
          print'(a)', "numgrad:"
-         call write_2d_matrix(numgrad)
+         print'(3es21.14)', numgrad
          print'(a)', "diff:"
-         call write_2d_matrix(gradient - numgrad)
+         print'(3es21.14)', gradient - numgrad
       end if
 
    end subroutine test_numgrad
@@ -329,11 +282,11 @@ contains
       if (any(abs(sigma(:, :) - numsigma(:, :)) > thr2)) then
          call test_failed(error, "Derivative of energy does not match")
          print'(a)', "sigma:"
-         call write_2d_matrix(sigma(:, :))
+         print'(3es21.14)', sigma
          print'(a)', "numgrad:"
-         call write_2d_matrix(numsigma(:, :))
+         print'(3es21.14)', numsigma
          print'(a)', "diff:"
-         call write_2d_matrix(sigma(:, :) - numsigma(:, :))
+         print'(3es21.14)', sigma(:, :) - numsigma(:, :)
       end if
 
    end subroutine test_numsigma
@@ -400,12 +353,12 @@ contains
 
       if (any(abs(dbdr(:, :, :) - numgrad(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the b vector does not match")
+         print'(a)', "dbdr:"
+         print'(3es21.14)', dbdr
          print'(a)', "numgrad:"
-         call write_2d_matrix(numgrad(1, :, :))
-         print'(a)', "absdiff:"
-         print'(3es21.14)', sum(abs(dbdr(:, :, :) - numgrad(:, :, :)))
+         print'(3es21.14)', numgrad
          print'(a)', "diff:"
-         call write_2d_matrix(dbdr(1, :, :) - numgrad(1, :, :))
+         print'(3es21.14)', dbdr - numgrad
       end if
 
    end subroutine test_dbdr
@@ -492,11 +445,11 @@ contains
       if (any(abs(dbdL(:, :, :) - numsigma(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the b vector does not match")
          print'(a)', "dbdL:"
-         call write_2d_matrix(dbdL(1, :, :))
+         print'(3es21.14)', dbdL
          print'(a)', "numsigma:"
-         call write_2d_matrix(numsigma(1, :, :))
+         print'(3es21.14)', numsigma
          print'(a)', "diff:"
-         call write_2d_matrix(dbdL(1, :, :) - numsigma(1, :, :))
+         print'(3es21.14)', dbdL - numsigma
       end if
 
    end subroutine test_dbdL
@@ -566,8 +519,6 @@ contains
                      & + numgrad(ic, iat, kat)
                end do
             end do
-            ! For dcdr test
-            ! numgrad(ic, iat, :) = numgrad(ic, iat, :) + 0.5_wp*(amatr(iat, :) - amatl(iat, :))/step
          end do
       end do lp
 
@@ -582,35 +533,16 @@ contains
          dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
       end do
 
-      ! increased error tolerance to account for numerical noise
+      ! higher tolerance for numerical gradient
       if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > 2.0_wp*thr2)) then
          call test_failed(error, "Derivative of the A matrix does not match")
          print'(a)', "dadr:"
-         call write_2d_matrix(dadr(1, :, :))
+         print'(3es21.14)', dadr
          print'(a)', "numgrad:"
-         call write_2d_matrix(numgrad(1, :, :))
+         print'(3es21.14)', numgrad
          print'(a)', "diff:"
-         call write_2d_matrix(dadr(1, :, :) - numgrad(1, :, :))
+         print'(3es21.14)', dadr - numgrad
       end if
-
-      ! numtrace(:, :) = 0.0_wp
-      ! do iat = 1, mol%nat
-      !    do jat = 1, iat - 1
-      !       ! Numerical trace of the a matrix
-      !       numtrace(:, iat) = - numgrad(:, jat, iat) + numtrace(:, iat)
-      !       numtrace(:, jat) = - numgrad(:, iat, jat) + numtrace(:, jat)
-      !    end do
-      ! end do
-
-      ! if (any(abs(atrace(:, :) - numtrace(:, :)) > thr2)) then
-      !    call test_failed(error, "Derivative of the A matrix trace does not match")
-      !    print'(a)', "atrace:"
-      !    print'(3es21.14)', atrace
-      !    print'(a)', "numtrace:"
-      !    print'(3es21.14)', numtrace
-      !    print'(a)', "diff:"
-      !    print'(3es21.14)', atrace - numtrace
-      ! end if
 
    end subroutine test_dadr
 
@@ -689,7 +621,6 @@ contains
             do iat = 1, mol%nat
                ! Numerical sigma of the a matrix
                numsigma(jc, ic, :) = 0.5_wp*qvec(iat)*(amatr(iat, :) - amatl(iat, :))/step + numsigma(jc, ic, :)
-               ! numsigma(jc, ic, iat) = 0.5_wp*(amatr(iat, iat) - amatl(iat, iat))/step ! for dcdL test
             end do
          end do
       end do lp
@@ -699,36 +630,17 @@ contains
       call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
       call model%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
 
-      ! dcndr(:, :, :) = 0.0_wp
-      ! dcndL(:, :, :) = 0.0_wp
-      ! dqlocdr(:, :, :) = 0.0_wp
-      ! dqlocdL(:, :, :) = 0.0_wp
-
       call model%get_coulomb_derivs(mol, cache, qvec, dadr, dadL, atrace)
       if (allocated(error)) return
-
-      ! do iat = 1, mol%nat
-      !    write(*,*) "iat", iat
-      !    call write_2d_matrix(dadL(:, :, iat), "dadL", unit=output_unit)
-      !    call write_2d_matrix(numsigma(:, :, iat), "numsigma", unit=output_unit)
-      !    call write_2d_matrix(dadL(:, :, iat) - numsigma(:, :, iat), "diff", unit=output_unit)
-      ! end do
-
-      ! do ic = 1, 3
-      !    do jc = 1, 3
-      !       write(*,*) "ic, jc", ic, jc
-      !       write(*,*) dadL(ic, jc, :) - numsigma(ic, jc, :)
-      !    end do
-      ! end do
 
       if (any(abs(dadL(:, :, :) - numsigma(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the A matrix does not match")
          print'(a)', "dadL:"
-         call write_2d_matrix(dadL(1, :, :))
+         print'(3es21.14)', dadL
          print'(a)', "numsigma:"
-         call write_2d_matrix(numsigma(1, :, :))
+         print'(3es21.14)', numsigma
          print'(a)', "diff:"
-         call write_2d_matrix(dadL(1, :, :) - numsigma(1, :, :))
+         print'(3es21.14)', dadL - numsigma
       end if
 
    end subroutine test_dadL
@@ -790,11 +702,11 @@ contains
       if (any(abs(dqdr(:, :, :) - numdr(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of charges does not match")
          print'(a)', "dqdr:"
-         call write_2d_matrix(dqdr(1, :, :))
+         print'(3es21.14)', dqdr
          print'(a)', "numdr:"
-         call write_2d_matrix(numdr(1, :, :))
+         print'(3es21.14)', numdr
          print'(a)', "diff:"
-         call write_2d_matrix(dqdr(1, :, :) - numdr(1, :, :))
+         print'(3es21.14)', dqdr - numdr
       end if
 
    end subroutine test_numdqdr
@@ -872,11 +784,11 @@ contains
       if (any(abs(dqdL(:, :, :) - numdL(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of charges does not match")
          print'(a)', "dqdL:"
-         call write_2d_matrix(dqdL(1, :, :))
+         print'(3es21.14)', dqdL
          print'(a)', "numdL:"
-         call write_2d_matrix(numdL(1, :, :))
+         print'(3es21.14)', numdL
          print'(a)', "diff:"
-         call write_2d_matrix(dqdL(1, :, :) - numdL(1, :, :))
+         print'(3es21.14)', dqdL - numdL
       end if
 
    end subroutine test_numdqdL
