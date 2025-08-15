@@ -15,9 +15,10 @@
 
 !> Bond capacitor electronegativity equilibration charge model published in
 !>
-!> T. Froitzheim, M. Müller, A. Hansen, and S. Grimme
-!> , *J. Chem. Phys.*, in preparation.
-module multicharge_param_eeqbc2024
+!> Thomas Froitzheim, Marcel Müller, Andreas Hansen, and Stefan Grimme, 
+!> *J. Chem. Phys.*, **2025**, 162, 214109.
+!> DOI: [10.1063/5.0268978](https://dx.doi.org/10.1063/5.0268978)
+module multicharge_param_eeqbc2025
    use mctc_env, only: wp
    use mctc_io_symbols, only: to_number
    implicit none
@@ -617,4 +618,4 @@ contains
 
    end function get_eeqbc_avg_cn_num
 
-end module multicharge_param_eeqbc2024
+end module multicharge_param_eeqbc2025

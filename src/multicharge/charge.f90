@@ -23,7 +23,7 @@ module multicharge_charge
    use mctc_io, only : structure_type
    use mctc_cutoff, only : get_lattice_points
    use multicharge_model, only : mchrg_model_type
-   use multicharge_param, only : new_eeq2019_model, new_eeqbc2024_model
+   use multicharge_param, only : new_eeq2019_model, new_eeqbc2025_model
    implicit none
    private
 
@@ -124,7 +124,7 @@ subroutine get_eeqbc_charges(mol, error, qvec, dqdr, dqdL)
 
    class(mchrg_model_type), allocatable :: eeqbc_model
 
-   call new_eeqbc2024_model(mol, eeqbc_model, error)
+   call new_eeqbc2025_model(mol, eeqbc_model, error)
 
    call get_charges(eeqbc_model, mol, error, qvec, dqdr, dqdL)
 

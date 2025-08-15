@@ -22,7 +22,7 @@ module test_model
    use mctc_io_structure, only: structure_type, new
    use mstore, only: get_structure
    use multicharge_model, only: mchrg_model_type
-   use multicharge_param, only: new_eeq2019_model, new_eeqbc2024_model
+   use multicharge_param, only: new_eeq2019_model, new_eeqbc2025_model
    use multicharge_model_cache, only: cache_container
    use multicharge_blas, only: gemv
    use multicharge_charge, only: get_charges, get_eeq_charges, get_eeqbc_charges
@@ -1369,7 +1369,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "MB16-43", "01")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_dadr(error, mol, model)
 
@@ -1384,7 +1384,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "MB16-43", "01")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_dadL(error, mol, model)
 
@@ -1399,7 +1399,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "MB16-43", "01")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_dbdr(error, mol, model)
 
@@ -1429,7 +1429,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "MB16-43", "05")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_dadr(error, mol, model)
 
@@ -1459,7 +1459,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "MB16-43", "05")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_dbdr(error, mol, model)
 
@@ -1483,7 +1483,7 @@ contains
       real(wp), allocatable :: qvec(:)
 
       call get_structure(mol, "MB16-43", "01")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call gen_test(error, mol, model, qref=ref)
 
@@ -1532,7 +1532,7 @@ contains
          &-3.09898225456160E-1_wp]
 
       call get_structure(mol, "MB16-43", "02")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call gen_test(error, mol, model, qref=ref)
 
@@ -1581,7 +1581,7 @@ contains
          & [3, 17])
       mol%periodic = [.false.]
 
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call gen_test(error, mol, model, qref=ref)
 
@@ -1603,7 +1603,7 @@ contains
          &-1.03483694342593E-5_wp]
 
       call get_structure(mol, "MB16-43", "03")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call gen_test(error, mol, model, eref=ref)
 
@@ -1625,7 +1625,7 @@ contains
          &-9.22642011641358E-3_wp]
 
       call get_structure(mol, "MB16-43", "04")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call gen_test(error, mol, model, eref=ref)
 
@@ -1640,7 +1640,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "MB16-43", "05")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_numgrad(error, mol, model)
 
@@ -1655,7 +1655,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "MB16-43", "06")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_numgrad(error, mol, model)
 
@@ -1670,7 +1670,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "MB16-43", "07")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_numsigma(error, mol, model)
 
@@ -1685,7 +1685,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "MB16-43", "08")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_numsigma(error, mol, model)
 
@@ -1700,7 +1700,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "MB16-43", "09")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_numdqdr(error, mol, model)
 
@@ -1715,7 +1715,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "MB16-43", "10")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_numdqdr(error, mol, model)
 
@@ -1730,7 +1730,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "MB16-43", "11")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_numdqdL(error, mol, model)
 
@@ -1745,7 +1745,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "MB16-43", "12")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_numdqdL(error, mol, model)
 
