@@ -17,8 +17,8 @@
 !> Provides implementation of the bond capacitor electronegativity equilibration model (EEQ_BC)
 
 !> Bond capacitor electronegativity equilibration charge model published in
-!> 
-!> Thomas Froitzheim, Marcel Müller, Andreas Hansen, and Stefan Grimme, 
+!>
+!> Thomas Froitzheim, Marcel Müller, Andreas Hansen, and Stefan Grimme,
 !> *J. Chem. Phys.*, **2025**, 162, 214109.
 !> DOI: [10.1063/5.0268978](https://dx.doi.org/10.1063/5.0268978)
 module multicharge_model_eeqbc
@@ -745,10 +745,10 @@ contains
             atrace_local(:, jat) = -dtmp*qvec(iat)*dcdr(:, iat, jat) + atrace_local(:, jat)
             dadr_local(:, iat, jat) = +dtmp*qvec(iat)*dcdr(:, iat, jat) + dadr_local(:, iat, jat)
             dadr_local(:, jat, iat) = +dtmp*qvec(jat)*dcdr(:, jat, iat) + dadr_local(:, jat, iat)
-            dadL_local(:, :, iat) = - dtmp*qvec(jat)*spread(dcdr(:, iat, jat), 2, 3)*spread(vec, 1, 3) &
-                & + dadL_local(:, :, iat) 
-            dadL_local(:, :, jat) = - dtmp*qvec(iat)*spread(dcdr(:, iat, jat), 2, 3)*spread(vec, 1, 3) & 
-                & + dadL_local(:, :, jat) 
+            dadL_local(:, :, iat) = -dtmp*qvec(jat)*spread(dcdr(:, iat, jat), 2, 3)*spread(vec, 1, 3) &
+                & + dadL_local(:, :, iat)
+            dadL_local(:, :, jat) = -dtmp*qvec(iat)*spread(dcdr(:, iat, jat), 2, 3)*spread(vec, 1, 3) &
+                & + dadL_local(:, :, jat)
 
             ! Capacitance derivative diagonal
             dtmp = (self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi)*qvec(iat)

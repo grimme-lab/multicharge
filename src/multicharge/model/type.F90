@@ -123,58 +123,6 @@ module multicharge_model_type
          real(wp), intent(out), contiguous :: dxdr(:, :, :)
          real(wp), intent(out), contiguous :: dxdL(:, :, :)
       end subroutine get_xvec_derivs
-
-      !subroutine get_amat_0d(self, mol, amat, cn, qloc, cmat)
-      !   import :: mchrg_model_type, cache_container, structure_type, wp
-      !   class(mchrg_model_type), intent(in) :: self
-      !   type(structure_type), intent(in) :: mol
-      !   real(wp), intent(out) :: amat(:, :)
-      !   real(wp), intent(in), optional :: cn(:)
-      !   real(wp), intent(in), optional :: qloc(:)
-      !   real(wp), intent(in), optional :: cmat(:, :)
-      !end subroutine get_amat_0d
-
-      !subroutine get_amat_3d(self, mol, cache, wsc, alpha, amat)
-      !   import :: mchrg_model_type, cache_container, structure_type, &
-      !      & wignerseitz_cell_type, wp
-      !   class(mchrg_model_type), intent(in) :: self
-      !   type(structure_type), intent(in) :: mol
-      !   type(cache_container), intent(inout) :: cache
-      !   type(wignerseitz_cell_type), intent(in) :: wsc
-      !   real(wp), intent(in) :: alpha
-      !   real(wp), intent(out) :: amat(:, :)
-      !end subroutine get_amat_3d
-
-      !subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
-      !   & dqlocdr, dqlocdL, dadr, dadL, atrace)
-      !   import :: mchrg_model_type, structure_type, wp
-      !   class(mchrg_model_type), intent(in) :: self
-      !   type(structure_type), intent(in) :: mol
-      !   real(wp), intent(in) :: qvec(:)
-      !   real(wp), intent(out) :: dadr(:, :, :)
-      !   real(wp), intent(out) :: dadL(:, :, :)
-      !   real(wp), intent(out) :: atrace(:, :)
-      !   real(wp), intent(in), optional :: cn(:)
-      !   real(wp), intent(in), optional :: qloc(:)
-      !   real(wp), intent(in), optional :: dcndr(:, :, :)
-      !   real(wp), intent(in), optional :: dcndL(:, :, :)
-      !   real(wp), intent(in), optional :: dqlocdr(:, :, :)
-      !   real(wp), intent(in), optional :: dqlocdL(:, :, :)
-      !end subroutine get_damat_0d
-
-      !subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
-      !   import :: mchrg_model_type, structure_type, &
-      !      & wignerseitz_cell_type, wp
-      !   class(mchrg_model_type), intent(in) :: self
-      !   type(structure_type), intent(in) :: mol
-      !   type(wignerseitz_cell_type), intent(in) :: wsc
-      !   real(wp), intent(in) :: alpha
-      !   real(wp), intent(in) :: qvec(:)
-      !   real(wp), intent(out) :: dadr(:, :, :)
-      !   real(wp), intent(out) :: dadL(:, :, :)
-      !   real(wp), intent(out) :: atrace(:, :)
-      !end subroutine get_damat_3d
-
    end interface
 
    real(wp), parameter :: twopi = 2*pi
