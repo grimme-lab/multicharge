@@ -24,7 +24,7 @@ module test_pbc
    use mctc_cutoff, only: get_lattice_points
    use mstore, only: get_structure
    use multicharge_model, only: mchrg_model_type
-   use multicharge_param, only: new_eeq2019_model, new_eeqbc2024_model
+   use multicharge_param, only: new_eeq2019_model, new_eeqbc2025_model
    use multicharge_model_cache, only: cache_container
    implicit none
    private
@@ -1064,7 +1064,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "X23", "CO2")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_dbdr(error, mol, model)
 
@@ -1079,7 +1079,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "X23", "CO2")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_dbdL(error, mol, model)
 
@@ -1094,7 +1094,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "ICE10", "vi")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_dadr(error, mol, model)
 
@@ -1109,7 +1109,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "ICE10", "vi")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_dadL(error, mol, model)
 
@@ -1124,7 +1124,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "X23", "CO2")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_numgrad(error, mol, model)
 
@@ -1139,7 +1139,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "ICE10", "vi")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_numsigma(error, mol, model)
 
@@ -1154,7 +1154,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "X23", "urea")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_numdqdr(error, mol, model)
 
@@ -1169,7 +1169,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "X23", "oxacb")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_numdqdL(error, mol, model)
 

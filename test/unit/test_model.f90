@@ -1414,7 +1414,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "MB16-43", "01")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_dbdL(error, mol, model)
 
@@ -1444,7 +1444,7 @@ contains
       class(mchrg_model_type), allocatable :: model
 
       call get_structure(mol, "MB16-43", "05")
-      call new_eeqbc2024_model(mol, model, error)
+      call new_eeqbc2025_model(mol, model, error)
       if (allocated(error)) return
       call test_dadL(error, mol, model)
 
