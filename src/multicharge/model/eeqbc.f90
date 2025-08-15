@@ -1076,7 +1076,7 @@ contains
 
       call get_dir_trans(mol%lattice, dtrans)
 
-      cmat(:, :) = 0.0_wp!1.0_wp/real(25, wp)
+      cmat(:, :) = 0.0_wp
 
       !$omp parallel default(none) &
       !$omp shared(cmat, mol, self, wsc, dtrans) &
