@@ -381,8 +381,8 @@ contains
                ! Diagonal elements
                dxdr_local(:, iat, iat) = dxdr_local(:, iat, iat) + ptr%xtmp(jat)*ptr%dcdr(:, iat, jat)
                ! Derivative of capacitance matrix
-               dxdr_local(:, iat, jat) = (ptr%xtmp(iat) - ptr%xtmp(jat))*ptr%dcdr(:, iat, jat) &
-               & + dxdr_local(:, iat, jat)
+               dxdr_local(:, iat, jat) = dxdr_local(:, iat, jat)  &
+                   & + (ptr%xtmp(iat) - ptr%xtmp(jat))*ptr%dcdr(:, iat, jat)
                jzp = mol%id(jat)
                capj = self%cap(jzp)
                rvdw = self%rvdw(iat, jat)
