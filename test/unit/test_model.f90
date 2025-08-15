@@ -287,7 +287,6 @@ contains
             do iat = 1, mol%nat
                ! Numerical sigma of the a matrix
                numsigma(jc, ic, :) = 0.5_wp*qvec(iat)*(amatr(iat, :) - amatl(iat, :))/step + numsigma(jc, ic, :)
-               ! numsigma(jc, ic, iat) = 0.5_wp*(amatr(iat, iat) - amatl(iat, iat))/step ! for dcdL test
             end do
          end do
       end do lp
