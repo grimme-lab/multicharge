@@ -353,8 +353,8 @@ contains
       end do
       !$omp end do
       !$omp critical (get_xvec_derivs_)
-      dtmpdr(:, :, :) = dtmpdr(:, :, :) + dtmpdr_local(:, :, :)
-      dtmpdL(:, :, :) = dtmpdL(:, :, :) + dtmpdL_local(:, :, :)
+      dtmpdr(:, :, :) = dtmpdr + dtmpdr_local
+      dtmpdL(:, :, :) = dtmpdL + dtmpdL_local
       !$omp end critical (get_xvec_derivs_)
       deallocate (dtmpdL_local, dtmpdr_local)
       !$omp end parallel
@@ -378,14 +378,17 @@ contains
             izp = mol%id(iat)
             capi = self%cap(izp)
             do jat = 1, mol%nat
+               rvdw = self%rvdw(iat, jat)
+               jzp = mol%id(jat)
+               capj = self%cap(jzp)
+
                ! Diagonal elements
                dxdr_local(:, iat, iat) = dxdr_local(:, iat, iat) + ptr%xtmp(jat)*ptr%dcdr(:, iat, jat)
+
                ! Derivative of capacitance matrix
                dxdr_local(:, iat, jat) = dxdr_local(:, iat, jat)  &
                    & + (ptr%xtmp(iat) - ptr%xtmp(jat))*ptr%dcdr(:, iat, jat)
-               jzp = mol%id(jat)
-               capj = self%cap(jzp)
-               rvdw = self%rvdw(iat, jat)
+
                wsw = 1.0_wp/real(ptr%wsc%nimg(iat, jat), wp)
                do img = 1, ptr%wsc%nimg(iat, jat)
                   vec = mol%xyz(:, jat) - mol%xyz(:, iat) + ptr%wsc%trans(:, ptr%wsc%tridx(img, jat, iat))
@@ -412,8 +415,8 @@ contains
          end do
          !$omp end do
          !$omp critical (get_xvec_derivs_update)
-         dxdr(:, :, :) = dxdr(:, :, :) + dxdr_local(:, :, :)
-         dxdL(:, :, :) = dxdL(:, :, :) + dxdL_local(:, :, :)
+         dxdr(:, :, :) = dxdr + dxdr_local
+         dxdL(:, :, :) = dxdL + dxdL_local
          !$omp end critical (get_xvec_derivs_update)
          deallocate (dxdL_local, dxdr_local)
          !$omp end parallel
@@ -439,15 +442,14 @@ contains
                vec = mol%xyz(:, iat) - mol%xyz(:, jat)
                dxdL_local(:, :, iat) = dxdL_local(:, :, iat) + ptr%xtmp(jat)*spread(ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3)
                dxdL_local(:, :, jat) = dxdL_local(:, :, jat) + ptr%xtmp(iat)*spread(ptr%dcdr(:, jat, iat), 1, 3)*spread(-vec, 2, 3)
-               ! dxdL_local(:, :, iat) = dxdL_local(:, :, iat) - ptr%xtmp(iat)*spread(ptr%dcdr(:, iat, jat), 1, 3)*spread(vec, 2, 3) ! A
             end do
             dxdr_local(:, iat, iat) = dxdr_local(:, iat, iat) + ptr%xtmp(iat)*ptr%dcdr(:, iat, iat)
             dxdL_local(:, :, iat) = dxdL_local(:, :, iat) + ptr%xtmp(iat)*ptr%dcdL(:, :, iat)
          end do
          !$omp end do
          !$omp critical (get_xvec_derivs_)
-         dxdr(:, :, :) = dxdr(:, :, :) + dxdr_local(:, :, :)
-         dxdL(:, :, :) = dxdL(:, :, :) + dxdL_local(:, :, :)
+         dxdr(:, :, :) = dxdr + dxdr_local
+         dxdL(:, :, :) = dxdL + dxdL_local
          !$omp end critical (get_xvec_derivs_)
          deallocate (dxdL_local, dxdr_local)
          !$omp end parallel
@@ -517,7 +519,7 @@ contains
       end do
       !$omp end do
       !$omp critical (get_amat_0d_)
-      amat(:, :) = amat(:, :) + amat_local(:, :)
+      amat(:, :) = amat + amat_local
       !$omp end critical (get_amat_0d_)
       deallocate (amat_local)
       !$omp end parallel
@@ -593,7 +595,7 @@ contains
       end do
       !$omp end do
       !$omp critical (get_amat_3d_)
-      amat(:, :) = amat(:, :) + amat_local(:, :)
+      amat(:, :) = amat + amat_local
       !$omp end critical (get_amat_3d_)
       deallocate (amat_local)
       !$omp end parallel
@@ -776,9 +778,9 @@ contains
       end do
       !$omp end do
       !$omp critical (get_damat_0d_)
-      atrace(:, :) = atrace(:, :) + atrace_local(:, :)
-      dadr(:, :, :) = dadr(:, :, :) + dadr_local(:, :, :)
-      dadL(:, :, :) = dadL(:, :, :) + dadL_local(:, :, :)
+      atrace(:, :) = atrace + atrace_local
+      dadr(:, :, :) = dadr + dadr_local
+      dadL(:, :, :) = dadL + dadL_local
       !$omp end critical (get_damat_0d_)
       deallocate (dadL_local, dadr_local, atrace_local)
       !$omp end parallel
@@ -944,9 +946,9 @@ contains
       end do
       !$omp end do
       !$omp critical (get_damat_3d_)
-      atrace(:, :) = atrace(:, :) + atrace_local(:, :)
-      dadr(:, :, :) = dadr(:, :, :) + dadr_local(:, :, :)
-      dadL(:, :, :) = dadL(:, :, :) + dadL_local(:, :, :)
+      atrace(:, :) = atrace + atrace_local
+      dadr(:, :, :) = dadr + dadr_local
+      dadL(:, :, :) = dadL + dadL_local
       !$omp end critical (get_damat_3d_)
       deallocate (dadL_local, dadr_local, atrace_local)
       !$omp end parallel
@@ -1052,7 +1054,7 @@ contains
       end do
       !$omp end do
       !$omp critical (get_cmat_0d_)
-      cmat(:, :) = cmat(:, :) + cmat_local(:, :)
+      cmat(:, :) = cmat + cmat_local
       !$omp end critical (get_cmat_0d_)
       deallocate (cmat_local)
       !$omp end parallel
@@ -1119,7 +1121,7 @@ contains
       end do
       !$omp end do
       !$omp critical (get_cmat_3d_)
-      cmat(:, :) = cmat(:, :) + cmat_local(:, :)
+      cmat(:, :) = cmat + cmat_local
       !$omp end critical (get_cmat_3d_)
       deallocate (cmat_local)
       !$omp end parallel
@@ -1129,7 +1131,11 @@ contains
    end subroutine get_cmat_3d
 
    subroutine get_cpair(kbc, cpair, r1, rvdw, capi, capj)
-      real(wp), intent(in) :: r1, capi, capj, rvdw, kbc
+      real(wp), intent(in) :: kbc
+      real(wp), intent(in) :: r1
+      real(wp), intent(in) :: capi
+      real(wp), intent(in) :: capj
+      real(wp), intent(in) :: rvdw
       real(wp), intent(out) :: cpair
 
       real(wp) :: arg
@@ -1140,7 +1146,12 @@ contains
    end subroutine get_cpair
 
    subroutine get_cpair_dir(kbc, rij, trans, rvdw, capi, capj, cpair)
-      real(wp), intent(in) :: rij(3), capi, capj, rvdw, kbc, trans(:, :)
+      real(wp), intent(in) :: kbc
+      real(wp), intent(in) :: rij(3)
+      real(wp), intent(in) :: trans(:, :)
+      real(wp), intent(in) :: rvdw
+      real(wp), intent(in) :: capi
+      real(wp), intent(in) :: capj
       real(wp), intent(out) :: cpair
 
       integer :: itr
@@ -1157,7 +1168,11 @@ contains
    end subroutine get_cpair_dir
 
    subroutine get_dcpair(kbc, vec, rvdw, capi, capj, dgpair, dspair)
-      real(wp), intent(in) :: vec(3), capi, capj, rvdw, kbc
+      real(wp), intent(in) :: kbc
+      real(wp), intent(in) :: vec(3)
+      real(wp), intent(in) :: rvdw
+      real(wp), intent(in) :: capi
+      real(wp), intent(in) :: capj
       real(wp), intent(out) :: dgpair(3)
       real(wp), intent(out) :: dspair(3, 3)
 
@@ -1220,8 +1235,8 @@ contains
       end do
       !$omp end do
       !$omp critical (get_dcmat_0d_)
-      dcdr(:, :, :) = dcdr(:, :, :) + dcdr_local(:, :, :)
-      dcdL(:, :, :) = dcdL(:, :, :) + dcdL_local(:, :, :)
+      dcdr(:, :, :) = dcdr + dcdr_local
+      dcdL(:, :, :) = dcdL + dcdL_local
       !$omp end critical (get_dcmat_0d_)
       deallocate (dcdL_local, dcdr_local)
       !$omp end parallel
@@ -1292,8 +1307,8 @@ contains
       end do
       !$omp end do
       !$omp critical (get_dcmat_3d_)
-      dcdr(:, :, :) = dcdr(:, :, :) + dcdr_local(:, :, :)
-      dcdL(:, :, :) = dcdL(:, :, :) + dcdL_local(:, :, :)
+      dcdr(:, :, :) = dcdr + dcdr_local
+      dcdL(:, :, :) = dcdL + dcdL_local
       !$omp end critical (get_dcmat_3d_)
       deallocate (dcdL_local, dcdr_local)
       !$omp end parallel

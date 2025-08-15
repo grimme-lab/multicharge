@@ -65,7 +65,7 @@ contains
          & new_unittest("eeq-dbdr-znooh", test_eeq_dbdr_znooh), &
          & new_unittest("gradient-znooh", test_g_znooh), &
          & new_unittest("dqdr-znooh", test_dqdr_znooh), &
-         ! & new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), & ! fails randomly due to numerical noise?
+         & new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), & ! fails randomly due to numerical noise?
          & new_unittest("eeqbc-dadL-mb01", test_eeqbc_dadL_mb01), &
          & new_unittest("eeqbc-dbdr-mb01", test_eeqbc_dbdr_mb01), &
          & new_unittest("eeqbc-dbdL-mb01", test_eeqbc_dbdL_mb01), &
@@ -175,9 +175,6 @@ contains
                      & 8.0_wp*amatr1(kat, jat) - amatr2(kat, jat))/(12.0_wp*step)
                end do
             end do
-            ! For dcdr test
-            ! numgrad(ic, iat, :) = numgrad(ic, iat, :) + &
-            !    & (amatl2(iat, :) - 8.0_wp*amatl1(iat, :) + 8.0_wp*amatr1(iat, :) - amatr2(iat, :))/(12.0_wp*step)
          end do
       end do lp
 
@@ -195,31 +192,12 @@ contains
       if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the A matrix does not match")
          print'(a)', "dadr:"
-         call write_2d_matrix(dadr(1, :, :))
+         print'(3es21.12)', dadr
          print'(a)', "numgrad:"
-         call write_2d_matrix(numgrad(1, :, :))
+         print'(3es21.12)', numgrad
          print'(a)', "diff:"
-         call write_2d_matrix(dadr(1, :, :) - numgrad(1, :, :))
+         print'(3es21.12)', dadr - numgrad
       end if
-
-      ! numtrace(:, :) = 0.0_wp
-      ! do iat = 1, mol%nat
-      !    do jat = 1, iat - 1
-      !       ! Numerical trace of the a matrix
-      !       numtrace(:, iat) = - numgrad(:, jat, iat) + numtrace(:, iat)
-      !       numtrace(:, jat) = - numgrad(:, iat, jat) + numtrace(:, jat)
-      !    end do
-      ! end do
-
-      ! if (any(abs(atrace(:, :) - numtrace(:, :)) > thr2)) then
-      !    call test_failed(error, "Derivative of the A matrix trace does not match")
-      !    print'(a)', "atrace:"
-      !    print'(3es21.14)', atrace
-      !    print'(a)', "numtrace:"
-      !    print'(3es21.14)', numtrace
-      !    print'(a)', "diff:"
-      !    print'(3es21.14)', atrace - numtrace
-      ! end if
 
    end subroutine test_dadr
 
@@ -296,36 +274,17 @@ contains
       call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
       call model%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
 
-      ! dcndr(:, :, :) = 0.0_wp
-      ! dcndL(:, :, :) = 0.0_wp
-      ! dqlocdr(:, :, :) = 0.0_wp
-      ! dqlocdL(:, :, :) = 0.0_wp
-
       call model%get_coulomb_derivs(mol, cache, qvec, dadr, dadL, atrace)
       if (allocated(error)) return
-
-      ! do iat = 1, mol%nat
-      !    write(*,*) "iat", iat
-      !    call write_2d_matrix(dadL(:, :, iat), "dadL", unit=output_unit)
-      !    call write_2d_matrix(numsigma(:, :, iat), "numsigma", unit=output_unit)
-      !    call write_2d_matrix(dadL(:, :, iat) - numsigma(:, :, iat), "diff", unit=output_unit)
-      ! end do
-
-      ! do ic = 1, 3
-      !    do jc = 1, 3
-      !       write(*,*) "ic, jc", ic, jc
-      !       write(*,*) dadL(ic, jc, :) - numsigma(ic, jc, :)
-      !    end do
-      ! end do
 
       if (any(abs(dadL(:, :, :) - numsigma(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the A matrix does not match")
          print'(a)', "dadL:"
-         call write_2d_matrix(dadL(1, :, :))
+         print'(3es21.12)', dadL
          print'(a)', "numsigma:"
-         call write_2d_matrix(numsigma(1, :, :))
+         print'(3es21.12)', numsigma
          print'(a)', "diff:"
-         call write_2d_matrix(dadL(1, :, :) - numsigma(1, :, :))
+         print'(3es21.12)', dadL - numsigma
       end if
 
    end subroutine test_dadL
@@ -389,11 +348,11 @@ contains
       if (any(abs(dbdr(:, :, :) - numgrad(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the b vector does not match")
          print'(a)', "dbdr:"
-         call write_2d_matrix(dbdr(1, :, :))
+         print'(3es21.14)', dbdr
          print'(a)', "numgrad:"
-         call write_2d_matrix(numgrad(1, :, :))
+         print'(3es21.14)', numgrad
          print'(a)', "diff:"
-         call write_2d_matrix(dbdr(1, :, :) - numgrad(1, :, :))
+         print'(3es21.14)', dbdr - numgrad
       end if
 
    end subroutine test_dbdr
@@ -469,58 +428,14 @@ contains
       if (any(abs(dbdL(:, :, :) - numsigma(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the b vector does not match")
          print'(a)', "dbdL:"
-         call write_2d_matrix(dbdL(1, :, :))
+         print'(3es21.14)', dbdL
          print'(a)', "numsigma:"
-         call write_2d_matrix(numsigma(1, :, :))
+         print'(3es21.14)', numsigma
          print'(a)', "diff:"
-         call write_2d_matrix(dbdL(1, :, :) - numsigma(1, :, :))
+         print'(3es21.14)', dbdL - numsigma
       end if
 
    end subroutine test_dbdL
-
-   subroutine write_2d_matrix(matrix, name, unit, step)
-      implicit none
-      real(wp), intent(in) :: matrix(:, :)
-      character(len=*), intent(in), optional :: name
-      integer, intent(in), optional :: unit
-      integer, intent(in), optional :: step
-      integer :: d1, d2
-      integer :: i, j, k, l, istep, iunit
-
-      d1 = size(matrix, dim=1)
-      d2 = size(matrix, dim=2)
-
-      if (present(unit)) then
-         iunit = unit
-      else
-         iunit = output_unit
-      end if
-
-      if (present(step)) then
-         istep = step
-      else
-         istep = 6
-      end if
-
-      if (present(name)) write (iunit, '(/,"matrix printed:",1x,a)') name
-
-      do i = 1, d2, istep
-         l = min(i + istep - 1, d2)
-         write (iunit, '(/,6x)', advance='no')
-         do k = i, l
-            write (iunit, '(6x,i7,3x)', advance='no') k
-         end do
-         write (iunit, '(a)')
-         do j = 1, d1
-            write (iunit, '(i6)', advance='no') j
-            do k = i, l
-               write (iunit, '(1x,f15.8)', advance='no') matrix(j, k)
-            end do
-            write (iunit, '(a)')
-         end do
-      end do
-
-   end subroutine write_2d_matrix
 
    subroutine gen_test(error, mol, model, qref, eref)
 

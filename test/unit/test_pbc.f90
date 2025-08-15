@@ -534,7 +534,7 @@ contains
       end do
 
       ! higher tolerance for numerical gradient
-      if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > 2.0_wp*thr2)) then
+      if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the A matrix does not match")
          print'(a)', "dadr:"
          print'(3es21.14)', dadr
