@@ -745,8 +745,10 @@ contains
             atrace_local(:, jat) = -dtmp*qvec(iat)*dcdr(:, iat, jat) + atrace_local(:, jat)
             dadr_local(:, iat, jat) = +dtmp*qvec(iat)*dcdr(:, iat, jat) + dadr_local(:, iat, jat)
             dadr_local(:, jat, iat) = +dtmp*qvec(jat)*dcdr(:, jat, iat) + dadr_local(:, jat, iat)
-            dadL_local(:, :, iat) = dadL_local(:, :, iat) - dtmp*qvec(jat)*spread(dcdr(:, iat, jat), 2, 3)*spread(vec, 1, 3)
-            dadL_local(:, :, jat) = dadL_local(:, :, jat) - dtmp*qvec(iat)*spread(dcdr(:, iat, jat), 2, 3)*spread(vec, 1, 3)
+            dadL_local(:, :, iat) = - dtmp*qvec(jat)*spread(dcdr(:, iat, jat), 2, 3)*spread(vec, 1, 3) &
+                & + dadL_local(:, :, iat) 
+            dadL_local(:, :, jat) = - dtmp*qvec(iat)*spread(dcdr(:, iat, jat), 2, 3)*spread(vec, 1, 3) & 
+                & + dadL_local(:, :, jat) 
 
             ! Capacitance derivative diagonal
             dtmp = (self%eta(izp) + self%kqeta(izp)*qloc(iat) + sqrt2pi/radi)*qvec(iat)
