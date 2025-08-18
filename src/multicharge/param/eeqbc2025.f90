@@ -15,7 +15,7 @@
 
 !> Bond capacitor electronegativity equilibration charge model published in
 !>
-!> Thomas Froitzheim, Marcel Müller, Andreas Hansen, and Stefan Grimme, 
+!> Thomas Froitzheim, Marcel Müller, Andreas Hansen, and Stefan Grimme
 !> *J. Chem. Phys.*, **2025**, 162, 214109.
 !> DOI: [10.1063/5.0268978](https://dx.doi.org/10.1063/5.0268978)
 module multicharge_param_eeqbc2025
