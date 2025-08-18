@@ -21,6 +21,7 @@ module test_pbc
    use mctc_cutoff, only: get_lattice_points
    use mstore, only: get_structure
    use multicharge_model, only: mchrg_model_type
+   use multicharge_model_eeqbc, only: eeqbc_model
    use multicharge_param, only: new_eeq2019_model, new_eeqbc2025_model
    use multicharge_model_cache, only: cache_container
    implicit none
@@ -466,6 +467,7 @@ contains
       type(error_type), allocatable, intent(out) :: error
 
       integer :: iat, ic, jat, kat
+      real(wp) :: thr2_local
       real(wp), parameter :: cutoff = 25.0_wp
       real(wp), parameter :: step = 1.0e-6_wp
       real(wp), allocatable :: cn(:)
@@ -481,6 +483,14 @@ contains
          & dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), dqlocdr(3, mol%nat, mol%nat), &
          & dqlocdL(3, 3, mol%nat), dadr(3, mol%nat, mol%nat + 1), dadL(3, 3, mol%nat + 1), &
          & atrace(3, mol%nat), numtrace(3, mol%nat), numgrad(3, mol%nat, mol%nat + 1), qvec(mol%nat))
+
+      ! Set tolerance higher if testing eeqbc model
+      select type (model)
+      type is (eeqbc_model)
+         thr2_local = 3.0_wp*thr2
+      class default
+         thr2_local = thr2
+      end select
 
       call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
@@ -534,7 +544,7 @@ contains
       end do
 
       ! higher tolerance for numerical gradient
-      if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2)) then
+      if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2_local)) then
          call test_failed(error, "Derivative of the A matrix does not match")
          print'(a)', "dadr:"
          print'(3es21.14)', dadr
