@@ -75,14 +75,6 @@ module multicharge_model_eeqbc
       procedure :: get_xvec
       !> Calculate derivatives of EN vector
       procedure :: get_xvec_derivs
-      !> Calculate Coulomb matrix
-      procedure :: get_amat_0d
-      !> Calculate Coulomb matrix periodic
-      procedure :: get_amat_3d
-      !> Calculate Coulomb matrix derivative
-      procedure :: get_damat_0d
-      !> Calculate Coulomb matrix derivative (periodic)
-      procedure :: get_damat_3d
       !> Calculate constraint matrix (molecular)
       procedure :: get_cmat_0d
       !> Calculate full constraint matrix (periodic)
@@ -231,22 +223,22 @@ contains
          call new_wignerseitz_cell(ptr%wsc, mol)
 
          ! Get full cmat sum over all WSC images (for get_xvec and xvec_derivs)
-         call self%get_cmat_3d(mol, ptr%wsc, ptr%cmat)
+         call get_cmat_3d(self, mol, ptr%wsc, ptr%cmat)
          if (grad) then
             if (.not. allocated(ptr%dcdr) .and. .not. allocated(ptr%dcdL)) then
                allocate (ptr%dcdr(3, mol%nat, mol%nat + 1), ptr%dcdL(3, 3, mol%nat + 1))
             end if
-            call self%get_dcmat_3d(mol, ptr%wsc, ptr%dcdr, ptr%dcdL)
+            call get_dcmat_3d(self, mol, ptr%wsc, ptr%dcdr, ptr%dcdL)
          end if
       else
-         call self%get_cmat_0d(mol, ptr%cmat)
+         call get_cmat_0d(self, mol, ptr%cmat)
 
          ! cmat gradients
          if (grad) then
             if (.not. allocated(ptr%dcdr) .and. .not. allocated(ptr%dcdL)) then
                allocate (ptr%dcdr(3, mol%nat, mol%nat + 1), ptr%dcdL(3, 3, mol%nat + 1))
             end if
-            call self%get_dcmat_0d(mol, ptr%dcdr, ptr%dcdL)
+            call get_dcmat_0d(self, mol, ptr%dcdr, ptr%dcdL)
          end if
       end if
 
@@ -467,9 +459,9 @@ contains
       call view(cache, ptr)
 
       if (any(mol%periodic)) then
-         call self%get_amat_3d(mol, ptr%wsc, ptr%cn, ptr%qloc, ptr%cmat, amat)
+         call get_amat_3d(self, mol, ptr%wsc, ptr%cn, ptr%qloc, ptr%cmat, amat)
       else
-         call self%get_amat_0d(mol, ptr%cn, ptr%qloc, ptr%cmat, amat)
+         call get_amat_0d(self, mol, ptr%cn, ptr%qloc, ptr%cmat, amat)
       end if
    end subroutine get_coulomb_matrix
 
@@ -643,12 +635,12 @@ contains
       call view(cache, ptr)
 
       if (any(mol%periodic)) then
-         call self%get_damat_3d(mol, ptr%wsc, ptr%cn, &
+         call get_damat_3d(self, mol, ptr%wsc, ptr%cn, &
          & ptr%qloc, qvec, ptr%dcndr, ptr%dcndL, ptr%dqlocdr, &
          & ptr%dqlocdL, ptr%cmat, ptr%dcdr, ptr%dcdL, dadr, dadL, atrace)
 
       else
-         call self%get_damat_0d(mol, ptr%cn, &
+         call get_damat_0d(self, mol, ptr%cn, &
          & ptr%qloc, qvec, ptr%dcndr, ptr%dcndL, ptr%dqlocdr, &
          & ptr%dqlocdL, ptr%cmat, ptr%dcdr, ptr%dcdL, dadr, dadL, atrace)
       end if

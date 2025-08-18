@@ -51,14 +51,6 @@ module multicharge_model_eeq
       procedure :: get_xvec
       !> Calculate EN vector derivatives
       procedure :: get_xvec_derivs
-      !> Calculate Coulomb matrix
-      procedure :: get_amat_0d
-      !> Calculate Coulomb matrix periodic
-      procedure :: get_amat_3d
-      !> Calculate Coulomb matrix derivative
-      procedure :: get_damat_0d
-      !> Calculate Coulomb matrix derivative periodic
-      procedure :: get_damat_3d
    end type eeq_model
 
    real(wp), parameter :: sqrtpi = sqrt(pi)
@@ -198,9 +190,9 @@ contains
       call view(cache, ptr)
 
       if (any(mol%periodic)) then
-         call self%get_amat_3d(mol, ptr%wsc, ptr%alpha, amat)
+         call get_amat_3d(self, mol, ptr%wsc, ptr%alpha, amat)
       else
-         call self%get_amat_0d(mol, amat)
+         call get_amat_0d(self, mol, amat)
       end if
    end subroutine get_coulomb_matrix
 
@@ -371,9 +363,9 @@ contains
       call view(cache, ptr)
 
       if (any(mol%periodic)) then
-         call self%get_damat_3d(mol, ptr%wsc, ptr%alpha, qvec, dadr, dadL, atrace)
+         call get_damat_3d(self, mol, ptr%wsc, ptr%alpha, qvec, dadr, dadL, atrace)
       else
-         call self%get_damat_0d(mol, qvec, dadr, dadL, atrace)
+         call get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
       end if
    end subroutine get_coulomb_derivs
 
