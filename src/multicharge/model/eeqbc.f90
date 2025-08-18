@@ -297,7 +297,7 @@ contains
          end do
          !$omp end do
          !$omp critical (get_xvec_)
-         xvec(:) = xvec(:) + xvec_local(:)
+         xvec(:) = xvec + xvec_local
          !$omp end critical (get_xvec_)
          deallocate (xvec_local)
          !$omp end parallel
