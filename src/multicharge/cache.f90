@@ -20,8 +20,7 @@
 module multicharge_model_cache
    use mctc_env, only: wp
    use mctc_io, only: structure_type
-   use multicharge_wignerseitz, only: wignerseitz_cell_type, new_wignerseitz_cell
-   use multicharge_ewald, only: get_alpha
+   use multicharge_wignerseitz, only: wignerseitz_cell_type
    implicit none
    private
 
@@ -40,23 +39,8 @@ module multicharge_model_cache
       real(wp), allocatable :: dcndL(:, :, :)
       !> Ewald separation parameter
       real(wp) :: alpha
+      !> Wigner-Seitz cell
       type(wignerseitz_cell_type) :: wsc
-   contains
-      !> Create WSC
-      procedure :: update
    end type model_cache
-
-contains
-   subroutine update(self, mol)
-      class(model_cache), intent(inout) :: self
-      type(structure_type), intent(in) :: mol
-
-      ! Create WSC
-      if (any(mol%periodic)) then
-         call new_wignerseitz_cell(self%wsc, mol)
-         call get_alpha(mol%lattice, self%alpha)
-      end if
-
-   end subroutine update
 
 end module multicharge_model_cache

@@ -112,10 +112,10 @@ contains
          &.or. mol%num == 97 .or. mol%num == 103)
       en = en/3.98_wp
       rvdw = get_vdw_rad(spread(mol%num(mol%id), 2, mol%nat), &
-         & spread(mol%num(mol%id), 1, mol%nat)) * autoaa
+         & spread(mol%num(mol%id), 1, mol%nat))*autoaa
 
       allocate (eeqbc)
-      call new_eeqbc_model(eeqbc, mol=mol, error=error, chi=chi, & 
+      call new_eeqbc_model(eeqbc, mol=mol, error=error, chi=chi, &
          & rad=rad, eta=eta, kcnchi=kcnchi, kqchi=kqchi, kqeta=kqeta, &
          & kcnrad=kcnrad, cap=cap, avg_cn=avg_cn, kbc=kbc, &
          & cutoff=cutoff, cn_exp=cn_exp, rcov=rcov, en=en, &

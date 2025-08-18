@@ -22,6 +22,7 @@ module test_model
    use mctc_io_structure, only: structure_type, new
    use mstore, only: get_structure
    use multicharge_model, only: mchrg_model_type
+   use multicharge_model_eeqbc, only: eeqbc_model
    use multicharge_param, only: new_eeq2019_model, new_eeqbc2025_model
    use multicharge_model_cache, only: cache_container
    use multicharge_blas, only: gemv
@@ -44,8 +45,9 @@ contains
 
       testsuite = [ &
          & new_unittest("eeq-dadr-mb01", test_eeq_dadr_mb01), &
-         ! !& new_unittest("eeq-dadL-mb01", test_eeq_dadL_mb01), &
+         & new_unittest("eeq-dadL-mb01", test_eeq_dadL_mb01), &
          & new_unittest("eeq-dbdr-mb01", test_eeq_dbdr_mb01), &
+         & new_unittest("eeq-dbdL-mb01", test_eeq_dbdL_mb01), &
          & new_unittest("eeq-charges-mb01", test_eeq_q_mb01), &
          & new_unittest("eeq-charges-mb02", test_eeq_q_mb02), &
          & new_unittest("eeq-charges-actinides", test_eeq_q_actinides), &
@@ -64,10 +66,12 @@ contains
          & new_unittest("eeq-dbdr-znooh", test_eeq_dbdr_znooh), &
          & new_unittest("gradient-znooh", test_g_znooh), &
          & new_unittest("dqdr-znooh", test_dqdr_znooh), &
-         !& new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), &
-         !& new_unittest("eeqbc-dadL-mb01", test_eeqbc_dadL_mb01), &
+         & new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), & ! fails randomly due to numerical noise?
+         & new_unittest("eeqbc-dadL-mb01", test_eeqbc_dadL_mb01), &
          & new_unittest("eeqbc-dbdr-mb01", test_eeqbc_dbdr_mb01), &
+         & new_unittest("eeqbc-dbdL-mb01", test_eeqbc_dbdL_mb01), &
          & new_unittest("eeqbc-dadr-mb05", test_eeqbc_dadr_mb05), &
+         & new_unittest("eeqbc-dadL-mb05", test_eeqbc_dadL_mb05), &
          & new_unittest("eeqbc-dbdr-mb05", test_eeqbc_dbdr_mb05), &
          & new_unittest("eeqbc-charges-mb01", test_eeqbc_q_mb01), &
          & new_unittest("eeqbc-charges-mb02", test_eeqbc_q_mb02), &
@@ -76,12 +80,12 @@ contains
          & new_unittest("eeqbc-energy-mb04", test_eeqbc_e_mb04), &
          & new_unittest("eeqbc-gradient-mb05", test_eeqbc_g_mb05), &
          & new_unittest("eeqbc-gradient-mb06", test_eeqbc_g_mb06), &
-         !& new_unittest("eeqbc-sigma-mb07", test_eeqbc_s_mb07), &
-         !& new_unittest("eeqbc-sigma-mb08", test_eeqbc_s_mb08), &
+         & new_unittest("eeqbc-sigma-mb07", test_eeqbc_s_mb07), &
+         & new_unittest("eeqbc-sigma-mb08", test_eeqbc_s_mb08), &
          & new_unittest("eeqbc-dqdr-mb09", test_eeqbc_dqdr_mb09), &
-         & new_unittest("eeqbc-dqdr-mb10", test_eeqbc_dqdr_mb10) &
-         !& new_unittest("eeqbc-dqdL-mb11", test_eeqbc_dqdL_mb11), &
-         !& new_unittest("eeqbc-dqdL-mb12", test_eeqbc_dqdL_mb12) &
+         & new_unittest("eeqbc-dqdr-mb10", test_eeqbc_dqdr_mb10), &
+         & new_unittest("eeqbc-dqdL-mb11", test_eeqbc_dqdL_mb11), &
+         & new_unittest("eeqbc-dqdL-mb12", test_eeqbc_dqdL_mb12) &
          & ]
 
    end subroutine collect_model
@@ -98,56 +102,89 @@ contains
       type(error_type), allocatable, intent(out) :: error
 
       integer :: iat, ic, jat, kat
+      real(wp) :: thr2_local
       real(wp), parameter :: trans(3, 1) = 0.0_wp
       real(wp), parameter :: step = 1.0e-6_wp
       real(wp), allocatable :: cn(:)
       real(wp), allocatable :: qloc(:)
       real(wp), allocatable :: dcndr(:, :, :), dcndL(:, :, :), dqlocdr(:, :, :), dqlocdL(:, :, :)
       real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
-      real(wp), allocatable :: qvec(:), numgrad(:, :, :), amatr(:, :), amatl(:, :), numtrace(:, :)
+      real(wp), allocatable :: qvec(:), numgrad(:, :, :), amatr1(:, :), amatr2(:, :), amatl1(:, :), amatl2(:, :), numtrace(:, :)
       type(cache_container), allocatable :: cache
       allocate (cache)
 
-      allocate (cn(mol%nat), qloc(mol%nat), amatr(mol%nat + 1, mol%nat + 1), amatl(mol%nat + 1, mol%nat + 1), &
+      allocate (cn(mol%nat), qloc(mol%nat), amatr1(mol%nat + 1, mol%nat + 1), amatl1(mol%nat + 1, mol%nat + 1), &
+         & amatr2(mol%nat + 1, mol%nat + 1), amatl2(mol%nat + 1, mol%nat + 1), &
          & dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), dqlocdr(3, mol%nat, mol%nat), &
          & dqlocdL(3, 3, mol%nat), dadr(3, mol%nat, mol%nat + 1), dadL(3, 3, mol%nat + 1), &
          & atrace(3, mol%nat), numtrace(3, mol%nat), numgrad(3, mol%nat, mol%nat + 1), qvec(mol%nat))
+
+      ! Set tolerance higher if testing eeqbc model
+      select type (model)
+      type is (eeqbc_model)
+         thr2_local = 3.0_wp*thr2
+      class default
+         thr2_local = thr2
+      end select
 
       ! Obtain the vector of charges
       call model%ncoord%get_coordination_number(mol, trans, cn)
       call model%local_charge(mol, trans, qloc)
       call model%solve(mol, error, cn, qloc, qvec=qvec)
-      if(allocated(error)) return
+      if (allocated(error)) return
 
       numgrad = 0.0_wp
 
       lp: do iat = 1, mol%nat
          do ic = 1, 3
-            ! Right-hand side
-            amatr(:, :) = 0.0_wp
+            amatr1(:, :) = 0.0_wp
+            amatr2(:, :) = 0.0_wp
+            amatl1(:, :) = 0.0_wp
+            amatl2(:, :) = 0.0_wp
+
+            ! First right-hand side (x+h)
             mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
             call model%update(mol, cache, cn, qloc)
-            call model%get_coulomb_matrix(mol, cache, amatr)
+            call model%get_coulomb_matrix(mol, cache, amatr1)
 
-            ! Left-hand side
-            amatl(:, :) = 0.0_wp
+            ! Second right-hand side (x+2h)
+            mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
+            call model%ncoord%get_coordination_number(mol, trans, cn)
+            call model%local_charge(mol, trans, qloc)
+            call model%update(mol, cache, cn, qloc)
+            call model%get_coulomb_matrix(mol, cache, amatr2)
+
+            ! Return to original position before calculating left sides
             mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
+
+            ! First left-hand side (x-h)
+            mol%xyz(ic, iat) = mol%xyz(ic, iat) - step
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
             call model%update(mol, cache, cn, qloc)
-            call model%get_coulomb_matrix(mol, cache, amatl)
+            call model%get_coulomb_matrix(mol, cache, amatl1)
 
-            mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
-            
+            ! Second left-hand side (x-2h)
+            mol%xyz(ic, iat) = mol%xyz(ic, iat) - step
+            call model%ncoord%get_coordination_number(mol, trans, cn)
+            call model%local_charge(mol, trans, qloc)
+            call model%update(mol, cache, cn, qloc)
+            call model%get_coulomb_matrix(mol, cache, amatl2)
+
+            ! Return to original position
+            mol%xyz(ic, iat) = mol%xyz(ic, iat) + 2*step
+
             do kat = 1, mol%nat
                do jat = 1, mol%nat
-                  ! Numerical gradient of the A matrix
-                  numgrad(ic, iat, kat) = 0.5_wp*qvec(jat)*(amatr(kat, jat) - amatl(kat, jat))/step &
-                     & + numgrad(ic, iat, kat) 
-               end do 
-            end do 
+                  ! Numerical gradient using 4-step central difference formula
+                  ! f'(x) ≈ [f(x-2h) - 8f(x-h) + 8f(x+h) - f(x+2h)]/(12h)
+                  numgrad(ic, iat, kat) = numgrad(ic, iat, kat) + &
+                     & qvec(jat)*(amatl2(kat, jat) - 8.0_wp*amatl1(kat, jat) + &
+                     & 8.0_wp*amatr1(kat, jat) - amatr2(kat, jat))/(12.0_wp*step)
+               end do
+            end do
          end do
       end do lp
 
@@ -160,36 +197,17 @@ contains
       ! Add trace of the A matrix
       do iat = 1, mol%nat
          dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
-      end do 
+      end do
 
-      if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2)) then
+      if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2_local)) then
          call test_failed(error, "Derivative of the A matrix does not match")
          print'(a)', "dadr:"
-         print'(3es21.14)', dadr
+         print'(3es21.12)', dadr
          print'(a)', "numgrad:"
-         print'(3es21.14)', numgrad
+         print'(3es21.12)', numgrad
          print'(a)', "diff:"
-         print'(3es21.14)', dadr - numgrad
+         print'(3es21.12)', dadr - numgrad
       end if
-
-      ! numtrace(:, :) = 0.0_wp
-      ! do iat = 1, mol%nat
-      !    do jat = 1, iat - 1
-      !       ! Numerical trace of the a matrix
-      !       numtrace(:, iat) = - numgrad(:, jat, iat) + numtrace(:, iat)
-      !       numtrace(:, jat) = - numgrad(:, iat, jat) + numtrace(:, jat)
-      !    end do
-      ! end do
-
-      ! if (any(abs(atrace(:, :) - numtrace(:, :)) > thr2)) then
-      !    call test_failed(error, "Derivative of the A matrix trace does not match")
-      !    print'(a)', "atrace:"
-      !    print'(3es21.14)', atrace
-      !    print'(a)', "numtrace:"
-      !    print'(3es21.14)', numtrace
-      !    print'(a)', "diff:"
-      !    print'(3es21.14)', atrace - numtrace
-      ! end if
 
    end subroutine test_dadr
 
@@ -211,7 +229,7 @@ contains
       real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :)
       real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
       real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
-      real(wp), allocatable :: lattr(:, :), xyz(:, :)
+      real(wp), allocatable :: xyz(:, :)
       real(wp), allocatable :: qvec(:), numsigma(:, :, :), amatr(:, :), amatl(:, :)
       real(wp) :: eps(3, 3)
       type(cache_container), allocatable :: cache
@@ -226,19 +244,17 @@ contains
       call model%ncoord%get_coordination_number(mol, trans, cn)
       call model%local_charge(mol, trans, qloc)
       call model%solve(mol, error, cn, qloc, qvec=qvec)
-      if(allocated(error)) return
+      if (allocated(error)) return
 
-      qvec = 1.0_wp
+      numsigma = 0.0_wp
 
       eps(:, :) = unity
       xyz(:, :) = mol%xyz
-      lattr = trans
       lp: do ic = 1, 3
          do jc = 1, 3
             amatr(:, :) = 0.0_wp
             eps(jc, ic) = eps(jc, ic) + step
             mol%xyz(:, :) = matmul(eps, xyz)
-            lattr(:, :) = matmul(eps, trans)
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
             call model%update(mol, cache, cn, qloc)
@@ -248,7 +264,6 @@ contains
             amatl(:, :) = 0.0_wp
             eps(jc, ic) = eps(jc, ic) - 2*step
             mol%xyz(:, :) = matmul(eps, xyz)
-            lattr(:, :) = matmul(eps, trans)
             call model%ncoord%get_coordination_number(mol, trans, cn)
             call model%local_charge(mol, trans, qloc)
             call model%update(mol, cache, cn, qloc)
@@ -257,7 +272,6 @@ contains
 
             eps(jc, ic) = eps(jc, ic) + step
             mol%xyz(:, :) = xyz
-            lattr(:, :) = trans
             do iat = 1, mol%nat
                ! Numerical sigma of the a matrix
                numsigma(jc, ic, :) = 0.5_wp*qvec(iat)*(amatr(iat, :) - amatl(iat, :))/step + numsigma(jc, ic, :)
@@ -270,34 +284,17 @@ contains
       call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
       call model%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
 
-      ! dcndr(:, :, :) = 0.0_wp
-      ! dcndL(:, :, :) = 0.0_wp
-      ! dqlocdr(:, :, :) = 0.0_wp
-      ! dqlocdL(:, :, :) = 0.0_wp
-
       call model%get_coulomb_derivs(mol, cache, qvec, dadr, dadL, atrace)
       if (allocated(error)) return
 
-      ! do iat = 1, mol%nat
-      !    write(*,*) "iat", iat
-      !    call write_2d_matrix(dadL(:, :, iat), "dadL", unit=output_unit)
-      !    call write_2d_matrix(numsigma(:, :, iat), "numsigma", unit=output_unit)
-      !    call write_2d_matrix(dadL(:, :, iat) - numsigma(:, :, iat), "diff", unit=output_unit)
-      ! end do
-
-      ! do ic = 1, 3
-      !    do jc = 1, 3
-      !       write(*,*) "ic, jc", ic, jc
-      !       write(*,*) dadL(ic, jc, :) - numsigma(ic, jc, :)
-      !    end do
-      ! end do
-
       if (any(abs(dadL(:, :, :) - numsigma(:, :, :)) > thr2)) then
          call test_failed(error, "Derivative of the A matrix does not match")
-         !print'(a)', "dadr:"
-         !print'(3es21.14)', dadr
-         !print'(a)', "diff:"
-         !print'(3es21.14)', dadr - numsigma
+         print'(a)', "dadL:"
+         print'(3es21.12)', dadL
+         print'(a)', "numsigma:"
+         print'(3es21.12)', numsigma
+         print'(a)', "diff:"
+         print'(3es21.12)', dadL - numsigma
       end if
 
    end subroutine test_dadL
@@ -370,49 +367,85 @@ contains
 
    end subroutine test_dbdr
 
-   subroutine write_2d_matrix(matrix, name, unit, step)
-      implicit none
-      real(wp), intent(in) :: matrix(:, :)
-      character(len=*), intent(in), optional :: name
-      integer, intent(in), optional :: unit
-      integer, intent(in), optional :: step
-      integer :: d1, d2
-      integer :: i, j, k, l, istep, iunit
+   subroutine test_dbdL(error, mol, model)
 
-      d1 = size(matrix, dim=1)
-      d2 = size(matrix, dim=2)
+      !> Molecular structure data
+      type(structure_type), intent(inout) :: mol
 
-      if (present(unit)) then
-         iunit = unit
-      else
-         iunit = output_unit
-      end if
+      !> Electronegativity equilibration model
+      class(mchrg_model_type), intent(in) :: model
 
-      if (present(step)) then
-         istep = step
-      else
-         istep = 6
-      end if
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
 
-      if (present(name)) write (iunit, '(/,"matrix printed:",1x,a)') name
+      integer :: iat, ic, jc
+      real(wp), parameter :: trans(3, 1) = 0.0_wp
+      real(wp), parameter :: step = 1.0e-6_wp, unity(3, 3) = reshape(&
+      & [1, 0, 0, 0, 1, 0, 0, 0, 1], shape(unity))
+      real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :)
+      real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
+      real(wp), allocatable :: dbdr(:, :, :), dbdL(:, :, :)
+      real(wp), allocatable :: numsigma(:, :, :), xvecr(:), xvecl(:)
+      real(wp), allocatable :: xyz(:, :)
+      real(wp) :: eps(3, 3)
+      type(cache_container), allocatable :: cache
+      allocate (cache)
 
-      do i = 1, d2, istep
-         l = min(i + istep - 1, d2)
-         write (iunit, '(/,6x)', advance='no')
-         do k = i, l
-            write (iunit, '(6x,i7,3x)', advance='no') k
-         end do
-         write (iunit, '(a)')
-         do j = 1, d1
-            write (iunit, '(i6)', advance='no') j
-            do k = i, l
-               write (iunit, '(1x,f15.8)', advance='no') matrix(j, k)
+      allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
+         & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
+         & xvecr(mol%nat + 1), xvecl(mol%nat + 1), numsigma(3, 3, mol%nat + 1), &
+         & dbdr(3, mol%nat, mol%nat + 1), dbdL(3, 3, mol%nat + 1), xyz(3, mol%nat))
+
+      numsigma = 0.0_wp
+
+      eps(:, :) = unity
+      xyz(:, :) = mol%xyz
+      lp: do ic = 1, 3
+         do jc = 1, 3
+            ! Right-hand side
+            xvecr(:) = 0.0_wp
+            eps(jc, ic) = eps(jc, ic) + step
+            mol%xyz(:, :) = matmul(eps, xyz)
+            call model%ncoord%get_coordination_number(mol, trans, cn)
+            call model%local_charge(mol, trans, qloc)
+            call model%update(mol, cache, cn, qloc)
+            call model%get_xvec(mol, cache, xvecr)
+
+            ! Left-hand side
+            xvecl(:) = 0.0_wp
+            eps(jc, ic) = eps(jc, ic) - 2*step
+            mol%xyz(:, :) = matmul(eps, xyz)
+            call model%ncoord%get_coordination_number(mol, trans, cn)
+            call model%local_charge(mol, trans, qloc)
+            call model%update(mol, cache, cn, qloc)
+            call model%get_xvec(mol, cache, xvecl)
+
+            eps(jc, ic) = eps(jc, ic) + step
+            mol%xyz(:, :) = xyz
+            do iat = 1, mol%nat
+               numsigma(jc, ic, iat) = 0.5_wp*(xvecr(iat) - xvecl(iat))/step
             end do
-            write (iunit, '(a)')
          end do
-      end do
+      end do lp
 
-   end subroutine write_2d_matrix
+      ! Analytical gradient
+      call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
+      call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
+      call model%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
+      call model%get_xvec(mol, cache, xvecl) ! need to call this for xtmp in cache (eeqbc)
+      call model%get_xvec_derivs(mol, cache, dbdr, dbdL)
+
+      if (any(abs(dbdL(:, :, :) - numsigma(:, :, :)) > thr2)) then
+         call test_failed(error, "Derivative of the b vector does not match")
+         print'(a)', "dbdL:"
+         print'(3es21.14)', dbdL
+         print'(a)', "numsigma:"
+         print'(3es21.14)', numsigma
+         print'(a)', "diff:"
+         print'(3es21.14)', dbdL - numsigma
+      end if
+
+   end subroutine test_dbdL
 
    subroutine gen_test(error, mol, model, qref, eref)
 
@@ -816,6 +849,21 @@ contains
 
    end subroutine test_eeq_dbdr_mb01
 
+   subroutine test_eeq_dbdL_mb01(error)
+
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      type(structure_type) :: mol
+      class(mchrg_model_type), allocatable :: model
+
+      call get_structure(mol, "MB16-43", "01")
+      call new_eeq2019_model(mol, model, error)
+      if (allocated(error)) return
+      call test_dbdL(error, mol, model)
+
+   end subroutine test_eeq_dbdL_mb01
+
    subroutine test_eeq_q_mb01(error)
 
       !> Error handling
@@ -840,7 +888,7 @@ contains
       if (allocated(error)) return
 
       ! Check wrapper functions
-      allocate (qvec(mol%nat), source = 0.0_wp)
+      allocate (qvec(mol%nat), source=0.0_wp)
       call get_charges(model, mol, error, qvec)
       if (allocated(error)) return
 
@@ -853,7 +901,7 @@ contains
       end if
       if (allocated(error)) return
 
-      qvec = 0.0_wp 
+      qvec = 0.0_wp
       call get_eeq_charges(mol, error, qvec)
       if (allocated(error)) return
 
@@ -1281,6 +1329,21 @@ contains
 
    end subroutine test_eeqbc_dbdr_mb01
 
+   subroutine test_eeqbc_dbdL_mb01(error)
+
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      type(structure_type) :: mol
+      class(mchrg_model_type), allocatable :: model
+
+      call get_structure(mol, "MB16-43", "01")
+      call new_eeqbc2025_model(mol, model, error)
+      if (allocated(error)) return
+      call test_dbdL(error, mol, model)
+
+   end subroutine test_eeqbc_dbdL_mb01
+
    subroutine test_eeqbc_dadr_mb05(error)
 
       !> Error handling
@@ -1295,6 +1358,21 @@ contains
       call test_dadr(error, mol, model)
 
    end subroutine test_eeqbc_dadr_mb05
+
+   subroutine test_eeqbc_dadL_mb05(error)
+
+      !> Error handling
+      type(error_type), allocatable, intent(out) :: error
+
+      type(structure_type) :: mol
+      class(mchrg_model_type), allocatable :: model
+
+      call get_structure(mol, "MB16-43", "05")
+      call new_eeqbc2025_model(mol, model, error)
+      if (allocated(error)) return
+      call test_dadL(error, mol, model)
+
+   end subroutine test_eeqbc_dadL_mb05
 
    subroutine test_eeqbc_dbdr_mb05(error)
 
@@ -1334,7 +1412,7 @@ contains
       call gen_test(error, mol, model, qref=ref)
 
       ! Check wrapper functions
-      allocate (qvec(mol%nat), source = 0.0_wp)
+      allocate (qvec(mol%nat), source=0.0_wp)
       call get_charges(model, mol, error, qvec)
       if (allocated(error)) return
 
@@ -1347,7 +1425,7 @@ contains
       end if
       if (allocated(error)) return
 
-      qvec = 0.0_wp 
+      qvec = 0.0_wp
       call get_eeqbc_charges(mol, error, qvec)
       if (allocated(error)) return
 

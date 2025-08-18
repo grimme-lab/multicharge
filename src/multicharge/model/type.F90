@@ -23,8 +23,6 @@
 !> General charge model
 module multicharge_model_type
 
-   use iso_fortran_env, only: output_unit
-
    use mctc_env, only: error_type, fatal_error, wp, ik => IK
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
@@ -122,61 +120,9 @@ module multicharge_model_type
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
          type(cache_container), intent(inout) :: cache
-         real(wp), intent(out) :: dxdr(:, :, :)
-         real(wp), intent(out) :: dxdL(:, :, :)
+         real(wp), intent(out), contiguous :: dxdr(:, :, :)
+         real(wp), intent(out), contiguous :: dxdL(:, :, :)
       end subroutine get_xvec_derivs
-
-      !subroutine get_amat_0d(self, mol, amat, cn, qloc, cmat)
-      !   import :: mchrg_model_type, cache_container, structure_type, wp
-      !   class(mchrg_model_type), intent(in) :: self
-      !   type(structure_type), intent(in) :: mol
-      !   real(wp), intent(out) :: amat(:, :)
-      !   real(wp), intent(in), optional :: cn(:)
-      !   real(wp), intent(in), optional :: qloc(:)
-      !   real(wp), intent(in), optional :: cmat(:, :)
-      !end subroutine get_amat_0d
-
-      !subroutine get_amat_3d(self, mol, cache, wsc, alpha, amat)
-      !   import :: mchrg_model_type, cache_container, structure_type, &
-      !      & wignerseitz_cell_type, wp
-      !   class(mchrg_model_type), intent(in) :: self
-      !   type(structure_type), intent(in) :: mol
-      !   type(cache_container), intent(inout) :: cache
-      !   type(wignerseitz_cell_type), intent(in) :: wsc
-      !   real(wp), intent(in) :: alpha
-      !   real(wp), intent(out) :: amat(:, :)
-      !end subroutine get_amat_3d
-
-      !subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
-      !   & dqlocdr, dqlocdL, dadr, dadL, atrace)
-      !   import :: mchrg_model_type, structure_type, wp
-      !   class(mchrg_model_type), intent(in) :: self
-      !   type(structure_type), intent(in) :: mol
-      !   real(wp), intent(in) :: qvec(:)
-      !   real(wp), intent(out) :: dadr(:, :, :)
-      !   real(wp), intent(out) :: dadL(:, :, :)
-      !   real(wp), intent(out) :: atrace(:, :)
-      !   real(wp), intent(in), optional :: cn(:)
-      !   real(wp), intent(in), optional :: qloc(:)
-      !   real(wp), intent(in), optional :: dcndr(:, :, :)
-      !   real(wp), intent(in), optional :: dcndL(:, :, :)
-      !   real(wp), intent(in), optional :: dqlocdr(:, :, :)
-      !   real(wp), intent(in), optional :: dqlocdL(:, :, :)
-      !end subroutine get_damat_0d
-
-      !subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
-      !   import :: mchrg_model_type, structure_type, &
-      !      & wignerseitz_cell_type, wp
-      !   class(mchrg_model_type), intent(in) :: self
-      !   type(structure_type), intent(in) :: mol
-      !   type(wignerseitz_cell_type), intent(in) :: wsc
-      !   real(wp), intent(in) :: alpha
-      !   real(wp), intent(in) :: qvec(:)
-      !   real(wp), intent(out) :: dadr(:, :, :)
-      !   real(wp), intent(out) :: dadL(:, :, :)
-      !   real(wp), intent(out) :: atrace(:, :)
-      !end subroutine get_damat_3d
-
    end interface
 
    real(wp), parameter :: twopi = 2*pi
@@ -315,7 +261,7 @@ contains
 
       if (present(energy)) then
          ! Extract only the Coulomb matrix without the constraints
-         allocate(jmat(mol%nat, mol%nat))
+         allocate (jmat(mol%nat, mol%nat))
          jmat = amat(:mol%nat, :mol%nat)
          call symv(jmat, vrhs(:mol%nat), xvec(:mol%nat), &
             & alpha=0.5_wp, beta=-1.0_wp, uplo='l')
@@ -330,7 +276,7 @@ contains
          call self%get_coulomb_derivs(mol, cache, vrhs, dadr, dadL, atrace)
          do iat = 1, mol%nat
             dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
-         end do   
+         end do
       end if
 
       if (grad) then
@@ -381,49 +327,5 @@ contains
       qloc = qloc + mol%charge/real(mol%nat, wp)
 
    end subroutine local_charge
-
-   subroutine write_2d_matrix(matrix, name, unit, step)
-      implicit none
-      real(wp), intent(in) :: matrix(:, :)
-      character(len=*), intent(in), optional :: name
-      integer, intent(in), optional :: unit
-      integer, intent(in), optional :: step
-      integer :: d1, d2
-      integer :: i, j, k, l, istep, iunit
-
-      d1 = size(matrix, dim=1)
-      d2 = size(matrix, dim=2)
-
-      if (present(unit)) then
-         iunit = unit
-      else
-         iunit = output_unit
-      end if
-
-      if (present(step)) then
-         istep = step
-      else
-         istep = 6
-      end if
-
-      if (present(name)) write (iunit, '(/,"matrix printed:",1x,a)') name
-
-      do i = 1, d2, istep
-         l = min(i + istep - 1, d2)
-         write (iunit, '(/,6x)', advance='no')
-         do k = i, l
-            write (iunit, '(6x,i7,3x)', advance='no') k
-         end do
-         write (iunit, '(a)')
-         do j = 1, d1
-            write (iunit, '(i6)', advance='no') j
-            do k = i, l
-               write (iunit, '(1x,f15.8)', advance='no') matrix(j, k)
-            end do
-            write (iunit, '(a)')
-         end do
-      end do
-
-   end subroutine write_2d_matrix
 
 end module multicharge_model_type
