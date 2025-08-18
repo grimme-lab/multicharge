@@ -75,6 +75,22 @@ module multicharge_model_eeqbc
       procedure :: get_xvec
       !> Calculate derivatives of EN vector
       procedure :: get_xvec_derivs
+      !> Calculate Coulomb matrix
+      procedure :: get_amat_0d
+      !> Calculate Coulomb matrix periodic
+      procedure :: get_amat_3d
+      !> Calculate Coulomb matrix derivative
+      procedure :: get_damat_0d
+      !> Calculate Coulomb matrix derivative (periodic)
+      procedure :: get_damat_3d
+      !> Calculate constraint matrix (molecular)
+      procedure :: get_cmat_0d
+      !> Calculate full constraint matrix (periodic)
+      procedure :: get_cmat_3d
+      !> Calculate constraint matrix derivatives (molecular)
+      procedure :: get_dcmat_0d
+      !> Calculate constraint matrix derivatives (periodic)
+      procedure :: get_dcmat_3d
    end type eeqbc_model
 
    real(wp), parameter :: sqrtpi = sqrt(pi)
@@ -306,7 +322,7 @@ contains
       type(eeqbc_cache), pointer :: ptr
 
       integer :: iat, izp, jat, jzp, img
-      real(wp) :: capi, capj, wsw, vec(3), ctmp, rvdw, dG(3), dS(3, 3), dxdiag
+      real(wp) :: capi, capj, wsw, vec(3), ctmp, rvdw, dG(3), dS(3, 3)
       real(wp), allocatable :: dtmpdr(:, :, :), dtmpdL(:, :, :)
       real(wp), allocatable :: dtrans(:, :)
 
@@ -361,14 +377,13 @@ contains
          do iat = 1, mol%nat
             izp = mol%id(iat)
             capi = self%cap(izp)
-            dxdiag = 0.0_wp
             do jat = 1, mol%nat
                rvdw = self%rvdw(iat, jat)
                jzp = mol%id(jat)
                capj = self%cap(jzp)
 
                ! Diagonal elements
-               dxdiag = dxdiag + ptr%xtmp(jat)*ptr%dcdr(:, iat, jat)
+               dxdr_local(:, iat, iat) = dxdr_local(:, iat, iat) + ptr%xtmp(jat)*ptr%dcdr(:, iat, jat)
 
                ! Derivative of capacitance matrix
                dxdr_local(:, iat, jat) = dxdr_local(:, iat, jat)  &
@@ -381,7 +396,6 @@ contains
                   dxdL_local(:, :, iat) = dxdL_local(:, :, iat) + wsw*dS*ptr%xtmp(jat)
                end do
             end do
-            dxdr_local(:, iat, iat) = dxdr_local(:, iat, iat) + dxdiag
             dxdL_local(:, :, iat) = dxdL_local(:, :, iat) + ptr%xtmp(iat)*ptr%dcdL(:, :, iat)
 
             ! Capacitance terms for i = j, T != 0
@@ -418,9 +432,7 @@ contains
          do iat = 1, mol%nat
             do jat = 1, iat - 1
                ! Diagonal elements
-               !$omp atomic
                dxdr_local(:, iat, iat) = dxdr_local(:, iat, iat) + ptr%xtmp(jat)*ptr%dcdr(:, iat, jat)
-               !$omp atomic
                dxdr_local(:, jat, jat) = dxdr_local(:, jat, jat) + ptr%xtmp(iat)*ptr%dcdr(:, jat, iat)
 
                ! Derivative of capacitance matrix
@@ -1036,9 +1048,7 @@ contains
             cmat_local(jat, iat) = -tmp
             cmat_local(iat, jat) = -tmp
             ! Diagonal elements
-            !$omp atomic
             cmat_local(iat, iat) = cmat_local(iat, iat) + tmp
-            !$omp atomic
             cmat_local(jat, jat) = cmat_local(jat, jat) + tmp
          end do
       end do
@@ -1093,9 +1103,7 @@ contains
                cmat_local(jat, iat) = cmat_local(jat, iat) - tmp*wsw
                cmat_local(iat, jat) = cmat_local(iat, jat) - tmp*wsw
                ! Diagonal elements
-               !$omp atomic
                cmat_local(iat, iat) = cmat_local(iat, iat) + tmp*wsw
-               !$omp atomic
                cmat_local(jat, jat) = cmat_local(jat, jat) + tmp*wsw
             end do
          end do
@@ -1217,9 +1225,7 @@ contains
             dcdr_local(:, iat, jat) = -dG
             dcdr_local(:, jat, iat) = +dG
             ! Positive diagonal elements
-            !$omp atomic
             dcdr_local(:, iat, iat) = +dG + dcdr_local(:, iat, iat)
-            !$omp atomic
             dcdr_local(:, jat, jat) = -dG + dcdr_local(:, jat, jat)
             dcdL_local(:, :, iat) = -dS + dcdL_local(:, :, iat)
             dcdL_local(:, :, jat) = -dS + dcdL_local(:, :, jat)
@@ -1279,9 +1285,7 @@ contains
                dcdr_local(:, iat, jat) = -dG*wsw + dcdr_local(:, iat, jat)
                dcdr_local(:, jat, iat) = +dG*wsw + dcdr_local(:, jat, iat)
                ! Positive diagonal elements
-               !$omp atomic
                dcdr_local(:, iat, iat) = +dG*wsw + dcdr_local(:, iat, iat)
-               !$omp atomic
                dcdr_local(:, jat, jat) = -dG*wsw + dcdr_local(:, jat, jat)
                dcdL_local(:, :, jat) = -dS*wsw + dcdL_local(:, :, jat)
                dcdL_local(:, :, iat) = -dS*wsw + dcdL_local(:, :, iat)
