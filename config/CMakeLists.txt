@@ -18,6 +18,7 @@ option(WITH_OpenMP "Enable support for shared memory parallelisation with OpenMP
 option(WITH_ILP64 "Enable support for ILP64 BLAS/LAPACK calls" FALSE)
 option(WITH_TESTS "Enable compilation of unit tests" TRUE)
 
+set(MULTICHARGE_BLAS ${BLA_VENDOR} CACHE STRING "BLAS vendor")
 
 if(NOT DEFINED "${PROJECT_NAME}-dependency-method")
   set(
