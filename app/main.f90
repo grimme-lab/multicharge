@@ -116,7 +116,7 @@ program main
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
    call model%solve(mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
       & energy, gradient, sigma, qvec, dqdr, dqdL)
-   ! TODO: write_ascii for dqdr, dqdL
+
    if (allocated(error)) then
       write(error_unit, '(a)') error%message
       error stop
@@ -148,7 +148,7 @@ contains
          ""
 
       write (unit, '(2x, a, t35, a)') &
-         "-m, -model, --model <model>", "Choose the charge model", &
+         "-m, -model, --model <model>", "Choose the charge model (eeq or eeqbc)", &
          "-i, -input, --input <format>", "Hint for the format of the input file", &
          "-c, -charge, --charge <value>", "Set the molecular charge", &
          "-g, -grad, --grad", "Evaluate molecular gradient and virial", &

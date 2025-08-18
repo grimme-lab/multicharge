@@ -1325,8 +1325,6 @@ contains
       end do
    end subroutine get_dcpair_dir
 
-   ! NOTE: the following is basically identical to tblite versions of this pattern
-
    !> Inspect cache and reallocate it in case of type mismatch
    subroutine taint(cache, ptr)
       !> Instance of the cache

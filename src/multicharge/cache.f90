@@ -31,11 +31,11 @@ module multicharge_model_cache
 
    !> Cache for the charge model
    type, abstract, public :: model_cache
-      !> CN array
+      !> Coordination number array
       real(wp), allocatable :: cn(:)
-      !> CN dr gradient
+      !> Coordination number gradient w.r.t the positions
       real(wp), allocatable :: dcndr(:, :, :)
-      !> CN dL gradient
+      !> Coordination number gradient w.r.t the lattice vectors
       real(wp), allocatable :: dcndL(:, :, :)
       !> Ewald separation parameter
       real(wp) :: alpha

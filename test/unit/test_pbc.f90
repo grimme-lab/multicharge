@@ -479,10 +479,11 @@ contains
       type(cache_container), allocatable :: cache
       allocate (cache)
 
-      allocate (cn(mol%nat), qloc(mol%nat), amatr(mol%nat + 1, mol%nat + 1), amatl(mol%nat + 1, mol%nat + 1), &
-         & dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), dqlocdr(3, mol%nat, mol%nat), &
-         & dqlocdL(3, 3, mol%nat), dadr(3, mol%nat, mol%nat + 1), dadL(3, 3, mol%nat + 1), &
-         & atrace(3, mol%nat), numtrace(3, mol%nat), numgrad(3, mol%nat, mol%nat + 1), qvec(mol%nat))
+      allocate (cn(mol%nat), qloc(mol%nat), amatr(mol%nat + 1, mol%nat + 1), &
+         & amatl(mol%nat + 1, mol%nat + 1), dcndr(3, mol%nat, mol%nat), &
+         & dcndL(3, 3, mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
+         & dadr(3, mol%nat, mol%nat + 1), dadL(3, 3, mol%nat + 1), atrace(3, mol%nat), &
+         & numtrace(3, mol%nat), numgrad(3, mol%nat, mol%nat + 1), qvec(mol%nat))
 
       ! Set tolerance higher if testing eeqbc model
       select type (model)
@@ -525,8 +526,8 @@ contains
             do kat = 1, mol%nat
                do jat = 1, mol%nat
                   ! Numerical gradient of the A matrix
-                  numgrad(ic, iat, kat) = 0.5_wp*qvec(jat)*(amatr(kat, jat) - amatl(kat, jat))/step &
-                     & + numgrad(ic, iat, kat)
+                  numgrad(ic, iat, kat) = numgrad(ic, iat, kat) + &
+                     & 0.5_wp*qvec(jat)*(amatr(kat, jat) - amatl(kat, jat))/step 
                end do
             end do
          end do
@@ -630,7 +631,8 @@ contains
             lattr(:, :) = trans
             do iat = 1, mol%nat
                ! Numerical sigma of the a matrix
-               numsigma(jc, ic, :) = 0.5_wp*qvec(iat)*(amatr(iat, :) - amatl(iat, :))/step + numsigma(jc, ic, :)
+               numsigma(jc, ic, :) = numsigma(jc, ic, :) + &
+                  & 0.5_wp*qvec(iat)*(amatr(iat, :) - amatl(iat, :))/step 
             end do
          end do
       end do lp

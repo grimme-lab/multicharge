@@ -109,7 +109,7 @@ contains
 
       call taint(cache, ptr)
 
-      ! Refer CN arrays in cache
+      ! Save CN arrays in cache
       ptr%cn = cn
       if (present(dcndr) .and. present(dcndL)) then
          ptr%dcndr = dcndr
@@ -230,7 +230,7 @@ contains
       end do
       !$omp end do
       !$omp critical (get_amat_0d_)
-      amat(:, :) = amat(:, :) + amat_local(:, :)
+      amat(:, :) = amat + amat_local
       !$omp end critical (get_amat_0d_)
       deallocate (amat_local)
       !$omp end parallel
@@ -295,7 +295,7 @@ contains
       end do
       !$omp end do
       !$omp critical (get_amat_3d_)
-      amat(:, :) = amat(:, :) + amat_local(:, :)
+      amat(:, :) = amat + amat_local
       !$omp end critical (get_amat_3d_)
       deallocate (amat_local)
       !$omp end parallel
@@ -417,9 +417,9 @@ contains
       end do
       !$omp end do
       !$omp critical (get_damat_0d_)
-      atrace(:, :) = atrace(:, :) + atrace_local(:, :)
-      dadr(:, :, :) = dadr(:, :, :) + dadr_local(:, :, :)
-      dadL(:, :, :) = dadL(:, :, :) + dadL_local(:, :, :)
+      atrace(:, :) = atrace + atrace_local
+      dadr(:, :, :) = dadr + dadr_local
+      dadL(:, :, :) = dadL + dadL_local
       !$omp end critical (get_damat_0d_)
       deallocate (dadL_local, dadr_local, atrace_local)
       !$omp end parallel
@@ -498,9 +498,9 @@ contains
       end do
       !$omp end do
       !$omp critical (get_damat_3d_)
-      atrace(:, :) = atrace(:, :) + atrace_local(:, :)
-      dadr(:, :, :) = dadr(:, :, :) + dadr_local(:, :, :)
-      dadL(:, :, :) = dadL(:, :, :) + dadL_local(:, :, :)
+      atrace(:, :) = atrace + atrace_local
+      dadr(:, :, :) = dadr + dadr_local
+      dadL(:, :, :) = dadL + dadL_local
       !$omp end critical (get_damat_3d_)
       deallocate (dadL_local, dadr_local, atrace_local)
       !$omp end parallel
@@ -564,12 +564,10 @@ contains
          dtmp = -sin(gv)*etmp
          dg(:) = dg + dtmp*vec
          ds(:, :) = ds + etmp*cos(gv) &
-                   & *((2.0_wp/g2 + 0.5_wp/alp2)*spread(vec, 1, 3)*spread(vec, 2, 3) - unity)
+            & *((2.0_wp/g2 + 0.5_wp/alp2)*spread(vec, 1, 3)*spread(vec, 2, 3) - unity)
       end do
 
    end subroutine get_damat_rec_3d
-
-   ! NOTE: the following is basically identical to tblite versions of this pattern
 
    !> Inspect cache and reallocate it in case of type mismatch
    subroutine taint(cache, ptr)
