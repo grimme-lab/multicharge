@@ -75,22 +75,6 @@ module multicharge_model_eeqbc
       procedure :: get_xvec
       !> Calculate derivatives of EN vector
       procedure :: get_xvec_derivs
-      !> Calculate Coulomb matrix
-      procedure :: get_amat_0d
-      !> Calculate Coulomb matrix periodic
-      procedure :: get_amat_3d
-      !> Calculate Coulomb matrix derivative
-      procedure :: get_damat_0d
-      !> Calculate Coulomb matrix derivative (periodic)
-      procedure :: get_damat_3d
-      !> Calculate constraint matrix (molecular)
-      procedure :: get_cmat_0d
-      !> Calculate full constraint matrix (periodic)
-      procedure :: get_cmat_3d
-      !> Calculate constraint matrix derivatives (molecular)
-      procedure :: get_dcmat_0d
-      !> Calculate constraint matrix derivatives (periodic)
-      procedure :: get_dcmat_3d
    end type eeqbc_model
 
    real(wp), parameter :: sqrtpi = sqrt(pi)

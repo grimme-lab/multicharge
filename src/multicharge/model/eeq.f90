@@ -17,7 +17,7 @@
 !> Provides implementation of the electronegativity equilibration model (EEQ)
 
 !> Electronegativity equlibration charge model published in
-!> 
+!>
 !> E. Caldeweyher, S. Ehlert, A. Hansen, H. Neugebauer, S. Spicher, C. Bannwarth
 !> and S. Grimme, *J. Chem. Phys.*, **2019**, 150, 154122.
 !> DOI: [10.1063/1.5090222](https://dx.doi.org/10.1063/1.5090222)
@@ -51,14 +51,6 @@ module multicharge_model_eeq
       procedure :: get_xvec
       !> Calculate EN vector derivatives
       procedure :: get_xvec_derivs
-      !> Calculate Coulomb matrix
-      procedure :: get_amat_0d
-      !> Calculate Coulomb matrix periodic
-      procedure :: get_amat_3d
-      !> Calculate Coulomb matrix derivative
-      procedure :: get_damat_0d
-      !> Calculate Coulomb matrix derivative periodic
-      procedure :: get_damat_3d
    end type eeq_model
 
    real(wp), parameter :: sqrtpi = sqrt(pi)
