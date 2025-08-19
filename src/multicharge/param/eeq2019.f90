@@ -155,7 +155,6 @@ module multicharge_param_eeq2019
 contains
 
 
-
 !> Get electronegativity for species with a given symbol
 elemental function get_eeq_chi_sym(symbol) result(chi)
 

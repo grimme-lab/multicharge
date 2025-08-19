@@ -28,7 +28,7 @@ module multicharge_param
    implicit none
    private
 
-   public :: new_eeq2019_model, new_eeqbc2025_model, mchargeModel
+   public :: new_eeq2019_model, new_eeqbc2025_model, mcharge_model
 
    !> Possible charge models enumerator
    type :: TMchargeModelEnum
@@ -39,89 +39,89 @@ module multicharge_param
    end type TMchargeModelEnum
 
    !> Actual charge model enumerator
-   type(TMchargeModelEnum), parameter :: mchargeModel = TMchargeModelEnum()
+   type(TMchargeModelEnum), parameter :: mcharge_model = TMchargeModelEnum()
 
 contains
 
-   subroutine new_eeq2019_model(mol, model, error)
-      !> Molecular structure data
-      type(structure_type), intent(in) :: mol
-      !> Electronegativity equilibration model
-      class(mchrg_model_type), allocatable, intent(out) :: model
-      !> Error handling
-      type(error_type), allocatable, intent(out) :: error
+subroutine new_eeq2019_model(mol, model, error)
+   !> Molecular structure data
+   type(structure_type), intent(in) :: mol
+   !> Electronegativity equilibration model
+   class(mchrg_model_type), allocatable, intent(out) :: model
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
 
-      real(wp), parameter :: cutoff = 25.0_wp
-      real(wp), parameter :: cn_exp = 7.5_wp
-      real(wp), parameter :: cn_max = 8.0_wp
+   real(wp), parameter :: cutoff = 25.0_wp
+   real(wp), parameter :: cn_exp = 7.5_wp
+   real(wp), parameter :: cn_max = 8.0_wp
 
-      real(wp), allocatable :: chi(:), eta(:), kcnchi(:), rad(:), rcov(:)
-      type(eeq_model), allocatable :: eeq
+   real(wp), allocatable :: chi(:), eta(:), kcnchi(:), rad(:), rcov(:)
+   type(eeq_model), allocatable :: eeq
 
-      chi = get_eeq_chi(mol%num)
-      eta = get_eeq_eta(mol%num)
-      kcnchi = get_eeq_kcnchi(mol%num)
-      rad = get_eeq_rad(mol%num)
-      rcov = get_covalent_rad(mol%num)
+   chi = get_eeq_chi(mol%num)
+   eta = get_eeq_eta(mol%num)
+   kcnchi = get_eeq_kcnchi(mol%num)
+   rad = get_eeq_rad(mol%num)
+   rcov = get_covalent_rad(mol%num)
 
-      allocate (eeq)
-      call new_eeq_model(eeq, mol=mol, error=error, chi=chi, &
-         & rad=rad, eta=eta, kcnchi=kcnchi, cutoff=cutoff, &
-         & cn_exp=cn_exp, rcov=rcov, cn_max=cn_max)
-      call move_alloc(eeq, model)
+   allocate (eeq)
+   call new_eeq_model(eeq, mol=mol, error=error, chi=chi, &
+      & rad=rad, eta=eta, kcnchi=kcnchi, cutoff=cutoff, &
+      & cn_exp=cn_exp, rcov=rcov, cn_max=cn_max)
+   call move_alloc(eeq, model)
 
-   end subroutine new_eeq2019_model
+end subroutine new_eeq2019_model
 
-   subroutine new_eeqbc2025_model(mol, model, error)
-      !> Molecular structure data
-      type(structure_type), intent(in) :: mol
-      !> Electronegativity equilibration model
-      class(mchrg_model_type), allocatable, intent(out) :: model
-      !> Error handling
-      type(error_type), allocatable, intent(out) :: error
+subroutine new_eeqbc2025_model(mol, model, error)
+   !> Molecular structure data
+   type(structure_type), intent(in) :: mol
+   !> Electronegativity equilibration model
+   class(mchrg_model_type), allocatable, intent(out) :: model
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
 
-      real(wp), parameter :: kcnrad = 0.14_wp
-      real(wp), parameter :: kbc = 0.60_wp
-      real(wp), parameter :: cutoff = 25.0_wp
-      real(wp), parameter :: cn_exp = 2.0_wp
-      real(wp), parameter :: norm_exp = 0.75_wp
+   real(wp), parameter :: kcnrad = 0.14_wp
+   real(wp), parameter :: kbc = 0.60_wp
+   real(wp), parameter :: cutoff = 25.0_wp
+   real(wp), parameter :: cn_exp = 2.0_wp
+   real(wp), parameter :: norm_exp = 0.75_wp
 
-      real(wp), allocatable :: chi(:), eta(:), rad(:), kcnchi(:), &
-         & kqchi(:), kqeta(:), cap(:), rcov(:), avg_cn(:), en(:), &
-         & rvdw(:, :)
-      type(eeqbc_model), allocatable :: eeqbc
+   real(wp), allocatable :: chi(:), eta(:), rad(:), kcnchi(:), &
+      & kqchi(:), kqeta(:), cap(:), rcov(:), avg_cn(:), en(:), &
+      & rvdw(:, :)
+   type(eeqbc_model), allocatable :: eeqbc
 
-      chi = get_eeqbc_chi(mol%num)
-      eta = get_eeqbc_eta(mol%num)
-      rad = get_eeqbc_rad(mol%num)
-      kcnchi = get_eeqbc_kcnchi(mol%num)
-      kqchi = get_eeqbc_kqchi(mol%num)
-      kqeta = get_eeqbc_kqeta(mol%num)
-      cap = get_eeqbc_cap(mol%num)
-      rcov = get_eeqbc_cov_radii(mol%num)
-      avg_cn = get_eeqbc_avg_cn(mol%num)
-      ! Electronegativities normalized to Fluorine
-      ! with actinides (Th-Lr) set to average of 1.30
-      en = get_pauling_en(mol%num)
-      en = merge(en, 1.30_wp, mol%num < 90)
-      en = merge(0.80_wp, en, mol%num == 87)
-      en = merge(1.00_wp, en, mol%num == 89)
-      en = merge(1.10_wp, en, mol%num == 90 .or. mol%num == 91 &
-         &.or. mol%num == 92 .or. mol%num == 95)
-      en = merge(1.20_wp, en, mol%num == 93 .or. mol%num == 94 &
-         &.or. mol%num == 97 .or. mol%num == 103)
-      en = en/3.98_wp
-      rvdw = get_vdw_rad(spread(mol%num(mol%id), 2, mol%nat), &
-         & spread(mol%num(mol%id), 1, mol%nat))*autoaa
+   chi = get_eeqbc_chi(mol%num)
+   eta = get_eeqbc_eta(mol%num)
+   rad = get_eeqbc_rad(mol%num)
+   kcnchi = get_eeqbc_kcnchi(mol%num)
+   kqchi = get_eeqbc_kqchi(mol%num)
+   kqeta = get_eeqbc_kqeta(mol%num)
+   cap = get_eeqbc_cap(mol%num)
+   rcov = get_eeqbc_cov_radii(mol%num)
+   avg_cn = get_eeqbc_avg_cn(mol%num)
+   ! Electronegativities normalized to Fluorine
+   ! with actinides (Th-Lr) set to average of 1.30
+   en = get_pauling_en(mol%num)
+   en = merge(en, 1.30_wp, mol%num < 90)
+   en = merge(0.80_wp, en, mol%num == 87)
+   en = merge(1.00_wp, en, mol%num == 89)
+   en = merge(1.10_wp, en, mol%num == 90 .or. mol%num == 91 &
+      &.or. mol%num == 92 .or. mol%num == 95)
+   en = merge(1.20_wp, en, mol%num == 93 .or. mol%num == 94 &
+      &.or. mol%num == 97 .or. mol%num == 103)
+   en = en/3.98_wp
+   rvdw = get_vdw_rad(spread(mol%num(mol%id), 2, mol%nat), &
+      & spread(mol%num(mol%id), 1, mol%nat))*autoaa
 
-      allocate (eeqbc)
-      call new_eeqbc_model(eeqbc, mol=mol, error=error, chi=chi, &
-         & rad=rad, eta=eta, kcnchi=kcnchi, kqchi=kqchi, kqeta=kqeta, &
-         & kcnrad=kcnrad, cap=cap, avg_cn=avg_cn, kbc=kbc, &
-         & cutoff=cutoff, cn_exp=cn_exp, rcov=rcov, en=en, &
-         & norm_exp=norm_exp, rvdw=rvdw)
-      call move_alloc(eeqbc, model)
+   allocate (eeqbc)
+   call new_eeqbc_model(eeqbc, mol=mol, error=error, chi=chi, &
+      & rad=rad, eta=eta, kcnchi=kcnchi, kqchi=kqchi, kqeta=kqeta, &
+      & kcnrad=kcnrad, cap=cap, avg_cn=avg_cn, kbc=kbc, &
+      & cutoff=cutoff, cn_exp=cn_exp, rcov=rcov, en=en, &
+      & norm_exp=norm_exp, rvdw=rvdw)
+   call move_alloc(eeqbc, model)
 
-   end subroutine new_eeqbc2025_model
+end subroutine new_eeqbc2025_model
 
 end module multicharge_param
