@@ -227,9 +227,9 @@ subroutine get_arguments(input, model_id, input_format, grad, charge, &
             exit
          end if
          if (arg == "eeq2019" .or. arg == "eeq") then
-            model_id = mchargeModel%eeq2019
+            model_id = mcharge_model%eeq2019
          else if (arg == "eeqbc2025" .or. arg == "eeqbc") then
-            model_id = mchargeModel%eeqbc2025
+            model_id = mcharge_model%eeqbc2025
          else
             call fatal_error(error, "Invalid model")
             exit
