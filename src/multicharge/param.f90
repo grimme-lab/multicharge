@@ -28,7 +28,7 @@ module multicharge_param
    implicit none
    private
 
-   public :: new_eeq2019_model, new_eeqbc2025_model, mchargeModel
+   public :: new_eeq2019_model, new_eeqbc2025_model, mcharge_model
 
    !> Possible charge models enumerator
    type :: TMchargeModelEnum
@@ -39,7 +39,7 @@ module multicharge_param
    end type TMchargeModelEnum
 
    !> Actual charge model enumerator
-   type(TMchargeModelEnum), parameter :: mchargeModel = TMchargeModelEnum()
+   type(TMchargeModelEnum), parameter :: mcharge_model = TMchargeModelEnum()
 
 contains
 

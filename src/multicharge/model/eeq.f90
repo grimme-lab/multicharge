@@ -569,8 +569,6 @@ subroutine get_damat_rec_3d(rij, vol, alp, trans, dg, ds)
 
 end subroutine get_damat_rec_3d
 
-! NOTE: the following is basically identical to tblite versions of this pattern
-
 !> Inspect cache and reallocate it in case of type mismatch
 subroutine taint(cache, ptr)
    !> Instance of the cache

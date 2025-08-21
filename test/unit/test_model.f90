@@ -14,9 +14,6 @@
 ! limitations under the License.
 
 module test_model
-
-   use iso_fortran_env, only: output_unit
-
    use mctc_env, only: wp
    use mctc_env_testing, only: new_unittest, unittest_type, error_type, check, test_failed
    use mctc_io_structure, only: structure_type, new
@@ -66,7 +63,7 @@ subroutine collect_model(testsuite)
       & new_unittest("eeq-dbdr-znooh", test_eeq_dbdr_znooh), &
       & new_unittest("gradient-znooh", test_g_znooh), &
       & new_unittest("dqdr-znooh", test_dqdr_znooh), &
-      & new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), & ! fails randomly due to numerical noise?
+      & new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), &
       & new_unittest("eeqbc-dadL-mb01", test_eeqbc_dadL_mb01), &
       & new_unittest("eeqbc-dbdr-mb01", test_eeqbc_dbdr_mb01), &
       & new_unittest("eeqbc-dbdL-mb01", test_eeqbc_dbdL_mb01), &
@@ -274,7 +271,8 @@ subroutine test_dadL(error, mol, model)
          mol%xyz(:, :) = xyz
          do iat = 1, mol%nat
             ! Numerical sigma of the a matrix
-            numsigma(jc, ic, :) = 0.5_wp*qvec(iat)*(amatr(iat, :) - amatl(iat, :))/step + numsigma(jc, ic, :)
+            numsigma(jc, ic, :) = numsigma(jc, ic, :) + &
+               & 0.5_wp*qvec(iat)*(amatr(iat, :) - amatl(iat, :))/step
          end do
       end do
    end do lp

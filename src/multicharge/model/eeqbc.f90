@@ -94,6 +94,7 @@ module multicharge_model_eeqbc
 
    !> Default exponent of error function in bond capacitance
    real(wp), parameter :: default_kbc = 0.65_wp
+
 contains
 
 subroutine new_eeqbc_model(self, mol, error, chi, rad, &
@@ -1324,8 +1325,6 @@ subroutine get_dcpair_dir(kbc, rij, trans, rvdw, capi, capj, dgpair, dspair)
       dspair(:, :) = dspair + dstmp
    end do
 end subroutine get_dcpair_dir
-
-! NOTE: the following is basically identical to tblite versions of this pattern
 
 !> Inspect cache and reallocate it in case of type mismatch
 subroutine taint(cache, ptr)

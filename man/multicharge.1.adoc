@@ -14,17 +14,20 @@ Electronegativity equilibration model for atomic partial charges.
 
 == Options
 
+*-m, -model, --model* _model_::
+Choose the charge model (eeq or eeqbc)
+
 *-i, -input, --input* _format_::
 Hint for the format of the input file
 
 *-c, -charge, --charge* _value_::
 Provide the molecular charge
 
-*-j, -json, --json*::
-Provide output in JSON format to the file 'multicharge.json'
-
 *-g, -grad, --grad*::
 Evaluate molecular gradient and virial
+
+*-j, -json, --json*::
+Provide output in JSON format to the file 'multicharge.json'
 
 *-v, -version, --version*::
 Print program version and exit
