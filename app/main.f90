@@ -44,41 +44,41 @@ program main
 
    call get_arguments(input, model_id, input_format, grad, charge, json, error)
    if (allocated(error)) then
-      write (error_unit, '(a)') error%message
+      write(error_unit, '(a)') error%message
       error stop
-   end if
+   endif
 
    if (input == "-") then
       if (.not. allocated(input_format)) input_format = filetype%xyz
       call read_structure(mol, input_unit, input_format, error)
    else
       call read_structure(mol, input, error, input_format)
-   end if
+   endif
    if (allocated(error)) then
-      write (error_unit, '(a)') error%message
+      write(error_unit, '(a)') error%message
       error stop
-   end if
+   endif
 
    if (allocated(charge)) then
       mol%charge = charge
    else
       chargeinput = ".CHRG"
-      inquire (file=chargeinput, exist=exist)
+      inquire(file=chargeinput, exist=exist)
       if (exist) then
-         open (file=chargeinput, newunit=unit)
-         allocate (charge)
-         read (unit, *, iostat=stat) charge
+         open(file=chargeinput, newunit=unit)
+         allocate(charge)
+         read(unit, *, iostat=stat) charge
          if (stat == 0) then
             mol%charge = charge
-            write (output_unit, '(a,/)') &
+            write(output_unit, '(a,/)') &
                "[Info] Molecular charge read from '"//chargeinput//"'"
          else
-            write (output_unit, '(a,/)') &
+            write(output_unit, '(a,/)') &
                "[Warn] Could not read molecular charge read from '"//chargeinput//"'"
-         end if
-         close (unit)
-      end if
-   end if
+         endif
+         close(unit)
+      endif
+   endif
 
    if (model_id == mchargeModel%eeq2019) then
       call new_eeq2019_model(mol, model, error)
@@ -86,30 +86,30 @@ program main
       call new_eeqbc2025_model(mol, model, error)
    else
       call fatal_error(error, "Invalid model was choosen.")
-   end if
-   if(allocated(error)) then
+   endif
+   if (allocated(error)) then
       write(error_unit, '(a)') error%message
       error stop
-   end if
+   endif
 
    call write_ascii_model(output_unit, mol, model)
 
-   allocate (energy(mol%nat), qvec(mol%nat))
+   allocate(energy(mol%nat), qvec(mol%nat))
    energy(:) = 0.0_wp
 
-   allocate (cn(mol%nat), qloc(mol%nat))
+   allocate(cn(mol%nat), qloc(mol%nat))
    if (grad) then
-      allocate (gradient(3, mol%nat), sigma(3, 3))
+      allocate(gradient(3, mol%nat), sigma(3, 3))
       gradient(:, :) = 0.0_wp
       sigma(:, :) = 0.0_wp
 
-      allocate (dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat))
+      allocate(dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat))
       dqdr(:, :, :) = 0.0_wp
       dqdL(:, :, :) = 0.0_wp
 
-      allocate (dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat))
-      allocate (dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat))
-   end if
+      allocate(dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat))
+      allocate(dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat))
+   endif
 
    call get_lattice_points(mol%periodic, mol%lattice, model%ncoord%cutoff, trans)
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
@@ -120,155 +120,155 @@ program main
    if (allocated(error)) then
       write(error_unit, '(a)') error%message
       error stop
-   end if
+   endif
 
    call write_ascii_properties(output_unit, mol, model, cn, qvec)
    call write_ascii_results(output_unit, mol, energy, gradient, sigma)
 
    if (json) then
-      open (file=json_output, newunit=unit)
+      open(file=json_output, newunit=unit)
       call json_results(unit, "  ", energy=sum(energy), gradient=gradient, charges=qvec, cn=cn)
-      close (unit)
-      write (output_unit, '(a)') &
+      close(unit)
+      write(output_unit, '(a)') &
          "[Info] JSON dump of results written to '"//json_output//"'"
-   end if
+   endif
 
 contains
 
-   subroutine help(unit)
-      integer, intent(in) :: unit
+subroutine help(unit)
+   integer, intent(in) :: unit
 
-      write (unit, '(a, *(1x, a))') &
-         "Usage: "//prog_name//" [options] <input>"
+   write(unit, '(a, *(1x, a))') &
+      "Usage: "//prog_name//" [options] <input>"
 
-      write (unit, '(a)') &
-         "", &
-         "Electronegativity equilibration model for atomic charges and", &
-         "higher multipole moments", &
-         ""
+   write(unit, '(a)') &
+      "", &
+      "Electronegativity equilibration model for atomic charges and", &
+      "higher multipole moments", &
+      ""
 
-      write (unit, '(2x, a, t35, a)') &
-         "-m, -model, --model <model>", "Choose the charge model", &
-         "-i, -input, --input <format>", "Hint for the format of the input file", &
-         "-c, -charge, --charge <value>", "Set the molecular charge", &
-         "-g, -grad, --grad", "Evaluate molecular gradient and virial", &
-         "-j, -json, --json", "Provide output in JSON format to the file 'multicharge.json'", &
-         "-v, -version, --version", "Print program version and exit", &
-         "-h, -help, --help", "Show this help message"
+   write(unit, '(2x, a, t35, a)') &
+      "-m, -model, --model <model>", "Choose the charge model", &
+      "-i, -input, --input <format>", "Hint for the format of the input file", &
+      "-c, -charge, --charge <value>", "Set the molecular charge", &
+      "-g, -grad, --grad", "Evaluate molecular gradient and virial", &
+      "-j, -json, --json", "Provide output in JSON format to the file 'multicharge.json'", &
+      "-v, -version, --version", "Print program version and exit", &
+      "-h, -help, --help", "Show this help message"
 
-      write (unit, '(a)')
+   write(unit, '(a)')
 
-   end subroutine help
+end subroutine help
 
-   subroutine version(unit)
-      integer, intent(in) :: unit
-      character(len=:), allocatable :: version_string
+subroutine version(unit)
+   integer, intent(in) :: unit
+   character(len=:), allocatable :: version_string
 
-      call get_multicharge_version(string=version_string)
-      write (unit, '(a, *(1x, a))') &
-         & prog_name, "version", version_string
+   call get_multicharge_version(string=version_string)
+   write(unit, '(a, *(1x, a))') &
+      & prog_name, "version", version_string
 
-   end subroutine version
+end subroutine version
 
-   subroutine get_arguments(input, model_id, input_format, grad, charge, &
-      & json, error)
+subroutine get_arguments(input, model_id, input_format, grad, charge, &
+   & json, error)
 
-      !> Input file name
-      character(len=:), allocatable :: input
+   !> Input file name
+   character(len=:), allocatable :: input
 
-      !> ID of choosen model type
-      integer, allocatable, intent(out) :: model_id
+   !> ID of choosen model type
+   integer, allocatable, intent(out) :: model_id
 
-      !> Input file format
-      integer, allocatable, intent(out) :: input_format
+   !> Input file format
+   integer, allocatable, intent(out) :: input_format
 
-      !> Evaluate gradient
-      logical, intent(out) :: grad
+   !> Evaluate gradient
+   logical, intent(out) :: grad
 
-      !> Provide JSON output
-      logical, intent(out) :: json
+   !> Provide JSON output
+   logical, intent(out) :: json
 
-      !> Charge
-      real(wp), allocatable, intent(out) :: charge
+   !> Charge
+   real(wp), allocatable, intent(out) :: charge
 
-      !> Error handling
-      type(error_type), allocatable, intent(out) :: error
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
 
-      integer :: iarg, narg, iostat
-      character(len=:), allocatable :: arg
+   integer :: iarg, narg, iostat
+   character(len=:), allocatable :: arg
 
-      model_id = mchargeModel%eeq2019
-      grad = .false.
-      json = .false.
-      iarg = 0
-      narg = command_argument_count()
-      do while (iarg < narg)
+   model_id = mchargeModel%eeq2019
+   grad = .false.
+   json = .false.
+   iarg = 0
+   narg = command_argument_count()
+   do while(iarg < narg)
+      iarg = iarg + 1
+      call get_argument(iarg, arg)
+      select case(arg)
+      case("-h", "-help", "--help")
+         call help(output_unit)
+         stop
+      case("-v", "-version", "--version")
+         call version(output_unit)
+         stop
+      case default
+         if (.not. allocated(input)) then
+            call move_alloc(arg, input)
+            cycle
+         endif
+         call fatal_error(error, "Too many positional arguments present")
+         exit
+      case("-m", "-model", "--model")
          iarg = iarg + 1
          call get_argument(iarg, arg)
-         select case (arg)
-         case ("-h", "-help", "--help")
-            call help(output_unit)
-            stop
-         case ("-v", "-version", "--version")
-            call version(output_unit)
-            stop
-         case default
-            if (.not. allocated(input)) then
-               call move_alloc(arg, input)
-               cycle
-            end if
-            call fatal_error(error, "Too many positional arguments present")
+         if (.not. allocated(arg)) then
+            call fatal_error(error, "Missing argument for model")
             exit
-         case ("-m", "-model", "--model")
-            iarg = iarg + 1
-            call get_argument(iarg, arg)
-            if (.not. allocated(arg)) then
-               call fatal_error(error, "Missing argument for model")
-               exit
-            end if
-            if (arg == "eeq2019" .or. arg == "eeq") then
-               model_id = mchargeModel%eeq2019
-            else if (arg == "eeqbc2025" .or. arg == "eeqbc") then
-               model_id = mchargeModel%eeqbc2025
-            else
-               call fatal_error(error, "Invalid model")
-               exit
-            end if
-         case ("-i", "-input", "--input")
-            iarg = iarg + 1
-            call get_argument(iarg, arg)
-            if (.not. allocated(arg)) then
-               call fatal_error(error, "Missing argument for input format")
-               exit
-            end if
-            input_format = get_filetype("."//arg)
-         case ("-c", "-charge", "--charge")
-            iarg = iarg + 1
-            call get_argument(iarg, arg)
-            if (.not. allocated(arg)) then
-               call fatal_error(error, "Missing argument for charge")
-               exit
-            end if
-            allocate (charge)
-            read (arg, *, iostat=iostat) charge
-            if (iostat /= 0) then
-               call fatal_error(error, "Invalid charge value")
-               exit
-            end if
-         case ("-g", "-grad", "--grad")
-            grad = .true.
-         case ("-j", "-json", "--json")
-            json = .true.
-         end select
-      end do
+         endif
+         if (arg == "eeq2019" .or. arg == "eeq") then
+            model_id = mchargeModel%eeq2019
+         else if (arg == "eeqbc2025" .or. arg == "eeqbc") then
+            model_id = mchargeModel%eeqbc2025
+         else
+            call fatal_error(error, "Invalid model")
+            exit
+         endif
+      case("-i", "-input", "--input")
+         iarg = iarg + 1
+         call get_argument(iarg, arg)
+         if (.not. allocated(arg)) then
+            call fatal_error(error, "Missing argument for input format")
+            exit
+         endif
+         input_format = get_filetype("."//arg)
+      case("-c", "-charge", "--charge")
+         iarg = iarg + 1
+         call get_argument(iarg, arg)
+         if (.not. allocated(arg)) then
+            call fatal_error(error, "Missing argument for charge")
+            exit
+         endif
+         allocate(charge)
+         read(arg, *, iostat=iostat) charge
+         if (iostat /= 0) then
+            call fatal_error(error, "Invalid charge value")
+            exit
+         endif
+      case("-g", "-grad", "--grad")
+         grad = .true.
+      case("-j", "-json", "--json")
+         json = .true.
+      endselect
+   enddo
 
-      if (.not. allocated(input)) then
-         if (.not. allocated(error)) then
-            call help(output_unit)
-            error stop
-         end if
-      end if
+   if (.not. allocated(input)) then
+      if (.not. allocated(error)) then
+         call help(output_unit)
+         error stop
+      endif
+   endif
 
-   end subroutine get_arguments
+end subroutine get_arguments
 
 end program main

@@ -15,7 +15,7 @@
 
 !> Bond capacitor electronegativity equilibration charge model published in
 !>
-!> Thomas Froitzheim, Marcel Müller, Andreas Hansen, and Stefan Grimme, 
+!> Thomas Froitzheim, Marcel Müller, Andreas Hansen, and Stefan Grimme,
 !> *J. Chem. Phys.*, **2025**, 162, 214109.
 !> DOI: [10.1063/5.0268978](https://dx.doi.org/10.1063/5.0268978)
 module multicharge_param_eeqbc2025
@@ -349,273 +349,273 @@ module multicharge_param_eeqbc2025
 contains
 
 !> Get electronegativity for species with a given symbol
-   elemental function get_eeqbc_chi_sym(symbol) result(chi)
+elemental function get_eeqbc_chi_sym(symbol) result(chi)
 
-      !> Element symbol
-      character(len=*), intent(in) :: symbol
+   !> Element symbol
+   character(len=*), intent(in) :: symbol
 
-      !> electronegativity
-      real(wp) :: chi
+   !> electronegativity
+   real(wp) :: chi
 
-      chi = get_eeqbc_chi(to_number(symbol))
+   chi = get_eeqbc_chi(to_number(symbol))
 
-   end function get_eeqbc_chi_sym
+end function get_eeqbc_chi_sym
 
 !> Get electronegativity for species with a given atomic number
-   elemental function get_eeqbc_chi_num(number) result(chi)
+elemental function get_eeqbc_chi_num(number) result(chi)
 
-      !> Atomic number
-      integer, intent(in) :: number
+   !> Atomic number
+   integer, intent(in) :: number
 
-      !> electronegativity
-      real(wp) :: chi
+   !> electronegativity
+   real(wp) :: chi
 
-      if (number > 0 .and. number <= size(eeqbc_chi, dim=1)) then
-         chi = eeqbc_chi(number)
-      else
-         chi = -1.0_wp
-      end if
+   if (number > 0 .and. number <= size(eeqbc_chi, dim=1)) then
+      chi = eeqbc_chi(number)
+   else
+      chi = -1.0_wp
+   endif
 
-   end function get_eeqbc_chi_num
+end function get_eeqbc_chi_num
 
 !> Get hardness for species with a given symbol
-   elemental function get_eeqbc_eta_sym(symbol) result(eta)
+elemental function get_eeqbc_eta_sym(symbol) result(eta)
 
-      !> Element symbol
-      character(len=*), intent(in) :: symbol
+   !> Element symbol
+   character(len=*), intent(in) :: symbol
 
-      !> hardness
-      real(wp) :: eta
+   !> hardness
+   real(wp) :: eta
 
-      eta = get_eeqbc_eta(to_number(symbol))
+   eta = get_eeqbc_eta(to_number(symbol))
 
-   end function get_eeqbc_eta_sym
+end function get_eeqbc_eta_sym
 
 !> Get hardness for species with a given atomic number
-   elemental function get_eeqbc_eta_num(number) result(eta)
+elemental function get_eeqbc_eta_num(number) result(eta)
 
-      !> Atomic number
-      integer, intent(in) :: number
+   !> Atomic number
+   integer, intent(in) :: number
 
-      !> hardness
-      real(wp) :: eta
+   !> hardness
+   real(wp) :: eta
 
-      if (number > 0 .and. number <= size(eeqbc_eta, dim=1)) then
-         eta = eeqbc_eta(number)
-      else
-         eta = -1.0_wp
-      end if
+   if (number > 0 .and. number <= size(eeqbc_eta, dim=1)) then
+      eta = eeqbc_eta(number)
+   else
+      eta = -1.0_wp
+   endif
 
-   end function get_eeqbc_eta_num
+end function get_eeqbc_eta_num
 
 !> Get charge width for species with a given symbol
-   elemental function get_eeqbc_rad_sym(symbol) result(rad)
+elemental function get_eeqbc_rad_sym(symbol) result(rad)
 
-      !> Element symbol
-      character(len=*), intent(in) :: symbol
+   !> Element symbol
+   character(len=*), intent(in) :: symbol
 
-      !> charge width
-      real(wp) :: rad
+   !> charge width
+   real(wp) :: rad
 
-      rad = get_eeqbc_rad(to_number(symbol))
+   rad = get_eeqbc_rad(to_number(symbol))
 
-   end function get_eeqbc_rad_sym
+end function get_eeqbc_rad_sym
 
 !> Get charge width for species with a given atomic number
-   elemental function get_eeqbc_rad_num(number) result(rad)
+elemental function get_eeqbc_rad_num(number) result(rad)
 
-      !> Atomic number
-      integer, intent(in) :: number
+   !> Atomic number
+   integer, intent(in) :: number
 
-      !> charge width
-      real(wp) :: rad
+   !> charge width
+   real(wp) :: rad
 
-      if (number > 0 .and. number <= size(eeqbc_rad, dim=1)) then
-         rad = eeqbc_rad(number)
-      else
-         rad = -1.0_wp
-      end if
+   if (number > 0 .and. number <= size(eeqbc_rad, dim=1)) then
+      rad = eeqbc_rad(number)
+   else
+      rad = -1.0_wp
+   endif
 
-   end function get_eeqbc_rad_num
+end function get_eeqbc_rad_num
 
 !> Get CN scaling of the electronegativity for species with a given symbol
-   elemental function get_eeqbc_kcnchi_sym(symbol) result(kcnchi)
+elemental function get_eeqbc_kcnchi_sym(symbol) result(kcnchi)
 
-      !> Element symbol
-      character(len=*), intent(in) :: symbol
+   !> Element symbol
+   character(len=*), intent(in) :: symbol
 
-      !> CN scaling of EN
-      real(wp) :: kcnchi
+   !> CN scaling of EN
+   real(wp) :: kcnchi
 
-      kcnchi = get_eeqbc_kcnchi(to_number(symbol))
+   kcnchi = get_eeqbc_kcnchi(to_number(symbol))
 
-   end function get_eeqbc_kcnchi_sym
+end function get_eeqbc_kcnchi_sym
 
 !> Get CN scaling of the electronegativity for species with a given atomic number
-   elemental function get_eeqbc_kcnchi_num(number) result(kcnchi)
+elemental function get_eeqbc_kcnchi_num(number) result(kcnchi)
 
-      !> Atomic number
-      integer, intent(in) :: number
+   !> Atomic number
+   integer, intent(in) :: number
 
-      !> CN scaling of EN
-      real(wp) :: kcnchi
+   !> CN scaling of EN
+   real(wp) :: kcnchi
 
-      if (number > 0 .and. number <= size(eeqbc_kcnchi, dim=1)) then
-         kcnchi = eeqbc_kcnchi(number)
-      else
-         kcnchi = -1.0_wp
-      end if
+   if (number > 0 .and. number <= size(eeqbc_kcnchi, dim=1)) then
+      kcnchi = eeqbc_kcnchi(number)
+   else
+      kcnchi = -1.0_wp
+   endif
 
-   end function get_eeqbc_kcnchi_num
+end function get_eeqbc_kcnchi_num
 
 !> Get local q scaling of the electronegativity for species with a given symbol
-   elemental function get_eeqbc_kqchi_sym(symbol) result(kqchi)
+elemental function get_eeqbc_kqchi_sym(symbol) result(kqchi)
 
-      !> Element symbol
-      character(len=*), intent(in) :: symbol
+   !> Element symbol
+   character(len=*), intent(in) :: symbol
 
-      !> local q scaling of EN
-      real(wp) :: kqchi
+   !> local q scaling of EN
+   real(wp) :: kqchi
 
-      kqchi = get_eeqbc_kqchi(to_number(symbol))
+   kqchi = get_eeqbc_kqchi(to_number(symbol))
 
-   end function get_eeqbc_kqchi_sym
+end function get_eeqbc_kqchi_sym
 
 !> Get local q scaling of the electronegativity for species with a given atomic number
-   elemental function get_eeqbc_kqchi_num(number) result(kqchi)
+elemental function get_eeqbc_kqchi_num(number) result(kqchi)
 
-      !> Atomic number
-      integer, intent(in) :: number
+   !> Atomic number
+   integer, intent(in) :: number
 
-      !> local q scaling of EN
-      real(wp) :: kqchi
+   !> local q scaling of EN
+   real(wp) :: kqchi
 
-      if (number > 0 .and. number <= size(eeqbc_kqchi, dim=1)) then
-         kqchi = eeqbc_kqchi(number)
-      else
-         kqchi = -1.0_wp
-      end if
+   if (number > 0 .and. number <= size(eeqbc_kqchi, dim=1)) then
+      kqchi = eeqbc_kqchi(number)
+   else
+      kqchi = -1.0_wp
+   endif
 
-   end function get_eeqbc_kqchi_num
+end function get_eeqbc_kqchi_num
 
 !> Get local q scaling of the chemical hardness for species with a given symbol
-   elemental function get_eeqbc_kqeta_sym(symbol) result(kqeta)
+elemental function get_eeqbc_kqeta_sym(symbol) result(kqeta)
 
-      !> Element symbol
-      character(len=*), intent(in) :: symbol
+   !> Element symbol
+   character(len=*), intent(in) :: symbol
 
-      !> local q scaling of hardness
-      real(wp) :: kqeta
+   !> local q scaling of hardness
+   real(wp) :: kqeta
 
-      kqeta = get_eeqbc_kqeta(to_number(symbol))
+   kqeta = get_eeqbc_kqeta(to_number(symbol))
 
-   end function get_eeqbc_kqeta_sym
+end function get_eeqbc_kqeta_sym
 
 !> Get local q scaling of the chemical hardness for species with a given atomic number
-   elemental function get_eeqbc_kqeta_num(number) result(kqeta)
+elemental function get_eeqbc_kqeta_num(number) result(kqeta)
 
-      !> Atomic number
-      integer, intent(in) :: number
+   !> Atomic number
+   integer, intent(in) :: number
 
-      !> local q scaling of hardness
-      real(wp) :: kqeta
+   !> local q scaling of hardness
+   real(wp) :: kqeta
 
-      if (number > 0 .and. number <= size(eeqbc_kqeta, dim=1)) then
-         kqeta = eeqbc_kqeta(number)
-      else
-         kqeta = -1.0_wp
-      end if
+   if (number > 0 .and. number <= size(eeqbc_kqeta, dim=1)) then
+      kqeta = eeqbc_kqeta(number)
+   else
+      kqeta = -1.0_wp
+   endif
 
-   end function get_eeqbc_kqeta_num
+end function get_eeqbc_kqeta_num
 
 !> Get bond capacitance for species with a given symbol
-   elemental function get_eeqbc_cap_sym(symbol) result(cap)
+elemental function get_eeqbc_cap_sym(symbol) result(cap)
 
-      !> Element symbol
-      character(len=*), intent(in) :: symbol
+   !> Element symbol
+   character(len=*), intent(in) :: symbol
 
-      !> bond capacitance
-      real(wp) :: cap
+   !> bond capacitance
+   real(wp) :: cap
 
-      cap = get_eeqbc_cap(to_number(symbol))
+   cap = get_eeqbc_cap(to_number(symbol))
 
-   end function get_eeqbc_cap_sym
+end function get_eeqbc_cap_sym
 
 !> Get bond capacitance for species with a given atomic number
-   elemental function get_eeqbc_cap_num(number) result(cap)
+elemental function get_eeqbc_cap_num(number) result(cap)
 
-      !> Atomic number
-      integer, intent(in) :: number
+   !> Atomic number
+   integer, intent(in) :: number
 
-      !> bond capacitance
-      real(wp) :: cap
+   !> bond capacitance
+   real(wp) :: cap
 
-      if (number > 0 .and. number <= size(eeqbc_cap, dim=1)) then
-         cap = eeqbc_cap(number)
-      else
-         cap = -1.0_wp
-      end if
+   if (number > 0 .and. number <= size(eeqbc_cap, dim=1)) then
+      cap = eeqbc_cap(number)
+   else
+      cap = -1.0_wp
+   endif
 
-   end function get_eeqbc_cap_num
+end function get_eeqbc_cap_num
 
 !> Get covalent radius for species with a given symbol
-   elemental function get_eeqbc_cov_radii_sym(symbol) result(rcov)
+elemental function get_eeqbc_cov_radii_sym(symbol) result(rcov)
 
-      !> Element symbol
-      character(len=*), intent(in) :: symbol
+   !> Element symbol
+   character(len=*), intent(in) :: symbol
 
-      !> covalent radius
-      real(wp) :: rcov
+   !> covalent radius
+   real(wp) :: rcov
 
-      rcov = get_eeqbc_cov_radii(to_number(symbol))
+   rcov = get_eeqbc_cov_radii(to_number(symbol))
 
-   end function get_eeqbc_cov_radii_sym
+end function get_eeqbc_cov_radii_sym
 
 !> Get covalent radius for species with a given atomic number
-   elemental function get_eeqbc_cov_radii_num(number) result(rcov)
+elemental function get_eeqbc_cov_radii_num(number) result(rcov)
 
-      !> Atomic number
-      integer, intent(in) :: number
+   !> Atomic number
+   integer, intent(in) :: number
 
-      !> covalent radius
-      real(wp) :: rcov
+   !> covalent radius
+   real(wp) :: rcov
 
-      if (number > 0 .and. number <= size(eeqbc_cov_radii, dim=1)) then
-         rcov = eeqbc_cov_radii(number)
-      else
-         rcov = -1.0_wp
-      end if
+   if (number > 0 .and. number <= size(eeqbc_cov_radii, dim=1)) then
+      rcov = eeqbc_cov_radii(number)
+   else
+      rcov = -1.0_wp
+   endif
 
-   end function get_eeqbc_cov_radii_num
+end function get_eeqbc_cov_radii_num
 
 !> Get average CN for species with a given symbol
-   elemental function get_eeqbc_avg_cn_sym(symbol) result(avg_cn)
+elemental function get_eeqbc_avg_cn_sym(symbol) result(avg_cn)
 
-      !> Element symbol
-      character(len=*), intent(in) :: symbol
+   !> Element symbol
+   character(len=*), intent(in) :: symbol
 
-      !> average CN
-      real(wp) :: avg_cn
+   !> average CN
+   real(wp) :: avg_cn
 
-      avg_cn = get_eeqbc_avg_cn(to_number(symbol))
+   avg_cn = get_eeqbc_avg_cn(to_number(symbol))
 
-   end function get_eeqbc_avg_cn_sym
+end function get_eeqbc_avg_cn_sym
 
 !> Get average CN for species with a given atomic number
-   elemental function get_eeqbc_avg_cn_num(number) result(avg_cn)
+elemental function get_eeqbc_avg_cn_num(number) result(avg_cn)
 
-      !> Atomic number
-      integer, intent(in) :: number
+   !> Atomic number
+   integer, intent(in) :: number
 
-      !> average CN
-      real(wp) :: avg_cn
+   !> average CN
+   real(wp) :: avg_cn
 
-      if (number > 0 .and. number <= size(eeqbc_avg_cn, dim=1)) then
-         avg_cn = eeqbc_avg_cn(number)
-      else
-         avg_cn = -1.0_wp
-      end if
+   if (number > 0 .and. number <= size(eeqbc_avg_cn, dim=1)) then
+      avg_cn = eeqbc_avg_cn(number)
+   else
+      avg_cn = -1.0_wp
+   endif
 
-   end function get_eeqbc_avg_cn_num
+end function get_eeqbc_avg_cn_num
 
 end module multicharge_param_eeqbc2025
