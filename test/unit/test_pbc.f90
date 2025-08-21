@@ -95,10 +95,10 @@ subroutine gen_test(error, mol, model, qref, eref)
    if (present(eref)) then
       allocate(energy(mol%nat))
       energy(:) = 0.0_wp
-   endif
+   end if
    if (present(qref)) then
       allocate(qvec(mol%nat))
-   endif
+   end if
 
    call model%solve(mol, error, cn, qloc, energy=energy, qvec=qvec)
    if (allocated(error)) return
@@ -112,8 +112,8 @@ subroutine gen_test(error, mol, model, qref, eref)
          print'(3es21.14)', qref
          print'("---")'
          print'(3es21.14)', qvec - qref
-      endif
-   endif
+      end if
+   end if
    if (allocated(error)) return
 
    if (present(eref)) then
@@ -125,8 +125,8 @@ subroutine gen_test(error, mol, model, qref, eref)
          print'(3es21.14)', eref
          print'("---")'
          print'(3es21.14)', energy - eref
-      endif
-   endif
+      end if
+   end if
 
 end subroutine gen_test
 
@@ -181,8 +181,8 @@ subroutine test_numgrad(error, mol, model)
 
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
          numgrad(ic, iat) = 0.5_wp * (er - el) / step
-      enddo
-   enddo lp
+      end do
+   end do lp
    if (allocated(error)) return
 
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
@@ -201,7 +201,7 @@ subroutine test_numgrad(error, mol, model)
       print'(3es21.14)', numgrad
       print'(a)', "diff:"
       print'(3es21.14)', gradient - numgrad
-   endif
+   end if
 
 end subroutine test_numgrad
 
@@ -268,8 +268,8 @@ subroutine test_numsigma(error, mol, model)
          mol%lattice(:, :) = lattice
          lattr(:, :) = trans
          numsigma(jc, ic) = 0.5_wp * (er - el) / step
-      enddo
-   enddo lp
+      end do
+   end do lp
    if (allocated(error)) return
 
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
@@ -288,7 +288,7 @@ subroutine test_numsigma(error, mol, model)
       print'(3es21.14)', numsigma
       print'(a)', "diff:"
       print'(3es21.14)', sigma(:, :) - numsigma(:, :)
-   endif
+   end if
 
 end subroutine test_numsigma
 
@@ -342,8 +342,8 @@ subroutine test_dbdr(error, mol, model)
 
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
          numgrad(ic, iat, :) = 0.5_wp * (xvecr(:) - xvecl(:)) / step
-      enddo
-   enddo lp
+      end do
+   end do lp
 
    ! Analytical gradient
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
@@ -360,7 +360,7 @@ subroutine test_dbdr(error, mol, model)
       print'(3es21.14)', numgrad
       print'(a)', "diff:"
       print'(3es21.14)', dbdr - numgrad
-   endif
+   end if
 
 end subroutine test_dbdr
 
@@ -432,9 +432,9 @@ subroutine test_dbdL(error, mol, model)
          lattr(:, :) = trans
          do iat = 1, mol%nat
             numsigma(jc, ic, iat) = 0.5_wp * (xvecr(iat) - xvecl(iat)) / step
-         enddo
-      enddo
-   enddo lp
+         end do
+      end do
+   end do lp
 
    ! Analytical gradient
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
@@ -451,7 +451,7 @@ subroutine test_dbdL(error, mol, model)
       print'(3es21.14)', numsigma
       print'(a)', "diff:"
       print'(3es21.14)', dbdL - numsigma
-   endif
+   end if
 
 end subroutine test_dbdL
 
@@ -490,7 +490,7 @@ subroutine test_dadr(error, mol, model)
       thr2_local = 3.0_wp * thr2
    class default
       thr2_local = thr2
-   endselect
+   end select
 
    call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
@@ -527,10 +527,10 @@ subroutine test_dadr(error, mol, model)
                ! Numerical gradient of the A matrix
                numgrad(ic, iat, kat) = 0.5_wp * qvec(jat) * (amatr(kat, jat) - amatl(kat, jat)) / step &
                   & + numgrad(ic, iat, kat)
-            enddo
-         enddo
-      enddo
-   enddo lp
+            end do
+         end do
+      end do
+   end do lp
 
    ! Analytical gradient
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
@@ -541,7 +541,7 @@ subroutine test_dadr(error, mol, model)
    ! Add trace of the A matrix
    do iat = 1, mol%nat
       dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
-   enddo
+   end do
 
    ! higher tolerance for numerical gradient
    if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2_local)) then
@@ -552,7 +552,7 @@ subroutine test_dadr(error, mol, model)
       print'(3es21.14)', numgrad
       print'(a)', "diff:"
       print'(3es21.14)', dadr - numgrad
-   endif
+   end if
 
 end subroutine test_dadr
 
@@ -631,9 +631,9 @@ subroutine test_dadL(error, mol, model)
          do iat = 1, mol%nat
             ! Numerical sigma of the a matrix
             numsigma(jc, ic, :) = 0.5_wp * qvec(iat) * (amatr(iat, :) - amatl(iat, :)) / step + numsigma(jc, ic, :)
-         enddo
-      enddo
-   enddo lp
+         end do
+      end do
+   end do lp
    if (allocated(error)) return
 
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
@@ -651,7 +651,7 @@ subroutine test_dadL(error, mol, model)
       print'(3es21.14)', numsigma
       print'(a)', "diff:"
       print'(3es21.14)', dadL - numsigma
-   endif
+   end if
 
 end subroutine test_dadL
 
@@ -699,8 +699,8 @@ subroutine test_numdqdr(error, mol, model)
 
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
          numdr(ic, iat, :) = 0.5_wp * (qr - ql) / step
-      enddo
-   enddo lp
+      end do
+   end do lp
    if (allocated(error)) return
 
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
@@ -717,7 +717,7 @@ subroutine test_numdqdr(error, mol, model)
       print'(3es21.14)', numdr
       print'(a)', "diff:"
       print'(3es21.14)', dqdr - numdr
-   endif
+   end if
 
 end subroutine test_numdqdr
 
@@ -780,8 +780,8 @@ subroutine test_numdqdL(error, mol, model)
          mol%lattice(:, :) = lattice
          lattr(:, :) = trans
          numdL(jc, ic, :) = 0.5_wp * (qr - ql) / step
-      enddo
-   enddo lp
+      end do
+   end do lp
    if (allocated(error)) return
 
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
@@ -799,7 +799,7 @@ subroutine test_numdqdL(error, mol, model)
       print'(3es21.14)', numdL
       print'(a)', "diff:"
       print'(3es21.14)', dqdL - numdL
-   endif
+   end if
 
 end subroutine test_numdqdL
 

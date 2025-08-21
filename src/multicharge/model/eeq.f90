@@ -114,13 +114,13 @@ subroutine update(self, mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
    if (present(dcndr) .and. present(dcndL)) then
       ptr%dcndr = dcndr
       ptr%dcndL = dcndL
-   endif
+   end if
 
    if (any(mol%periodic)) then
       ! Create WSC
       call new_wignerseitz_cell(ptr%wsc, mol)
       call get_alpha(mol%lattice, ptr%alpha)
-   endif
+   end if
 
 end subroutine update
 
@@ -144,7 +144,7 @@ subroutine get_xvec(self, mol, cache, xvec)
       izp = mol%id(iat)
       tmp = self%kcnchi(izp) / sqrt(ptr%cn(iat) + reg)
       xvec(iat) = -self%chi(izp) + tmp * ptr%cn(iat)
-   enddo
+   end do
    xvec(mol%nat + 1) = mol%charge
 
 end subroutine get_xvec
@@ -175,7 +175,7 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
       tmp = self%kcnchi(izp) / sqrt(ptr%cn(iat) + reg)
       dxdr(:, :, iat) = 0.5_wp * tmp * ptr%dcndr(:, :, iat) + dxdr(:, :, iat)
       dxdL(:, :, iat) = 0.5_wp * tmp * ptr%dcndL(:, :, iat) + dxdL(:, :, iat)
-   enddo
+   end do
 
 end subroutine get_xvec_derivs
 
@@ -193,7 +193,7 @@ subroutine get_coulomb_matrix(self, mol, cache, amat)
       call get_amat_3d(self, mol, ptr%wsc, ptr%alpha, amat)
    else
       call get_amat_0d(self, mol, amat)
-   endif
+   end if
 end subroutine get_coulomb_matrix
 
 subroutine get_amat_0d(self, mol, amat)
@@ -224,10 +224,10 @@ subroutine get_amat_0d(self, mol, amat)
          tmp = erf(sqrt(r2 * gam)) / sqrt(r2)
          amat_local(jat, iat) = amat_local(jat, iat) + tmp
          amat_local(iat, jat) = amat_local(iat, jat) + tmp
-      enddo
+      end do
       tmp = self%eta(izp) + sqrt2pi / self%rad(izp)
       amat_local(iat, iat) = amat_local(iat, iat) + tmp
-   enddo
+   end do
    !$omp end do
    !$omp critical (get_amat_0d_)
    amat(:, :) = amat(:, :) + amat_local(:, :)
@@ -278,8 +278,8 @@ subroutine get_amat_3d(self, mol, wsc, alpha, amat)
             call get_amat_rec_3d(vec, vol, alpha, rtrans, rtmp)
             amat_local(jat, iat) = amat_local(jat, iat) + (dtmp + rtmp) * wsw
             amat_local(iat, jat) = amat_local(iat, jat) + (dtmp + rtmp) * wsw
-         enddo
-      enddo
+         end do
+      end do
 
       gam = 1.0_wp / sqrt(2.0_wp * self%rad(izp)**2)
       wsw = 1.0_wp / real(wsc%nimg(iat, iat), wp)
@@ -288,11 +288,11 @@ subroutine get_amat_3d(self, mol, wsc, alpha, amat)
          call get_amat_dir_3d(vec, gam, alpha, dtrans, dtmp)
          call get_amat_rec_3d(vec, vol, alpha, rtrans, rtmp)
          amat_local(iat, iat) = amat_local(iat, iat) + (dtmp + rtmp) * wsw
-      enddo
+      end do
 
       dtmp = self%eta(izp) + sqrt2pi / self%rad(izp) - 2 * alpha / sqrtpi
       amat_local(iat, iat) = amat_local(iat, iat) + dtmp
-   enddo
+   end do
    !$omp end do
    !$omp critical (get_amat_3d_)
    amat(:, :) = amat(:, :) + amat_local(:, :)
@@ -324,7 +324,7 @@ subroutine get_amat_dir_3d(rij, gam, alp, trans, amat)
       if (r1 < eps) cycle
       tmp = erf(gam * r1) / r1 - erf(alp * r1) / r1
       amat = amat + tmp
-   enddo
+   end do
 
 end subroutine get_amat_dir_3d
 
@@ -347,7 +347,7 @@ subroutine get_amat_rec_3d(rij, vol, alp, trans, amat)
       if (g2 < eps) cycle
       tmp = cos(dot_product(rij, vec)) * fac * exp(-0.25_wp * g2 / (alp * alp)) / g2
       amat = amat + tmp
-   enddo
+   end do
 
 end subroutine get_amat_rec_3d
 
@@ -366,7 +366,7 @@ subroutine get_coulomb_derivs(self, mol, cache, qvec, dadr, dadL, atrace)
       call get_damat_3d(self, mol, ptr%wsc, ptr%alpha, qvec, dadr, dadL, atrace)
    else
       call get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
-   endif
+   end if
 end subroutine get_coulomb_derivs
 
 subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
@@ -413,8 +413,8 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
          dadr_local(:, jat, iat) = +dG * qvec(jat)
          dadL_local(:, :, jat) = +dS * qvec(iat) + dadL_local(:, :, jat)
          dadL_local(:, :, iat) = +dS * qvec(jat) + dadL_local(:, :, iat)
-      enddo
-   enddo
+      end do
+   end do
    !$omp end do
    !$omp critical (get_damat_0d_)
    atrace(:, :) = atrace(:, :) + atrace_local(:, :)
@@ -476,14 +476,14 @@ subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
             call get_damat_rec_3d(vec, vol, alpha, rtrans, dGr, dSr)
             dG = dG + (dGd + dGr) * wsw
             dS = dS + (dSd + dSr) * wsw
-         enddo
+         end do
          atrace_local(:, iat) = -dG * qvec(jat) + atrace_local(:, iat)
          atrace_local(:, jat) = +dG * qvec(iat) + atrace_local(:, jat)
          dadr_local(:, iat, jat) = -dG * qvec(iat) + dadr_local(:, iat, jat)
          dadr_local(:, jat, iat) = +dG * qvec(jat) + dadr_local(:, jat, iat)
          dadL_local(:, :, jat) = +dS * qvec(iat) + dadL_local(:, :, jat)
          dadL_local(:, :, iat) = +dS * qvec(jat) + dadL_local(:, :, iat)
-      enddo
+      end do
 
       dS(:, :) = 0.0_wp
       gam = 1.0_wp / sqrt(2.0_wp * self%rad(izp)**2)
@@ -493,9 +493,9 @@ subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
          call get_damat_dir_3d(vec, gam, alpha, dtrans, dGd, dSd)
          call get_damat_rec_3d(vec, vol, alpha, rtrans, dGr, dSr)
          dS = dS + (dSd + dSr) * wsw
-      enddo
+      end do
       dadL_local(:, :, iat) = +dS * qvec(iat) + dadL_local(:, :, iat)
-   enddo
+   end do
    !$omp end do
    !$omp critical (get_damat_3d_)
    atrace(:, :) = atrace(:, :) + atrace_local(:, :)
@@ -533,7 +533,7 @@ subroutine get_damat_dir_3d(rij, gam, alp, trans, dg, ds)
       atmp = -2 * alp * exp(-r2 * alp2) / (sqrtpi * r2) + erf(r1 * alp) / (r2 * r1)
       dg(:) = dg + (gtmp + atmp) * vec
       ds(:, :) = ds + (gtmp + atmp) * spread(vec, 1, 3) * spread(vec, 2, 3)
-   enddo
+   end do
 
 end subroutine get_damat_dir_3d
 
@@ -565,7 +565,7 @@ subroutine get_damat_rec_3d(rij, vol, alp, trans, dg, ds)
       dg(:) = dg + dtmp * vec
       ds(:, :) = ds + etmp * cos(gv) &
                   & * ((2.0_wp / g2 + 0.5_wp / alp2) * spread(vec, 1, 3) * spread(vec, 2, 3) - unity)
-   enddo
+   end do
 
 end subroutine get_damat_rec_3d
 
@@ -582,15 +582,15 @@ subroutine taint(cache, ptr)
       call view(cache, ptr)
       if (associated(ptr)) return
       deallocate(cache%raw)
-   endif
+   end if
 
    if (.not. allocated(cache%raw)) then
       block
          type(eeq_cache), allocatable :: tmp
          allocate(tmp)
          call move_alloc(tmp, cache%raw)
-      endblock
-   endif
+      end block
+   end if
 
    call view(cache, ptr)
 end subroutine taint
@@ -605,7 +605,7 @@ subroutine view(cache, ptr)
    select type(target => cache%raw)
    type is(eeq_cache)
       ptr => target
-   endselect
+   end select
 end subroutine view
 
 end module multicharge_model_eeq

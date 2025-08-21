@@ -209,7 +209,7 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
    ! Get lattice points
    if (any(mol%periodic)) then
       call get_dir_trans(mol%lattice, trans)
-   endif
+   end if
 
    ! Setup the Coulomb matrix
    ndim = mol%nat + 1
@@ -229,7 +229,7 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
    if (info /= 0) then
       call fatal_error(error, "Bunch-Kaufman factorization failed.")
       return
-   endif
+   end if
 
    if (cpq) then
       ! Inverted matrix is needed for coupled-perturbed equations
@@ -237,27 +237,27 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
       if (info /= 0) then
          call fatal_error(error, "Inversion of factorized matrix failed.")
          return
-      endif
+      end if
       ! Solve the linear system
       call symv(ainv, xvec, vrhs, uplo='l')
       do ic = 1, ndim
          do jc = ic + 1, ndim
             ainv(ic, jc) = ainv(jc, ic)
-         enddo
-      enddo
+         end do
+      end do
    else
       ! Solve the linear system
       call sytrs(ainv, vrhs, ipiv, info=info, uplo='l')
       if (info /= 0) then
          call fatal_error(error, "Solution of linear system failed.")
          return
-      endif
+      end if
 
-   endif
+   end if
 
    if (present(qvec)) then
       qvec(:) = vrhs(:mol%nat)
-   endif
+   end if
 
    if (present(energy)) then
       ! Extract only the Coulomb matrix without the constraints
@@ -266,7 +266,7 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
       call symv(jmat, vrhs(:mol%nat), xvec(:mol%nat), &
          & alpha=0.5_wp, beta=-1.0_wp, uplo='l')
       energy(:) = energy(:) + vrhs(:mol%nat) * xvec(:mol%nat)
-   endif
+   end if
 
    ! Allocate and get amat derivatives
    if (grad .or. cpq) then
@@ -276,8 +276,8 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
       call self%get_coulomb_derivs(mol, cache, vrhs, dadr, dadL, atrace)
       do iat = 1, mol%nat
          dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
-      enddo
-   endif
+      end do
+   end if
 
    if (grad) then
       gradient = 0.0_wp
@@ -285,17 +285,17 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
       call gemv(dxdr(:, :, :mol%nat), vrhs(:mol%nat), gradient, beta=1.0_wp, alpha=-1.0_wp)
       call gemv(dadL, vrhs, sigma, beta=1.0_wp, alpha=0.5_wp)
       call gemv(dxdL, vrhs, sigma, beta=1.0_wp, alpha=-1.0_wp)
-   endif
+   end if
 
    if (cpq) then
       do iat = 1, mol%nat
          dadr(:, :, iat) = -dxdr(:, :, iat) + dadr(:, :, iat)
          dadL(:, :, iat) = -dxdL(:, :, iat) + dadL(:, :, iat)
-      enddo
+      end do
 
       call gemm(dadr, ainv(:, :mol%nat), dqdr, alpha=-1.0_wp)
       call gemm(dadL, ainv(:, :mol%nat), dqdL, alpha=-1.0_wp)
-   endif
+   end if
 end subroutine solve
 
 subroutine local_charge(self, mol, trans, qloc, dqlocdr, dqlocdL)
@@ -316,12 +316,12 @@ subroutine local_charge(self, mol, trans, qloc, dqlocdr, dqlocdL)
    if (present(dqlocdr) .and. present(dqlocdL)) then
       dqlocdr = 0.0_wp
       dqlocdL = 0.0_wp
-   endif
+   end if
    ! Get the electronegativity weighted CN for local charge
    ! Derivatives depend only in this CN
    if (allocated(self%ncoord_en)) then
       call self%ncoord_en%get_coordination_number(mol, trans, qloc, dqlocdr, dqlocdL)
-   endif
+   end if
 
    ! Distribute the total charge equally
    qloc = qloc + mol%charge / real(mol%nat, wp)

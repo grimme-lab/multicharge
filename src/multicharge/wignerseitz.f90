@@ -65,8 +65,8 @@ subroutine new_wignerseitz_cell(self, mol)
          self%nimg(jat, iat) = nimg
          self%tridx(:, jat, iat) = tridx
          self%nimg_max = max(nimg, self%nimg_max)
-      enddo
-   enddo
+      end do
+   end do
 
    call move_alloc(trans, self%trans)
 
@@ -93,7 +93,7 @@ subroutine get_pairs(iws, trans, rij, list)
       if (r2 < thr) cycle
       img = img + 1
       dist(img) = r2
-   enddo
+   end do
 
    if (img == 0) return
 
@@ -112,7 +112,7 @@ subroutine get_pairs(iws, trans, rij, list)
       mask(pos) = .false.
       iws = iws + 1
       list(iws) = pos
-   enddo
+   end do
 
 end subroutine get_pairs
 

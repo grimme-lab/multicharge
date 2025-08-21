@@ -46,18 +46,18 @@ program main
    if (allocated(error)) then
       write(error_unit, '(a)') error%message
       error stop
-   endif
+   end if
 
    if (input == "-") then
       if (.not. allocated(input_format)) input_format = filetype%xyz
       call read_structure(mol, input_unit, input_format, error)
    else
       call read_structure(mol, input, error, input_format)
-   endif
+   end if
    if (allocated(error)) then
       write(error_unit, '(a)') error%message
       error stop
-   endif
+   end if
 
    if (allocated(charge)) then
       mol%charge = charge
@@ -75,10 +75,10 @@ program main
          else
             write(output_unit, '(a,/)') &
                "[Warn] Could not read molecular charge read from '"//chargeinput//"'"
-         endif
+         end if
          close(unit)
-      endif
-   endif
+      end if
+   end if
 
    if (model_id == mchargeModel%eeq2019) then
       call new_eeq2019_model(mol, model, error)
@@ -86,11 +86,11 @@ program main
       call new_eeqbc2025_model(mol, model, error)
    else
       call fatal_error(error, "Invalid model was choosen.")
-   endif
+   end if
    if (allocated(error)) then
       write(error_unit, '(a)') error%message
       error stop
-   endif
+   end if
 
    call write_ascii_model(output_unit, mol, model)
 
@@ -109,7 +109,7 @@ program main
 
       allocate(dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat))
       allocate(dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat))
-   endif
+   end if
 
    call get_lattice_points(mol%periodic, mol%lattice, model%ncoord%cutoff, trans)
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
@@ -120,7 +120,7 @@ program main
    if (allocated(error)) then
       write(error_unit, '(a)') error%message
       error stop
-   endif
+   end if
 
    call write_ascii_properties(output_unit, mol, model, cn, qvec)
    call write_ascii_results(output_unit, mol, energy, gradient, sigma)
@@ -131,7 +131,7 @@ program main
       close(unit)
       write(output_unit, '(a)') &
          "[Info] JSON dump of results written to '"//json_output//"'"
-   endif
+   end if
 
 contains
 
@@ -216,7 +216,7 @@ subroutine get_arguments(input, model_id, input_format, grad, charge, &
          if (.not. allocated(input)) then
             call move_alloc(arg, input)
             cycle
-         endif
+         end if
          call fatal_error(error, "Too many positional arguments present")
          exit
       case("-m", "-model", "--model")
@@ -225,7 +225,7 @@ subroutine get_arguments(input, model_id, input_format, grad, charge, &
          if (.not. allocated(arg)) then
             call fatal_error(error, "Missing argument for model")
             exit
-         endif
+         end if
          if (arg == "eeq2019" .or. arg == "eeq") then
             model_id = mchargeModel%eeq2019
          else if (arg == "eeqbc2025" .or. arg == "eeqbc") then
@@ -233,14 +233,14 @@ subroutine get_arguments(input, model_id, input_format, grad, charge, &
          else
             call fatal_error(error, "Invalid model")
             exit
-         endif
+         end if
       case("-i", "-input", "--input")
          iarg = iarg + 1
          call get_argument(iarg, arg)
          if (.not. allocated(arg)) then
             call fatal_error(error, "Missing argument for input format")
             exit
-         endif
+         end if
          input_format = get_filetype("."//arg)
       case("-c", "-charge", "--charge")
          iarg = iarg + 1
@@ -248,26 +248,26 @@ subroutine get_arguments(input, model_id, input_format, grad, charge, &
          if (.not. allocated(arg)) then
             call fatal_error(error, "Missing argument for charge")
             exit
-         endif
+         end if
          allocate(charge)
          read(arg, *, iostat=iostat) charge
          if (iostat /= 0) then
             call fatal_error(error, "Invalid charge value")
             exit
-         endif
+         end if
       case("-g", "-grad", "--grad")
          grad = .true.
       case("-j", "-json", "--json")
          json = .true.
-      endselect
-   enddo
+      end select
+   end do
 
    if (.not. allocated(input)) then
       if (.not. allocated(error)) then
          call help(output_unit)
          error stop
-      endif
-   endif
+      end if
+   end if
 
 end subroutine get_arguments
 

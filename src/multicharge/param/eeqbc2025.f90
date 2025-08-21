@@ -374,7 +374,7 @@ elemental function get_eeqbc_chi_num(number) result(chi)
       chi = eeqbc_chi(number)
    else
       chi = -1.0_wp
-   endif
+   end if
 
 end function get_eeqbc_chi_num
 
@@ -404,7 +404,7 @@ elemental function get_eeqbc_eta_num(number) result(eta)
       eta = eeqbc_eta(number)
    else
       eta = -1.0_wp
-   endif
+   end if
 
 end function get_eeqbc_eta_num
 
@@ -434,7 +434,7 @@ elemental function get_eeqbc_rad_num(number) result(rad)
       rad = eeqbc_rad(number)
    else
       rad = -1.0_wp
-   endif
+   end if
 
 end function get_eeqbc_rad_num
 
@@ -464,7 +464,7 @@ elemental function get_eeqbc_kcnchi_num(number) result(kcnchi)
       kcnchi = eeqbc_kcnchi(number)
    else
       kcnchi = -1.0_wp
-   endif
+   end if
 
 end function get_eeqbc_kcnchi_num
 
@@ -494,7 +494,7 @@ elemental function get_eeqbc_kqchi_num(number) result(kqchi)
       kqchi = eeqbc_kqchi(number)
    else
       kqchi = -1.0_wp
-   endif
+   end if
 
 end function get_eeqbc_kqchi_num
 
@@ -524,7 +524,7 @@ elemental function get_eeqbc_kqeta_num(number) result(kqeta)
       kqeta = eeqbc_kqeta(number)
    else
       kqeta = -1.0_wp
-   endif
+   end if
 
 end function get_eeqbc_kqeta_num
 
@@ -554,7 +554,7 @@ elemental function get_eeqbc_cap_num(number) result(cap)
       cap = eeqbc_cap(number)
    else
       cap = -1.0_wp
-   endif
+   end if
 
 end function get_eeqbc_cap_num
 
@@ -584,7 +584,7 @@ elemental function get_eeqbc_cov_radii_num(number) result(rcov)
       rcov = eeqbc_cov_radii(number)
    else
       rcov = -1.0_wp
-   endif
+   end if
 
 end function get_eeqbc_cov_radii_num
 
@@ -614,7 +614,7 @@ elemental function get_eeqbc_avg_cn_num(number) result(avg_cn)
       avg_cn = eeqbc_avg_cn(number)
    else
       avg_cn = -1.0_wp
-   endif
+   end if
 
 end function get_eeqbc_avg_cn_num
 
