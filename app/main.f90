@@ -18,7 +18,7 @@ program main
    use mctc_env, only: error_type, fatal_error, get_argument, wp
    use mctc_io, only: structure_type, read_structure, filetype, get_filetype
    use mctc_cutoff, only: get_lattice_points
-   use multicharge, only: mchrg_model_type, mcharge_model, new_eeq2019_model, &
+   use multicharge, only: mchrg_model_type, mchrg_model, new_eeq2019_model, &
       & new_eeqbc2025_model, get_multicharge_version, &
       & write_ascii_model, write_ascii_properties, write_ascii_results
    use multicharge_output, only: json_results
@@ -80,9 +80,9 @@ program main
       end if
    end if
 
-   if (model_id == mcharge_model%eeq2019) then
+   if (model_id == mchrg_model%eeq2019) then
       call new_eeq2019_model(mol, model, error)
-   else if (model_id == mcharge_model%eeqbc2025) then
+   else if (model_id == mchrg_model%eeqbc2025) then
       call new_eeqbc2025_model(mol, model, error)
    else
       call fatal_error(error, "Invalid model was choosen.")
@@ -197,7 +197,7 @@ subroutine get_arguments(input, model_id, input_format, grad, charge, &
    integer :: iarg, narg, iostat
    character(len=:), allocatable :: arg
 
-   model_id = mcharge_model%eeq2019
+   model_id = mchrg_model%eeq2019
    grad = .false.
    json = .false.
    iarg = 0
@@ -227,9 +227,9 @@ subroutine get_arguments(input, model_id, input_format, grad, charge, &
             exit
          end if
          if (arg == "eeq2019" .or. arg == "eeq") then
-            model_id = mcharge_model%eeq2019
+            model_id = mchrg_model%eeq2019
          else if (arg == "eeqbc2025" .or. arg == "eeqbc") then
-            model_id = mcharge_model%eeqbc2025
+            model_id = mchrg_model%eeqbc2025
          else
             call fatal_error(error, "Invalid model")
             exit
