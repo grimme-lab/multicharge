@@ -14,20 +14,20 @@
 ! limitations under the License.
 
 module multicharge_wignerseitz
-   use mctc_env, only : wp
-   use mctc_io, only : structure_type
-   use multicharge_cutoff, only : get_lattice_points
+   use mctc_env, only: wp
+   use mctc_io, only: structure_type
+   use mctc_cutoff, only: get_lattice_points
    implicit none
    private
 
    public :: wignerseitz_cell_type, new_wignerseitz_cell
 
    type :: wignerseitz_cell_type
+      integer :: nimg_max
       integer, allocatable :: nimg(:, :)
       integer, allocatable :: tridx(:, :, :)
       real(wp), allocatable :: trans(:, :)
    end type wignerseitz_cell_type
-
 
    !> Small cutoff threshold to create only closest cells
    real(wp), parameter :: thr = sqrt(epsilon(0.0_wp))
@@ -35,9 +35,7 @@ module multicharge_wignerseitz
    !> Tolerance to consider equivalent images
    real(wp), parameter :: tol = 0.01_wp
 
-
 contains
-
 
 subroutine new_wignerseitz_cell(self, mol)
 
@@ -57,6 +55,7 @@ subroutine new_wignerseitz_cell(self, mol)
    allocate(self%nimg(mol%nat, mol%nat), self%tridx(ntr, mol%nat, mol%nat), &
       & tridx(ntr))
 
+   self%nimg_max = 0
    !$omp parallel do default(none) schedule(runtime) collapse(2) &
    !$omp shared(mol, trans, self) private(iat, jat, vec, nimg, tridx)
    do iat = 1, mol%nat
@@ -65,13 +64,13 @@ subroutine new_wignerseitz_cell(self, mol)
          call get_pairs(nimg, trans, vec, tridx)
          self%nimg(jat, iat) = nimg
          self%tridx(:, jat, iat) = tridx
+         self%nimg_max = max(nimg, self%nimg_max)
       end do
    end do
 
    call move_alloc(trans, self%trans)
-   
-end subroutine new_wignerseitz_cell
 
+end subroutine new_wignerseitz_cell
 
 subroutine get_pairs(iws, trans, rij, list)
    integer, intent(out) :: iws
@@ -116,6 +115,5 @@ subroutine get_pairs(iws, trans, rij, list)
    end do
 
 end subroutine get_pairs
-
 
 end module multicharge_wignerseitz

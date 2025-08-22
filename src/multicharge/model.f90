@@ -13,15 +13,22 @@
 ! See the License for the specific language governing permissions and
 ! limitations under the License.
 
-module multicharge
-   use multicharge_charge, only : get_charges, get_eeq_charges, get_eeqbc_charges
-   use multicharge_model, only : mchrg_model_type
-   use multicharge_output, only : write_ascii_model, write_ascii_properties, &
-      & write_ascii_results
-   use multicharge_param, only : new_eeq2019_model, new_eeqbc2025_model, mchrg_model
-   use multicharge_version, only : get_multicharge_version
+!> @dir multicharge/model
+!> Contains the implementation of the charge models
+
+!> @file multicharge/model.f90
+!> Provides a reexport of the charge model implementations
+
+!> Proxy module to reexport the charge model implementations
+module multicharge_model
+   use multicharge_model_type, only : mchrg_model_type
+   use multicharge_model_eeq, only : eeq_model, new_eeq_model
+   use multicharge_model_eeqbc, only : eeqbc_model, new_eeqbc_model
    implicit none
-   public
+   private
 
+   public :: mchrg_model_type
+   public :: eeq_model, new_eeq_model
+   public :: eeqbc_model, new_eeqbc_model
 
-end module multicharge
+end module multicharge_model

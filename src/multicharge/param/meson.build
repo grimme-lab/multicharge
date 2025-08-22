@@ -15,4 +15,5 @@
 
 srcs += files(
   'eeq2019.f90',
+  'eeqbc2025.f90',
 )

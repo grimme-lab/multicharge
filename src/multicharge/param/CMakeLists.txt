@@ -18,6 +18,7 @@ set(dir "${CMAKE_CURRENT_SOURCE_DIR}")
 list(
   APPEND srcs
   "${dir}/eeq2019.f90"
+  "${dir}/eeqbc2025.f90"
 )
 
 set(srcs "${srcs}" PARENT_SCOPE)

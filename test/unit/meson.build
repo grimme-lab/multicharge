@@ -16,7 +16,7 @@
 # Find mstore dependency for testing
 mstore_dep = dependency(
   'mstore',
-  version: '>=0.1',
+  version: '>=0.3.0',
   fallback: ['mstore', 'mstore_dep'],
   required: not meson.is_subproject(),
   default_options: [

@@ -43,11 +43,11 @@ subroutine write_ascii_model(unit, mol, model)
 
    write(unit, '(a, ":")') "Charge model parameter"
    write(unit, '(54("-"))')
-   write(unit, '(a4,5x,*(1x,a10))') "Z", "chi/Eh", "kcn/Eh", "eta/Eh", "rad/AA"
+   write(unit, '(a4,5x,*(1x,a10))') "Z", "chi/Eh", "kcn_chi/Eh", "eta/Eh", "rad/AA"
    write(unit, '(54("-"))')
    do isp = 1, mol%nid
       write(unit, '(i4, 1x, a4, *(1x,f10.4))') &
-         & mol%num(isp), mol%sym(isp), model%chi(isp), model%kcn(isp), &
+         & mol%num(isp), mol%sym(isp), model%chi(isp), model%kcnchi(isp), &
          & model%eta(isp) + sqrt2pi/model%rad(isp), model%rad(isp) * autoaa
    end do
    write(unit, '(54("-"),/)')
@@ -81,7 +81,7 @@ subroutine write_ascii_properties(unit, mol, model, cn, qvec)
       isp = mol%id(iat)
       write(unit, '(i6,1x,i4,1x,a4,*(1x,f10.4))') &
          & iat, mol%num(isp), mol%sym(isp), cn(iat), qvec(iat), &
-         & model%chi(isp) - model%kcn(isp) * sqrt(cn(iat))
+         & model%chi(isp) - model%kcnchi(isp) * sqrt(cn(iat))
    end do
    write(unit, '(50("-"))')
    write(unit, '(a7,22x,f10.4)') &

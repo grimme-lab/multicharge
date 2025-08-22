@@ -5,7 +5,7 @@
 [![CI](https://github.com/grimme-lab/multicharge/workflows/CI/badge.svg)](https://github.com/grimme-lab/multicharge/actions)
 [![codecov](https://codecov.io/gh/grimme-lab/multicharge/branch/main/graph/badge.svg)](https://codecov.io/gh/grimme-lab/multicharge)
 
-Electronegativity equilibration model for atomic partial charges.
+Electronegativity equilibration models for atomic partial charges.
 
 
 ## Installation
@@ -134,6 +134,33 @@ multicharge.git = "https://github.com/grimme-lab/multicharge"
 ## Usage
 
 For an overview over all command line arguments use the ``--help`` argument or checkout the [``multicharge(1)``](man/multicharge.1.adoc) manpage.
+
+## Citation
+
+For the electronegativity equilibration model (EEQ): 
+
+Eike Caldeweyher, Sebastian Ehlert, Andreas Hansen, Hagen Neugebauer, Sebastian Spicher, Christoph Bannwarth and Stefan Grimme, *J. Chem Phys*, **2019**, 150, 154122.
+DOI: [10.1063/1.5090222](https://doi.org/10.1063/1.5090222)
+chemrxiv: [10.26434/chemrxiv.7430216](https://doi.org/10.26434/chemrxiv.7430216.v2)
+
+... the EEQ extention to Fr, Ra, and the full Actinide series: 
+
+Lukas Wittmann, Igor Gordiy, Marvin Friede, Benjamin Helmich-Paris, Stefan Grimme, Andreas Hansen and Markus Bursch, *Phys. Chem. Chem. Phys.*, **2024**, 26, 21379-21394.
+DOI: [10.1039/D4CP01514B](10.1039/D4CP01514B)
+
+... the periodic EEQ implementation: 
+
+Eike Caldeweyher, Jan-Michael Mewes, Sebastian Ehlert and Stefan Grimme, *Phys. Chem. Chem. Phys.*, **2020**, 22, 8499-8512.
+DOI: [10.1039/D0CP00502A](https://doi.org/10.1039/D0CP00502A)
+chemrxiv: [10.26434/chemrxiv.10299428](https://doi.org/10.26434/chemrxiv.10299428.v1)
+
+<br>
+
+For the bond capacity electronegativity equilibration charge model (EEQ<sub>BC</sub>): 
+
+Thomas Froitzheim, Marcel Müller, Andreas Hansen, and Stefan Grimme, *J. Chem. Phys.*, **2025**, 162, 214109.
+DOI: [10.1039/10.1063/5.0268978](https://doi.org/10.1063/5.0268978)
+chemrxiv: [10.26434/chemrxiv-2025-1nxwg](https://doi.org/10.26434/chemrxiv-2025-1nxwg)
 
 
 ## License
