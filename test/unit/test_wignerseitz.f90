@@ -14,24 +14,22 @@
 ! limitations under the License.
 
 module test_wignerseitz
-   use mctc_env, only : wp
-   use mctc_env_testing, only : new_unittest, unittest_type, error_type, check, &
+   use mctc_env, only: wp
+   use mctc_env_testing, only: new_unittest, unittest_type, error_type, check, &
       & test_failed
-   use mctc_io_structure, only : structure_type
-   use mctc_cutoff, only : get_lattice_points
-   use mstore, only : get_structure
+   use mctc_io_structure, only: structure_type
+   use mctc_cutoff, only: get_lattice_points
+   use mstore, only: get_structure
    use multicharge_wignerseitz
    implicit none
    private
 
    public :: collect_wignerseitz
 
-   real(wp), parameter :: thr = 100*epsilon(1.0_wp)
+   real(wp), parameter :: thr = 100 * epsilon(1.0_wp)
    real(wp), parameter :: thr2 = sqrt(epsilon(1.0_wp))
 
-
 contains
-
 
 !> Collect all exported unit tests
 subroutine collect_wignerseitz(testsuite)
@@ -46,8 +44,7 @@ subroutine collect_wignerseitz(testsuite)
       & new_unittest("wignerseitz-cell-3d", test_wsc_3d) &
       & ]
 
-end subroutine collect_wignerseitz
-
+endsubroutine collect_wignerseitz
 
 subroutine test_latticepoints_0d(error)
 
@@ -63,21 +60,20 @@ subroutine test_latticepoints_0d(error)
    call get_lattice_points(mol%periodic, mol%lattice, thr2, trans)
 
    call check(error, size(trans, 1), 3)
-   if (allocated(error)) return
+   if(allocated(error)) return
 
    call check(error, size(trans, 2), 1)
-   if (allocated(error)) return
+   if(allocated(error)) return
 
    call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
    call check(error, size(trans, 1), 3)
-   if (allocated(error)) return
+   if(allocated(error)) return
 
    call check(error, size(trans, 2), 1)
-   if (allocated(error)) return
+   if(allocated(error)) return
 
-end subroutine test_latticepoints_0d
-
+endsubroutine test_latticepoints_0d
 
 subroutine test_latticepoints_3d(error)
 
@@ -93,21 +89,20 @@ subroutine test_latticepoints_3d(error)
    call get_lattice_points(mol%periodic, mol%lattice, thr2, trans)
 
    call check(error, size(trans, 1), 3)
-   if (allocated(error)) return
+   if(allocated(error)) return
 
    call check(error, size(trans, 2), 27)
-   if (allocated(error)) return
+   if(allocated(error)) return
 
    call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
    call check(error, size(trans, 1), 3)
-   if (allocated(error)) return
+   if(allocated(error)) return
 
    call check(error, size(trans, 2), 343)
-   if (allocated(error)) return
+   if(allocated(error)) return
 
-end subroutine test_latticepoints_3d
-
+endsubroutine test_latticepoints_3d
 
 subroutine test_wsc_0d(error)
 
@@ -122,13 +117,12 @@ subroutine test_wsc_0d(error)
    call new_wignerseitz_cell(wsc, mol)
 
    call check(error, size(wsc%trans, 1), 3)
-   if (allocated(error)) return
+   if(allocated(error)) return
 
    call check(error, size(wsc%trans, 2), 1)
-   if (allocated(error)) return
+   if(allocated(error)) return
 
-end subroutine test_wsc_0d
-
+endsubroutine test_wsc_0d
 
 subroutine test_wsc_3d(error)
 
@@ -143,12 +137,11 @@ subroutine test_wsc_3d(error)
    call new_wignerseitz_cell(wsc, mol)
 
    call check(error, size(wsc%trans, 1), 3)
-   if (allocated(error)) return
+   if(allocated(error)) return
 
    call check(error, size(wsc%trans, 2), 27)
-   if (allocated(error)) return
+   if(allocated(error)) return
 
-end subroutine test_wsc_3d
+endsubroutine test_wsc_3d
 
-
-end module test_wignerseitz
+endmodule test_wignerseitz

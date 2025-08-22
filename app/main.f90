@@ -44,7 +44,7 @@ program main
 
    call get_arguments(input, model_id, input_format, grad, charge, json, error)
    if (allocated(error)) then
-      write (error_unit, '(a)') error%message
+      write(error_unit, '(a)') error%message
       error stop
    end if
 
@@ -55,7 +55,7 @@ program main
       call read_structure(mol, input, error, input_format)
    end if
    if (allocated(error)) then
-      write (error_unit, '(a)') error%message
+      write(error_unit, '(a)') error%message
       error stop
    end if
 
@@ -63,20 +63,20 @@ program main
       mol%charge = charge
    else
       chargeinput = ".CHRG"
-      inquire (file=chargeinput, exist=exist)
+      inquire(file=chargeinput, exist=exist)
       if (exist) then
-         open (file=chargeinput, newunit=unit)
-         allocate (charge)
-         read (unit, *, iostat=stat) charge
+         open(file=chargeinput, newunit=unit)
+         allocate(charge)
+         read(unit, *, iostat=stat) charge
          if (stat == 0) then
             mol%charge = charge
-            write (output_unit, '(a,/)') &
+            write(output_unit, '(a,/)') &
                "[Info] Molecular charge read from '"//chargeinput//"'"
          else
-            write (output_unit, '(a,/)') &
+            write(output_unit, '(a,/)') &
                "[Warn] Could not read molecular charge read from '"//chargeinput//"'"
          end if
-         close (unit)
+         close(unit)
       end if
    end if
 
@@ -87,28 +87,28 @@ program main
    else
       call fatal_error(error, "Invalid model was choosen.")
    end if
-   if(allocated(error)) then
+   if (allocated(error)) then
       write(error_unit, '(a)') error%message
       error stop
    end if
 
    call write_ascii_model(output_unit, mol, model)
 
-   allocate (energy(mol%nat), qvec(mol%nat))
+   allocate(energy(mol%nat), qvec(mol%nat))
    energy(:) = 0.0_wp
 
-   allocate (cn(mol%nat), qloc(mol%nat))
+   allocate(cn(mol%nat), qloc(mol%nat))
    if (grad) then
-      allocate (gradient(3, mol%nat), sigma(3, 3))
+      allocate(gradient(3, mol%nat), sigma(3, 3))
       gradient(:, :) = 0.0_wp
       sigma(:, :) = 0.0_wp
 
-      allocate (dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat))
+      allocate(dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat))
       dqdr(:, :, :) = 0.0_wp
       dqdL(:, :, :) = 0.0_wp
 
-      allocate (dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat))
-      allocate (dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat))
+      allocate(dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat))
+      allocate(dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat))
    end if
 
    call get_lattice_points(mol%periodic, mol%lattice, model%ncoord%cutoff, trans)
@@ -126,10 +126,10 @@ program main
    call write_ascii_results(output_unit, mol, energy, gradient, sigma)
 
    if (json) then
-      open (file=json_output, newunit=unit)
+      open(file=json_output, newunit=unit)
       call json_results(unit, "  ", energy=sum(energy), gradient=gradient, charges=qvec, cn=cn)
-      close (unit)
-      write (output_unit, '(a)') &
+      close(unit)
+      write(output_unit, '(a)') &
          "[Info] JSON dump of results written to '"//json_output//"'"
    end if
 
@@ -138,17 +138,17 @@ contains
 subroutine help(unit)
    integer, intent(in) :: unit
 
-   write (unit, '(a, *(1x, a))') &
+   write(unit, '(a, *(1x, a))') &
       "Usage: "//prog_name//" [options] <input>"
 
-   write (unit, '(a)') &
+   write(unit, '(a)') &
       "", &
       "Electronegativity equilibration model for atomic charges and", &
       "higher multipole moments", &
       ""
 
-   write (unit, '(2x, a, t35, a)') &
-      "-m, -model, --model <model>", "Choose the charge model (eeq or eeqbc)", &
+   write(unit, '(2x, a, t35, a)') &
+      "-m, -model, --model <model>", "Choose the charge model", &
       "-i, -input, --input <format>", "Hint for the format of the input file", &
       "-c, -charge, --charge <value>", "Set the molecular charge", &
       "-g, -grad, --grad", "Evaluate molecular gradient and virial", &
@@ -156,7 +156,7 @@ subroutine help(unit)
       "-v, -version, --version", "Print program version and exit", &
       "-h, -help, --help", "Show this help message"
 
-   write (unit, '(a)')
+   write(unit, '(a)')
 
 end subroutine help
 
@@ -165,7 +165,7 @@ subroutine version(unit)
    character(len=:), allocatable :: version_string
 
    call get_multicharge_version(string=version_string)
-   write (unit, '(a, *(1x, a))') &
+   write(unit, '(a, *(1x, a))') &
       & prog_name, "version", version_string
 
 end subroutine version
@@ -205,11 +205,11 @@ subroutine get_arguments(input, model_id, input_format, grad, charge, &
    do while (iarg < narg)
       iarg = iarg + 1
       call get_argument(iarg, arg)
-      select case (arg)
-      case ("-h", "-help", "--help")
+      select case(arg)
+      case("-h", "-help", "--help")
          call help(output_unit)
          stop
-      case ("-v", "-version", "--version")
+      case("-v", "-version", "--version")
          call version(output_unit)
          stop
       case default
@@ -219,7 +219,7 @@ subroutine get_arguments(input, model_id, input_format, grad, charge, &
          end if
          call fatal_error(error, "Too many positional arguments present")
          exit
-      case ("-m", "-model", "--model")
+      case("-m", "-model", "--model")
          iarg = iarg + 1
          call get_argument(iarg, arg)
          if (.not. allocated(arg)) then
@@ -234,7 +234,7 @@ subroutine get_arguments(input, model_id, input_format, grad, charge, &
             call fatal_error(error, "Invalid model")
             exit
          end if
-      case ("-i", "-input", "--input")
+      case("-i", "-input", "--input")
          iarg = iarg + 1
          call get_argument(iarg, arg)
          if (.not. allocated(arg)) then
@@ -242,22 +242,22 @@ subroutine get_arguments(input, model_id, input_format, grad, charge, &
             exit
          end if
          input_format = get_filetype("."//arg)
-      case ("-c", "-charge", "--charge")
+      case("-c", "-charge", "--charge")
          iarg = iarg + 1
          call get_argument(iarg, arg)
          if (.not. allocated(arg)) then
             call fatal_error(error, "Missing argument for charge")
             exit
          end if
-         allocate (charge)
-         read (arg, *, iostat=iostat) charge
+         allocate(charge)
+         read(arg, *, iostat=iostat) charge
          if (iostat /= 0) then
             call fatal_error(error, "Invalid charge value")
             exit
          end if
-      case ("-g", "-grad", "--grad")
+      case("-g", "-grad", "--grad")
          grad = .true.
-      case ("-j", "-json", "--json")
+      case("-j", "-json", "--json")
          json = .true.
       end select
    end do

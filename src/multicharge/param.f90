@@ -64,7 +64,7 @@ subroutine new_eeq2019_model(mol, model, error)
    rad = get_eeq_rad(mol%num)
    rcov = get_covalent_rad(mol%num)
 
-   allocate (eeq)
+   allocate(eeq)
    call new_eeq_model(eeq, mol=mol, error=error, chi=chi, &
       & rad=rad, eta=eta, kcnchi=kcnchi, cutoff=cutoff, &
       & cn_exp=cn_exp, rcov=rcov, cn_max=cn_max)
@@ -110,11 +110,11 @@ subroutine new_eeqbc2025_model(mol, model, error)
       &.or. mol%num == 92 .or. mol%num == 95)
    en = merge(1.20_wp, en, mol%num == 93 .or. mol%num == 94 &
       &.or. mol%num == 97 .or. mol%num == 103)
-   en = en/3.98_wp
+   en = en / 3.98_wp
    rvdw = get_vdw_rad(spread(mol%num(mol%id), 2, mol%nat), &
-      & spread(mol%num(mol%id), 1, mol%nat))*autoaa
+      & spread(mol%num(mol%id), 1, mol%nat)) * autoaa
 
-   allocate (eeqbc)
+   allocate(eeqbc)
    call new_eeqbc_model(eeqbc, mol=mol, error=error, chi=chi, &
       & rad=rad, eta=eta, kcnchi=kcnchi, kqchi=kqchi, kqeta=kqeta, &
       & kcnrad=kcnrad, cap=cap, avg_cn=avg_cn, kbc=kbc, &

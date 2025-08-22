@@ -29,7 +29,7 @@ module test_pbc
 
    public :: collect_pbc
 
-   real(wp), parameter :: thr = 1000*epsilon(1.0_wp)
+   real(wp), parameter :: thr = 1000 * epsilon(1.0_wp)
    real(wp), parameter :: thr2 = sqrt(epsilon(1.0_wp))
 
 contains
@@ -87,17 +87,17 @@ subroutine gen_test(error, mol, model, qref, eref)
 
    call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
-   allocate (cn(mol%nat), qloc(mol%nat))
+   allocate(cn(mol%nat), qloc(mol%nat))
 
    call model%ncoord%get_coordination_number(mol, trans, cn)
    call model%local_charge(mol, trans, qloc)
 
    if (present(eref)) then
-      allocate (energy(mol%nat))
+      allocate(energy(mol%nat))
       energy(:) = 0.0_wp
    end if
    if (present(qref)) then
-      allocate (qvec(mol%nat))
+      allocate(qvec(mol%nat))
    end if
 
    call model%solve(mol, error, cn, qloc, energy=energy, qvec=qvec)
@@ -152,7 +152,7 @@ subroutine test_numgrad(error, mol, model)
 
    call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
-   allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
+   allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
       & energy(mol%nat), gradient(3, mol%nat), sigma(3, 3), numgrad(3, mol%nat))
    energy(:) = 0.0_wp
@@ -172,7 +172,7 @@ subroutine test_numgrad(error, mol, model)
 
          energy(:) = 0.0_wp
          el = 0.0_wp
-         mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
+         mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2 * step
          call model%ncoord%get_coordination_number(mol, trans, cn)
          call model%local_charge(mol, trans, qloc)
          call model%solve(mol, error, cn, qloc, energy=energy)
@@ -180,7 +180,7 @@ subroutine test_numgrad(error, mol, model)
          el = sum(energy)
 
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
-         numgrad(ic, iat) = 0.5_wp*(er - el)/step
+         numgrad(ic, iat) = 0.5_wp * (er - el) / step
       end do
    end do lp
    if (allocated(error)) return
@@ -228,7 +228,7 @@ subroutine test_numsigma(error, mol, model)
 
    call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
-   allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
+   allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
       & energy(mol%nat), gradient(3, mol%nat), xyz(3, mol%nat))
    energy(:) = 0.0_wp
@@ -253,7 +253,7 @@ subroutine test_numsigma(error, mol, model)
          er = sum(energy)
 
          energy(:) = 0.0_wp
-         eps(jc, ic) = eps(jc, ic) - 2*step
+         eps(jc, ic) = eps(jc, ic) - 2 * step
          mol%xyz(:, :) = matmul(eps, xyz)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
@@ -267,7 +267,7 @@ subroutine test_numsigma(error, mol, model)
          mol%xyz(:, :) = xyz
          mol%lattice(:, :) = lattice
          lattr(:, :) = trans
-         numsigma(jc, ic) = 0.5_wp*(er - el)/step
+         numsigma(jc, ic) = 0.5_wp * (er - el) / step
       end do
    end do lp
    if (allocated(error)) return
@@ -311,11 +311,11 @@ subroutine test_dbdr(error, mol, model)
    real(wp), allocatable :: dbdr(:, :, :), dbdL(:, :, :)
    real(wp), allocatable :: numgrad(:, :, :), xvecr(:), xvecl(:)
    type(cache_container), allocatable :: cache
-   allocate (cache)
+   allocate(cache)
 
    call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
-   allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
+   allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
       & xvecr(mol%nat + 1), xvecl(mol%nat + 1), numgrad(3, mol%nat, mol%nat + 1), &
       & dbdr(3, mol%nat, mol%nat + 1), dbdL(3, 3, mol%nat + 1))
@@ -334,14 +334,14 @@ subroutine test_dbdr(error, mol, model)
 
          ! Left-hand side
          xvecl(:) = 0.0_wp
-         mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
+         mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2 * step
          call model%ncoord%get_coordination_number(mol, trans, cn)
          call model%local_charge(mol, trans, qloc)
          call model%update(mol, cache, cn, qloc)
          call model%get_xvec(mol, cache, xvecl)
 
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
-         numgrad(ic, iat, :) = 0.5_wp*(xvecr(:) - xvecl(:))/step
+         numgrad(ic, iat, :) = 0.5_wp * (xvecr(:) - xvecl(:)) / step
       end do
    end do lp
 
@@ -387,9 +387,9 @@ subroutine test_dbdL(error, mol, model)
    real(wp) :: lattice(3, 3)
    real(wp) :: eps(3, 3)
    type(cache_container), allocatable :: cache
-   allocate (cache)
+   allocate(cache)
 
-   allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
+   allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
       & xvecr(mol%nat + 1), xvecl(mol%nat + 1), numsigma(3, 3, mol%nat + 1), &
       & dbdr(3, mol%nat, mol%nat + 1), dbdL(3, 3, mol%nat + 1), xyz(3, mol%nat))
@@ -417,7 +417,7 @@ subroutine test_dbdL(error, mol, model)
 
          ! Left-hand side
          xvecl(:) = 0.0_wp
-         eps(jc, ic) = eps(jc, ic) - 2*step
+         eps(jc, ic) = eps(jc, ic) - 2 * step
          mol%xyz(:, :) = matmul(eps, xyz)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
@@ -431,7 +431,7 @@ subroutine test_dbdL(error, mol, model)
          mol%lattice(:, :) = lattice
          lattr(:, :) = trans
          do iat = 1, mol%nat
-            numsigma(jc, ic, iat) = 0.5_wp*(xvecr(iat) - xvecl(iat))/step
+            numsigma(jc, ic, iat) = 0.5_wp * (xvecr(iat) - xvecl(iat)) / step
          end do
       end do
    end do lp
@@ -477,18 +477,17 @@ subroutine test_dadr(error, mol, model)
    real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
    real(wp), allocatable :: qvec(:), numgrad(:, :, :), amatr(:, :), amatl(:, :), numtrace(:, :)
    type(cache_container), allocatable :: cache
-   allocate (cache)
+   allocate(cache)
 
-   allocate (cn(mol%nat), qloc(mol%nat), amatr(mol%nat + 1, mol%nat + 1), &
-      & amatl(mol%nat + 1, mol%nat + 1), dcndr(3, mol%nat, mol%nat), &
-      & dcndL(3, 3, mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
-      & dadr(3, mol%nat, mol%nat + 1), dadL(3, 3, mol%nat + 1), atrace(3, mol%nat), &
-      & numtrace(3, mol%nat), numgrad(3, mol%nat, mol%nat + 1), qvec(mol%nat))
+   allocate(cn(mol%nat), qloc(mol%nat), amatr(mol%nat + 1, mol%nat + 1), amatl(mol%nat + 1, mol%nat + 1), &
+      & dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), dqlocdr(3, mol%nat, mol%nat), &
+      & dqlocdL(3, 3, mol%nat), dadr(3, mol%nat, mol%nat + 1), dadL(3, 3, mol%nat + 1), &
+      & atrace(3, mol%nat), numtrace(3, mol%nat), numgrad(3, mol%nat, mol%nat + 1), qvec(mol%nat))
 
    ! Set tolerance higher if testing eeqbc model
-   select type (model)
-   type is (eeqbc_model)
-      thr2_local = 3.0_wp*thr2
+   select type(model)
+   type is(eeqbc_model)
+      thr2_local = 3.0_wp * thr2
    class default
       thr2_local = thr2
    end select
@@ -515,7 +514,7 @@ subroutine test_dadr(error, mol, model)
 
          ! Left-hand side
          amatl(:, :) = 0.0_wp
-         mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
+         mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2 * step
          call model%ncoord%get_coordination_number(mol, trans, cn)
          call model%local_charge(mol, trans, qloc)
          call model%update(mol, cache, cn, qloc)
@@ -526,8 +525,8 @@ subroutine test_dadr(error, mol, model)
          do kat = 1, mol%nat
             do jat = 1, mol%nat
                ! Numerical gradient of the A matrix
-               numgrad(ic, iat, kat) = numgrad(ic, iat, kat) + &
-                  & 0.5_wp*qvec(jat)*(amatr(kat, jat) - amatl(kat, jat))/step 
+               numgrad(ic, iat, kat) = 0.5_wp * qvec(jat) * (amatr(kat, jat) - amatl(kat, jat)) / step &
+                  & + numgrad(ic, iat, kat)
             end do
          end do
       end do
@@ -580,9 +579,9 @@ subroutine test_dadL(error, mol, model)
    real(wp) :: lattice(3, 3)
    real(wp) :: eps(3, 3)
    type(cache_container), allocatable :: cache
-   allocate (cache)
+   allocate(cache)
 
-   allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
+   allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
       & amatr(mol%nat + 1, mol%nat + 1), amatl(mol%nat + 1, mol%nat + 1), &
       & dadr(3, mol%nat, mol%nat + 1), dadL(3, 3, mol%nat + 1), atrace(3, mol%nat), &
@@ -615,7 +614,7 @@ subroutine test_dadL(error, mol, model)
          if (allocated(error)) exit lp
 
          amatl(:, :) = 0.0_wp
-         eps(jc, ic) = eps(jc, ic) - 2*step
+         eps(jc, ic) = eps(jc, ic) - 2 * step
          mol%xyz(:, :) = matmul(eps, xyz)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
@@ -631,8 +630,7 @@ subroutine test_dadL(error, mol, model)
          lattr(:, :) = trans
          do iat = 1, mol%nat
             ! Numerical sigma of the a matrix
-            numsigma(jc, ic, :) = numsigma(jc, ic, :) + &
-               & 0.5_wp*qvec(iat)*(amatr(iat, :) - amatl(iat, :))/step 
+            numsigma(jc, ic, :) = 0.5_wp * qvec(iat) * (amatr(iat, :) - amatl(iat, :)) / step + numsigma(jc, ic, :)
          end do
       end do
    end do lp
@@ -678,7 +676,7 @@ subroutine test_numdqdr(error, mol, model)
 
    call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
-   allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
+   allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
       & ql(mol%nat), qr(mol%nat), dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat), &
       & numdr(3, mol%nat, mol%nat))
@@ -693,14 +691,14 @@ subroutine test_numdqdr(error, mol, model)
          if (allocated(error)) exit lp
 
          ql = 0.0_wp
-         mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
+         mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2 * step
          call model%ncoord%get_coordination_number(mol, trans, cn)
          call model%local_charge(mol, trans, qloc)
          call model%solve(mol, error, cn, qloc, qvec=ql)
          if (allocated(error)) exit lp
 
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
-         numdr(ic, iat, :) = 0.5_wp*(qr - ql)/step
+         numdr(ic, iat, :) = 0.5_wp * (qr - ql) / step
       end do
    end do lp
    if (allocated(error)) return
@@ -746,7 +744,7 @@ subroutine test_numdqdL(error, mol, model)
 
    call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
-   allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
+   allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
       & qr(mol%nat), ql(mol%nat), dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat), &
       & xyz(3, mol%nat), numdL(3, 3, mol%nat))
@@ -768,7 +766,7 @@ subroutine test_numdqdL(error, mol, model)
          call model%solve(mol, error, cn, qloc, qvec=qr)
          if (allocated(error)) exit lp
 
-         eps(jc, ic) = eps(jc, ic) - 2*step
+         eps(jc, ic) = eps(jc, ic) - 2 * step
          mol%xyz(:, :) = matmul(eps, xyz)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
@@ -781,7 +779,7 @@ subroutine test_numdqdL(error, mol, model)
          mol%xyz(:, :) = xyz
          mol%lattice(:, :) = lattice
          lattr(:, :) = trans
-         numdL(jc, ic, :) = 0.5_wp*(qr - ql)/step
+         numdL(jc, ic, :) = 0.5_wp * (qr - ql) / step
       end do
    end do lp
    if (allocated(error)) return

@@ -125,7 +125,7 @@ module multicharge_model_type
       end subroutine get_xvec_derivs
    end interface
 
-   real(wp), parameter :: twopi = 2*pi
+   real(wp), parameter :: twopi = 2 * pi
    real(wp), parameter :: eps = sqrt(epsilon(0.0_wp))
 
 contains
@@ -145,7 +145,7 @@ subroutine get_rec_trans(lattice, trans)
    integer, parameter :: rep(3) = 2
    real(wp) :: rec_lat(3, 3)
 
-   rec_lat = twopi*transpose(matinv_3x3(lattice))
+   rec_lat = twopi * transpose(matinv_3x3(lattice))
    call get_lattice_points(rec_lat, rep, .false., trans)
 
 end subroutine get_rec_trans
@@ -203,7 +203,7 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
    cpq = present(dqdr) .and. present(dqdL) .and. dcn
 
    ! Update cache
-   allocate (cache)
+   allocate(cache)
    call self%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
 
    ! Get lattice points
@@ -213,18 +213,18 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
 
    ! Setup the Coulomb matrix
    ndim = mol%nat + 1
-   allocate (amat(ndim, ndim))
+   allocate(amat(ndim, ndim))
    call self%get_coulomb_matrix(mol, cache, amat)
 
    ! Get RHS of ES equation
-   allocate (xvec(ndim))
+   allocate(xvec(ndim))
    call self%get_xvec(mol, cache, xvec)
 
    vrhs = xvec
    ainv = amat
 
    ! Factorize the Coulomb matrix
-   allocate (ipiv(ndim))
+   allocate(ipiv(ndim))
    call sytrf(ainv, ipiv, info=info, uplo='l')
    if (info /= 0) then
       call fatal_error(error, "Bunch-Kaufman factorization failed.")
@@ -261,17 +261,17 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
 
    if (present(energy)) then
       ! Extract only the Coulomb matrix without the constraints
-      allocate (jmat(mol%nat, mol%nat))
+      allocate(jmat(mol%nat, mol%nat))
       jmat = amat(:mol%nat, :mol%nat)
       call symv(jmat, vrhs(:mol%nat), xvec(:mol%nat), &
          & alpha=0.5_wp, beta=-1.0_wp, uplo='l')
-      energy(:) = energy(:) + vrhs(:mol%nat)*xvec(:mol%nat)
+      energy(:) = energy(:) + vrhs(:mol%nat) * xvec(:mol%nat)
    end if
 
    ! Allocate and get amat derivatives
    if (grad .or. cpq) then
-      allocate (dadr(3, mol%nat, ndim), dadL(3, 3, ndim), atrace(3, mol%nat))
-      allocate (dxdr(3, mol%nat, ndim), dxdL(3, 3, ndim))
+      allocate(dadr(3, mol%nat, ndim), dadL(3, 3, ndim), atrace(3, mol%nat))
+      allocate(dxdr(3, mol%nat, ndim), dxdL(3, 3, ndim))
       call self%get_xvec_derivs(mol, cache, dxdr, dxdL)
       call self%get_coulomb_derivs(mol, cache, vrhs, dadr, dadL, atrace)
       do iat = 1, mol%nat
@@ -324,7 +324,7 @@ subroutine local_charge(self, mol, trans, qloc, dqlocdr, dqlocdL)
    end if
 
    ! Distribute the total charge equally
-   qloc = qloc + mol%charge/real(mol%nat, wp)
+   qloc = qloc + mol%charge / real(mol%nat, wp)
 
 end subroutine local_charge
 

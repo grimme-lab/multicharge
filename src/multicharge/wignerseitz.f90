@@ -52,7 +52,7 @@ subroutine new_wignerseitz_cell(self, mol)
 
    call get_lattice_points(mol%periodic, mol%lattice, thr, trans)
    ntr = size(trans, 2)
-   allocate (self%nimg(mol%nat, mol%nat), self%tridx(ntr, mol%nat, mol%nat), &
+   allocate(self%nimg(mol%nat, mol%nat), self%tridx(ntr, mol%nat, mol%nat), &
       & tridx(ntr))
 
    self%nimg_max = 0
