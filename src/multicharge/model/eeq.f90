@@ -548,7 +548,7 @@ subroutine get_damat_rec_3d(rij, vol, alp, trans, dg, ds)
    integer :: itr
    real(wp) :: fac, vec(3), g2, gv, etmp, dtmp, alp2
    real(wp), parameter :: unity(3, 3) = reshape(&
-      & [1, 0, 0, 0, 1, 0, 0, 0, 1], shape(unity))
+      & [1, 0, 0, 0, 1, 0, 0, 0, 1], [3, 3])
 
    dg(:) = 0.0_wp
    ds(:, :) = 0.0_wp

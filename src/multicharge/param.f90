@@ -117,9 +117,9 @@ subroutine new_eeqbc2025_model(mol, model, error)
    allocate(eeqbc)
    call new_eeqbc_model(eeqbc, mol=mol, error=error, chi=chi, &
       & rad=rad, eta=eta, kcnchi=kcnchi, kqchi=kqchi, kqeta=kqeta, &
-      & kcnrad=kcnrad, cap=cap, avg_cn=avg_cn, kbc=kbc, &
+      & kcnrad=kcnrad, cap=cap, avg_cn=avg_cn, rvdw=rvdw, kbc=kbc, &
       & cutoff=cutoff, cn_exp=cn_exp, rcov=rcov, en=en, &
-      & norm_exp=norm_exp, rvdw=rvdw)
+      & norm_exp=norm_exp)
    call move_alloc(eeqbc, model)
 
 end subroutine new_eeqbc2025_model
