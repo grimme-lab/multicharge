@@ -1,6 +1,24 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - "doc*/**"
+      - "./*.ya?ml"
+      - "**/*.md"
+      - "**/*.rst"
+
+  pull_request:
+    paths-ignore:
+      - "doc*/**"
+      - "./*.ya?ml"
+      - "**/*.md"
+      - "**/*.rst"
+
+  workflow_dispatch:
 
 env:
   BUILD_DIR: _build
