@@ -25,6 +25,7 @@ fc_id = fc.get_id()
 if fc_id == 'intel-llvm'
   fc_id = 'intel'
 endif
+
 if fc_id == 'gcc'
   add_project_arguments(
     '-ffree-line-length-none',
@@ -134,7 +135,6 @@ elif lapack_vendor == 'custom'
 
   lib_deps += custom_deps
 
-
 else
   lapack_dep = dependency(ilp64 ? 'lapack64' : 'lapack', required: false)
   if not lapack_dep.found()
@@ -153,7 +153,7 @@ mctc_dep = dependency('mctc-lib', required: false)
 if not mctc_dep.found()
   mctc_prj = subproject(
     'mctc-lib',
-    version: '>=0.4.1',
+    version: '>=0.5.0',
     default_options: [
       'default_library=static',
     ],
