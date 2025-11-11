@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if ((BLA_VENDOR MATCHES ^Intel) OR (DEFINED ENV{MKLROOT}))
+if ((MULTICHARGE_BLAS MATCHES ^Intel) OR (DEFINED ENV{MKLROOT}))
   enable_language("C")
 endif()
 
@@ -22,11 +22,13 @@ if(WITH_ILP64)
   set(_nvpl_int "_ilp64")
 else()
   set(_nvpl_int "_lp64")
+  set(BLA_SIZEOF_INTEGER 4)
 endif()
 
-if(NOT LAPACK_FOUND)
-  if(BLA_VENDOR STREQUAL "NVPL")
-    find_package("nvpl_lapack" REQUIRED)
+if(NOT MULTICHARGE_BLAS_FOUND)
+  if(MULTICHARGE_BLAS STREQUAL "NVPL")
+    find_package("nvpl_blas" REQUIRED)
+    set(MULTICHARGE_BLAS_FOUND TRUE)
 
     if((BLA_THREAD STREQUAL "OMP") OR (BLA_THREAD STREQUAL "ANY"))
       set(_nvpl_thread "_omp")
@@ -34,18 +36,18 @@ if(NOT LAPACK_FOUND)
       set(_nvpl_thread "_seq")
     endif()
 
-    add_library("LAPACK::LAPACK" INTERFACE IMPORTED)
-    target_link_libraries("LAPACK::LAPACK" INTERFACE "nvpl::lapack${_nvpl_int}${_nvpl_thread}")
+    add_library("multicharge::BLAS" INTERFACE IMPORTED GLOBAL)
+    target_link_libraries("multicharge::BLAS" INTERFACE "nvpl::blas${_nvpl_int}${_nvpl_thread}")
   else()
-    find_package("LAPACK" REQUIRED)
-  endif()
-
-  if(NOT TARGET "BLAS::BLAS")
-    find_package("custom-blas" REQUIRED)
-  endif()
-
-  if(NOT TARGET "LAPACK::LAPACK")
-    add_library("LAPACK::LAPACK" INTERFACE IMPORTED)
-    target_link_libraries("LAPACK::LAPACK" INTERFACE "${LAPACK_LIBRARIES}" "BLAS::BLAS")
+    find_package("BLAS" REQUIRED)
+    set(MULTICHARGE_BLAS_FOUND ${BLAS_FOUND})
+  
+    if(NOT TARGET "multicharge::BLAS")
+      add_library("multicharge::BLAS" INTERFACE IMPORTED GLOBAL)
+      target_link_libraries("multicharge::BLAS" INTERFACE "BLAS::BLAS")
+    endif()
   endif()
 endif()
+
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(multicharge-blas DEFAULT_MSG MULTICHARGE_BLAS_FOUND)
