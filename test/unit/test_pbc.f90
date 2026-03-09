@@ -467,7 +467,6 @@ subroutine test_dadr(error, mol, model)
    type(error_type), allocatable, intent(out) :: error
 
    integer :: iat, ic, jat, kat
-   real(wp) :: thr2_local
    real(wp), parameter :: cutoff = 25.0_wp
    real(wp), parameter :: step = 1.0e-6_wp
    real(wp), allocatable :: cn(:)
@@ -483,14 +482,6 @@ subroutine test_dadr(error, mol, model)
       & dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), dqlocdr(3, mol%nat, mol%nat), &
       & dqlocdL(3, 3, mol%nat), dadr(3, mol%nat, mol%nat + 1), dadL(3, 3, mol%nat + 1), &
       & atrace(3, mol%nat), numtrace(3, mol%nat), numgrad(3, mol%nat, mol%nat + 1), qvec(mol%nat))
-
-   ! Set tolerance higher if testing eeqbc model
-   select type(model)
-   type is(eeqbc_model)
-      thr2_local = 3.0_wp * thr2
-   class default
-      thr2_local = thr2
-   end select
 
    call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
 
@@ -543,8 +534,7 @@ subroutine test_dadr(error, mol, model)
       dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
    end do
 
-   ! higher tolerance for numerical gradient
-   if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2_local)) then
+   if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2)) then
       call test_failed(error, "Derivative of the A matrix does not match")
       print'(a)', "dadr:"
       print'(3es21.14)', dadr

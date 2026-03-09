@@ -671,7 +671,7 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
    real(wp), intent(out) :: dadL(:, :, :)
    real(wp), intent(out) :: atrace(:, :)
 
-   integer :: iat, jat, izp, jzp
+   integer :: iat, jat, izp, jzp, kat
    real(wp) :: vec(3), r2, gam, arg, dtmp, norm_cn
    real(wp) :: radi, radj, dradi, dradj, dG(3), dS(3, 3), dgamdL(3, 3)
    real(wp), allocatable :: dgamdr(:, :)
@@ -689,7 +689,7 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
    !$omp parallel default(none) &
    !$omp shared(atrace, dadr, dadL, mol, self, cn, qloc, qvec) &
    !$omp shared(cmat, dcdr, dcdL, dcndr, dcndL, dqlocdr, dqlocdL) &
-   !$omp private(iat, izp, jat, jzp, gam, vec, r2, dtmp, norm_cn, arg) &
+   !$omp private(iat, izp, jat, jzp, kat, gam, vec, r2, dtmp, norm_cn, arg) &
    !$omp private(radi, radj, dradi, dradj, dgamdr, dgamdL, dG, dS) &
    !$omp private(atrace_local, dadr_local, dadL_local)
    allocate(atrace_local, source=atrace)
@@ -733,10 +733,16 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
 
          ! Effective charge width derivative
          dtmp = 2.0_wp * exp(-arg) / (sqrtpi)
-         atrace_local(:, iat) = -dtmp * qvec(jat) * dgamdr(:, jat) * cmat(jat, iat) + atrace_local(:, iat)
-         atrace_local(:, jat) = -dtmp * qvec(iat) * dgamdr(:, iat) * cmat(iat, jat) + atrace_local(:, jat)
-         dadr_local(:, iat, jat) = +dtmp * qvec(iat) * dgamdr(:, iat) * cmat(iat, jat) + dadr_local(:, iat, jat)
-         dadr_local(:, jat, iat) = +dtmp * qvec(jat) * dgamdr(:, jat) * cmat(jat, iat) + dadr_local(:, jat, iat)
+         atrace_local(:, iat) = +dtmp * qvec(jat) * dgamdr(:, iat) * cmat(jat, iat) + atrace_local(:, iat)
+         atrace_local(:, jat) = +dtmp * qvec(iat) * dgamdr(:, jat) * cmat(iat, jat) + atrace_local(:, jat)
+         do kat = 1, mol%nat
+            if (kat /= iat) then
+               dadr_local(:, kat, iat) = +dtmp * qvec(jat) * dgamdr(:, kat) * cmat(jat, iat) + dadr_local(:, kat, iat)
+            end if
+            if (kat /= jat) then
+               dadr_local(:, kat, jat) = +dtmp * qvec(iat) * dgamdr(:, kat) * cmat(iat, jat) + dadr_local(:, kat, jat)
+            end if
+         end do
          dadL_local(:, :, iat) = +dtmp * qvec(jat) * dgamdL(:, :) * cmat(jat, iat) + dadL_local(:, :, iat)
          dadL_local(:, :, jat) = +dtmp * qvec(iat) * dgamdL(:, :) * cmat(iat, jat) + dadL_local(:, :, jat)
 
@@ -805,11 +811,11 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
    real(wp), intent(out) :: dadL(:, :, :)
    real(wp), intent(out) :: atrace(:, :)
 
-   integer :: iat, jat, izp, jzp, img
-   real(wp) :: vec(3), r2, gam, arg, dtmp, norm_cn, rvdw, wsw, dgam
-   real(wp) :: radi, radj, dradi, dradj, dG(3), dS(3, 3)
-   real(wp) :: dgamdL(3, 3), capi, capj
-   real(wp), allocatable :: dgamdr(:, :), dtrans(:, :)
+    integer :: iat, jat, izp, jzp, img, kat
+    real(wp) :: vec(3), r2, gam, arg, dtmp, norm_cn, rvdw, wsw, dgam
+    real(wp) :: radi, radj, dradi, dradj, dG(3), dS(3, 3)
+    real(wp) :: dgamdL(3, 3), capi, capj
+    real(wp), allocatable :: dgamdr(:, :), dtrans(:, :)
 
    ! Thread-private arrays for reduction
    real(wp), allocatable :: atrace_local(:, :)
@@ -826,7 +832,7 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
    !$omp parallel default(none) &
    !$omp shared(self, mol, cn, qloc, qvec, wsc, dadr, dadL, atrace) &
    !$omp shared (cmat, dcdr, dcdL, dcndr, dcndL, dqlocdr, dqlocdL, dtrans) &
-   !$omp private(iat, izp, jat, jzp, img, gam, vec, r2, dtmp, norm_cn, arg, rvdw) &
+   !$omp private(iat, izp, jat, jzp, kat, img, gam, vec, r2, dtmp, norm_cn, arg, rvdw) &
    !$omp private(radi, radj, dradi, dradj, capi, capj, dgamdr, dgamdL, dG, dS, wsw) &
    !$omp private(dgam, dadr_local, dadL_local, atrace_local)
    allocate(atrace_local, source=atrace)
@@ -875,10 +881,16 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
             dadL_local(:, :, iat) = +dS * qvec(jat) + dadL_local(:, :, iat)
 
             ! Effective charge width derivative
-            atrace_local(:, iat) = +dgam * qvec(jat) * dgamdr(:, jat) + atrace_local(:, iat)
-            atrace_local(:, jat) = +dgam * qvec(iat) * dgamdr(:, iat) + atrace_local(:, jat)
-            dadr_local(:, iat, jat) = -dgam * qvec(iat) * dgamdr(:, iat) + dadr_local(:, iat, jat)
-            dadr_local(:, jat, iat) = -dgam * qvec(jat) * dgamdr(:, jat) + dadr_local(:, jat, iat)
+            atrace_local(:, iat) = -dgam * qvec(jat) * dgamdr(:, iat) + atrace_local(:, iat)
+            atrace_local(:, jat) = -dgam * qvec(iat) * dgamdr(:, jat) + atrace_local(:, jat)
+            do kat = 1, mol%nat
+               if (kat /= iat) then
+                  dadr_local(:, kat, iat) = -dgam * qvec(jat) * dgamdr(:, kat) + dadr_local(:, kat, iat)
+               end if
+               if (kat /= jat) then
+                  dadr_local(:, kat, jat) = -dgam * qvec(iat) * dgamdr(:, kat) + dadr_local(:, kat, jat)
+               end if
+            end do
             dadL_local(:, :, iat) = -dgam * qvec(jat) * dgamdL(:, :) + dadL_local(:, :, iat)
             dadL_local(:, :, jat) = -dgam * qvec(iat) * dgamdL(:, :) + dadL_local(:, :, jat)
 
