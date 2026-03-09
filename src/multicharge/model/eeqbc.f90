@@ -735,14 +735,10 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
          dtmp = 2.0_wp * exp(-arg) / (sqrtpi)
          atrace_local(:, iat) = +dtmp * qvec(jat) * dgamdr(:, iat) * cmat(jat, iat) + atrace_local(:, iat)
          atrace_local(:, jat) = +dtmp * qvec(iat) * dgamdr(:, jat) * cmat(iat, jat) + atrace_local(:, jat)
-         do kat = 1, mol%nat
-            if (kat /= iat) then
-               dadr_local(:, kat, iat) = +dtmp * qvec(jat) * dgamdr(:, kat) * cmat(jat, iat) + dadr_local(:, kat, iat)
-            end if
-            if (kat /= jat) then
-               dadr_local(:, kat, jat) = +dtmp * qvec(iat) * dgamdr(:, kat) * cmat(iat, jat) + dadr_local(:, kat, jat)
-            end if
-         end do
+         dadr_local(:, :, iat) = +dtmp * qvec(jat) * dgamdr(:, :) * cmat(jat, iat) + dadr_local(:, :, iat)
+         dadr_local(:, iat, iat) = -dtmp * qvec(jat) * dgamdr(:, iat) * cmat(jat, iat) + dadr_local(:, iat, iat)
+         dadr_local(:, :, jat) = +dtmp * qvec(iat) * dgamdr(:, :) * cmat(iat, jat) + dadr_local(:, :, jat)
+         dadr_local(:, jat, jat) = -dtmp * qvec(iat) * dgamdr(:, jat) * cmat(iat, jat) + dadr_local(:, jat, jat)
          dadL_local(:, :, iat) = +dtmp * qvec(jat) * dgamdL(:, :) * cmat(jat, iat) + dadL_local(:, :, iat)
          dadL_local(:, :, jat) = +dtmp * qvec(iat) * dgamdL(:, :) * cmat(iat, jat) + dadL_local(:, :, jat)
 
@@ -811,7 +807,7 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
    real(wp), intent(out) :: dadL(:, :, :)
    real(wp), intent(out) :: atrace(:, :)
 
-   integer :: iat, jat, izp, jzp, img, kat
+   integer :: iat, jat, izp, jzp, img
    real(wp) :: vec(3), r2, gam, arg, dtmp, norm_cn, rvdw, wsw, dgam
    real(wp) :: radi, radj, dradi, dradj, dG(3), dS(3, 3)
    real(wp) :: dgamdL(3, 3), capi, capj
@@ -832,7 +828,7 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
    !$omp parallel default(none) &
    !$omp shared(self, mol, cn, qloc, qvec, wsc, dadr, dadL, atrace) &
    !$omp shared (cmat, dcdr, dcdL, dcndr, dcndL, dqlocdr, dqlocdL, dtrans) &
-   !$omp private(iat, izp, jat, jzp, kat, img, gam, vec, r2, dtmp, norm_cn, arg, rvdw) &
+   !$omp private(iat, izp, jat, jzp, img, gam, vec, r2, dtmp, norm_cn, arg, rvdw) &
    !$omp private(radi, radj, dradi, dradj, capi, capj, dgamdr, dgamdL, dG, dS, wsw) &
    !$omp private(dgam, dadr_local, dadL_local, atrace_local)
    allocate(atrace_local, source=atrace)
@@ -883,14 +879,10 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
             ! Effective charge width derivative
             atrace_local(:, iat) = -dgam * qvec(jat) * dgamdr(:, iat) + atrace_local(:, iat)
             atrace_local(:, jat) = -dgam * qvec(iat) * dgamdr(:, jat) + atrace_local(:, jat)
-            do kat = 1, mol%nat
-               if (kat /= iat) then
-                  dadr_local(:, kat, iat) = -dgam * qvec(jat) * dgamdr(:, kat) + dadr_local(:, kat, iat)
-               end if
-               if (kat /= jat) then
-                  dadr_local(:, kat, jat) = -dgam * qvec(iat) * dgamdr(:, kat) + dadr_local(:, kat, jat)
-               end if
-            end do
+            dadr_local(:, :, iat) = -dgam * qvec(jat) * dgamdr(:, :) + dadr_local(:, :, iat)
+            dadr_local(:, iat, iat) = +dgam * qvec(jat) * dgamdr(:, iat) + dadr_local(:, iat, iat)
+            dadr_local(:, :, jat) = -dgam * qvec(iat) * dgamdr(:, :) + dadr_local(:, :, jat)
+            dadr_local(:, jat, jat) = +dgam * qvec(iat) * dgamdr(:, jat) + dadr_local(:, jat, jat)
             dadL_local(:, :, iat) = -dgam * qvec(jat) * dgamdL(:, :) + dadL_local(:, :, iat)
             dadL_local(:, :, jat) = -dgam * qvec(iat) * dgamdL(:, :) + dadL_local(:, :, jat)
 
@@ -1330,7 +1322,7 @@ subroutine get_dcpair_dir(kbc, rij, trans, rvdw, capi, capj, dgpair, dspair)
    real(wp), intent(out) :: dspair(3, 3)
 
    integer :: itr
-   real(wp) :: r1, arg, dtmp, dgtmp(3), dstmp(3, 3), vec(3)
+   real(wp) :: r1, dgtmp(3), dstmp(3, 3), vec(3)
 
    dgpair(:) = 0.0_wp
    dspair(:, :) = 0.0_wp
