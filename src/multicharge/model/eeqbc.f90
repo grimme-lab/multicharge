@@ -811,11 +811,11 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
    real(wp), intent(out) :: dadL(:, :, :)
    real(wp), intent(out) :: atrace(:, :)
 
-    integer :: iat, jat, izp, jzp, img, kat
-    real(wp) :: vec(3), r2, gam, arg, dtmp, norm_cn, rvdw, wsw, dgam
-    real(wp) :: radi, radj, dradi, dradj, dG(3), dS(3, 3)
-    real(wp) :: dgamdL(3, 3), capi, capj
-    real(wp), allocatable :: dgamdr(:, :), dtrans(:, :)
+   integer :: iat, jat, izp, jzp, img, kat
+   real(wp) :: vec(3), r2, gam, arg, dtmp, norm_cn, rvdw, wsw, dgam
+   real(wp) :: radi, radj, dradi, dradj, dG(3), dS(3, 3)
+   real(wp) :: dgamdL(3, 3), capi, capj
+   real(wp), allocatable :: dgamdr(:, :), dtrans(:, :)
 
    ! Thread-private arrays for reduction
    real(wp), allocatable :: atrace_local(:, :)
