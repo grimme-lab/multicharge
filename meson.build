@@ -18,7 +18,7 @@ project(
   'fortran',
   version: '0.5.0',
   license: 'Apache-2.0',
-  meson_version: '>=0.55',
+  meson_version: '>=0.60',
   default_options: [
     'buildtype=debugoptimized',
     'default_library=both',
@@ -85,6 +85,41 @@ if install
     multicharge_lib,
     description: 'Electronegativity equilibration model for charges and multipoles',
     subdirs: ['', module_id],
+  )
+
+  cmake_data = configuration_data({
+    'PROJECT_NAME': meson.project_name(),
+    'PROJECT_VERSION': meson.project_version(),
+    'PACKAGE_INIT': '',
+    'CMAKE_INSTALL_PREFIX': get_option('prefix'),
+    'CMAKE_INSTALL_INCLUDEDIR': get_option('includedir'),
+    'CMAKE_INSTALL_LIBDIR': get_option('libdir'),
+    'MULTICHARGE_WITH_OpenMP': get_option('openmp') ? 'ON' : 'OFF',
+    'MULTICHARGE_WITH_ILP64': get_option('ilp64') ? 'ON' : 'OFF',
+    'MULTICHARGE_USE_MCTCLIB': mctc_dep.type_name() != 'internal' ? 'ON' : 'OFF',
+    'module-dir': module_id,
+  })
+  cmake_files = [
+    configure_file(
+      input: files('config'/'template-config.cmake'),
+      output: meson.project_name() + '-config.cmake',
+      configuration: cmake_data,
+    ),
+    configure_file(
+      input: files('config'/'template-targets.cmake'),
+      output: meson.project_name() + '-targets.cmake',
+      configuration: cmake_data,
+    ),
+    files('config'/'cmake'/'Findcustom-blas.cmake'),
+    files('config'/'cmake'/'Findcustom-lapack.cmake'),
+    files('config'/'cmake'/'Findmctc-lib.cmake'),
+    files('config'/'cmake'/'Findmstore.cmake'),
+    files('config'/'cmake'/'multicharge-utils.cmake'),
+  ]
+  install_data(
+    cmake_files,
+    install_dir: get_option('libdir')/'cmake'/meson.project_name(),
+    install_tag: 'devel',
   )
 
   asciidoc = find_program('asciidoctor', required: false)

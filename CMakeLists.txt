@@ -29,11 +29,11 @@ include(GNUInstallDirs)
 # General configuration information
 add_subdirectory("config")
 
-if(NOT TARGET "OpenMP::OpenMP_Fortran" AND WITH_OpenMP)
+if(NOT TARGET "OpenMP::OpenMP_Fortran" AND MULTICHARGE_WITH_OpenMP)
   find_package("OpenMP" REQUIRED)
 endif()
 
-if(WITH_ILP64)
+if(MULTICHARGE_WITH_ILP64)
   message(STATUS "Using LAPACK/BLAS ILP64 interface")
 endif()
 
@@ -46,7 +46,7 @@ if(NOT TARGET "mctc-lib::mctc-lib")
   find_package("mctc-lib" REQUIRED)
 endif()
 
-if(NOT TARGET "mstore::mstore" AND WITH_TESTS)
+if(NOT TARGET "mstore::mstore" AND MULTICHARGE_WITH_TESTS)
   find_package("mstore")
 endif()
 
@@ -64,6 +64,7 @@ add_library(
   "${PROJECT_NAME}-lib"
   "${srcs}"
 )
+add_library("${PROJECT_NAME}::${PROJECT_NAME}-lib" ALIAS "${PROJECT_NAME}-lib")
 set_target_properties(
   "${PROJECT_NAME}-lib"
   PROPERTIES
@@ -80,14 +81,14 @@ target_link_libraries(
   "LAPACK::LAPACK"
   "$<$<VERSION_LESS:${CMAKE_VERSION},3.20>:BLAS::BLAS>"
 )
-if(WITH_OpenMP)
+if(MULTICHARGE_WITH_OpenMP)
   target_link_libraries(
     "${PROJECT_NAME}-lib"
     PUBLIC
     "OpenMP::OpenMP_Fortran"
   )
 endif()
-if(WITH_ILP64)
+if(MULTICHARGE_WITH_ILP64)
   target_compile_definitions(
     "${PROJECT_NAME}-lib"
     PUBLIC -DIK=i8
@@ -111,6 +112,7 @@ add_subdirectory("app")
 
 # Export targets for other projects
 add_library("${PROJECT_NAME}" INTERFACE)
+add_library("${PROJECT_NAME}::${PROJECT_NAME}" ALIAS "${PROJECT_NAME}")
 target_link_libraries("${PROJECT_NAME}" INTERFACE "${PROJECT_NAME}-lib")
 install(
   TARGETS
@@ -141,7 +143,7 @@ install(
 )
 
 # add the testsuite
-if(WITH_TESTS)
+if(MULTICHARGE_WITH_TESTS)
   enable_testing()
   add_subdirectory("test")
 endif()
