@@ -214,7 +214,7 @@ jobs:
 
     - name: Install build and test dependencies
       if: ${{ contains(matrix.os, 'windows') }}
-      run: pip3 install meson==0.55
+      run: pip3 install meson==0.60
 
     - name: Check gfortran version for meson build
       if: ${{ matrix.build == 'meson' && matrix.compiler == 'gnu' }}
@@ -237,6 +237,7 @@ jobs:
         MESON_ARGS: >-
           ${{ matrix.compiler == 'intel' && '-Dfortran_link_args=-qopenmp' || '' }}
           ${{ contains(matrix.os, 'macos') && '-Dlapack=openblas' || '' }}
+          ${{ matrix.compiler == 'msys' && '-Dopenmp=false' || '' }}
 
     - name: Configure build (CMake)
       if: ${{ matrix.build == 'cmake' }}
@@ -282,6 +283,18 @@ jobs:
       run: |
         ninja -C ${{ env.BUILD_DIR }} install
         echo "MCHRG_PREFIX=$PWD/_dist" >> $GITHUB_ENV
+
+    - name: Discover installed files (CMake)
+      if: ${{ matrix.build != 'fpm' && ! contains(matrix.compiler, 'intel') && ! contains(matrix.os, 'macos') }}
+      run: |
+        cmake -S test/export -B ${{ env.BUILD_DIR }}/discover-cmake -G Ninja -DCMAKE_PREFIX_PATH=$PWD/_dist/lib/cmake
+        cmake --build ${{ env.BUILD_DIR }}/discover-cmake
+
+    - name: Discover installed files (Meson)
+      if: ${{ matrix.build != 'fpm' && ! contains(matrix.os, 'macos') }}
+      run: |
+        meson setup ${{ env.BUILD_DIR }}/discover-meson test/export --pkg-config-path=$PWD/_dist/lib/pkgconfig
+        meson compile -C ${{ env.BUILD_DIR }}/discover-meson
 
     - name: Create package
       if: ${{ matrix.build == 'meson' }}

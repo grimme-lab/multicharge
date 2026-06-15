@@ -13,11 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+if(NOT DEFINED WITH_OpenMP)
+  set(WITH_OpenMP TRUE)
+endif()
+if(NOT DEFINED WITH_ILP64)
+  set(WITH_ILP64 FALSE)
+endif()
+if(NOT DEFINED WITH_TESTS)
+  set(WITH_TESTS TRUE)
+endif()
 option(BUILD_SHARED_LIBS "Whether the libraries built should be shared" FALSE)
-option(WITH_OpenMP "Enable support for shared memory parallelisation with OpenMP" TRUE)
-option(WITH_ILP64 "Enable support for ILP64 BLAS/LAPACK calls" FALSE)
-option(WITH_TESTS "Enable compilation of unit tests" TRUE)
-
+option(MULTICHARGE_WITH_OpenMP "Enable support for shared memory parallelisation with OpenMP" ${WITH_OpenMP})
+option(MULTICHARGE_WITH_ILP64 "Enable support for ILP64 BLAS/LAPACK calls" ${WITH_ILP64})
+option(MULTICHARGE_WITH_TESTS "Enable compilation of unit tests" ${WITH_TESTS})
+set(MULTICHARGE_USE_MCTCLIB TRUE)
 
 if(NOT DEFINED "${PROJECT_NAME}-dependency-method")
   set(
@@ -61,7 +70,7 @@ install(
 
 include(CMakePackageConfigHelpers)
 configure_package_config_file(
-  "${CMAKE_CURRENT_SOURCE_DIR}/template.cmake"
+  "${CMAKE_CURRENT_SOURCE_DIR}/template-config.cmake"
   "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
   INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
 )
