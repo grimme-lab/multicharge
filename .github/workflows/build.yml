@@ -237,7 +237,7 @@ jobs:
         MESON_ARGS: >-
           ${{ matrix.compiler == 'intel' && '-Dfortran_link_args=-qopenmp' || '' }}
           ${{ contains(matrix.os, 'macos') && '-Dlapack=openblas' || '' }}
-          ${{ matrix.compiler == 'msys' && '-Dopenmp=false' || '' }
+          ${{ matrix.compiler == 'msys' && '-Dopenmp=false' || '' }}
 
     - name: Configure build (CMake)
       if: ${{ matrix.build == 'cmake' }}
