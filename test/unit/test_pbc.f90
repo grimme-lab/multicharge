@@ -14,16 +14,16 @@
 ! limitations under the License.
 
 module test_pbc
+   use mctc_cutoff, only: get_lattice_points
    use mctc_env, only: wp
    use mctc_env_testing, only: new_unittest, unittest_type, error_type, &
       & test_failed
    use mctc_io_structure, only: structure_type
-   use mctc_cutoff, only: get_lattice_points
    use mstore, only: get_structure
    use multicharge_model, only: mchrg_model_type
+   use multicharge_model_cache, only: cache_container
    use multicharge_model_eeqbc, only: eeqbc_model
    use multicharge_param, only: new_eeq2019_model, new_eeqbc2025_model
-   use multicharge_model_cache, only: cache_container
    implicit none
    private
 
@@ -106,12 +106,12 @@ subroutine gen_test(error, mol, model, qref, eref)
    if (present(qref)) then
       if (any(abs(qvec - qref) > thr)) then
          call test_failed(error, "Partial charges do not match")
-         print'(a)', "Charges:"
-         print'(3es21.14)', qvec
+         print"(a)", "Charges:"
+         print"(3es21.14)", qvec
          print'("---")'
-         print'(3es21.14)', qref
+         print"(3es21.14)", qref
          print'("---")'
-         print'(3es21.14)', qvec - qref
+         print"(3es21.14)", qvec - qref
       end if
    end if
    if (allocated(error)) return
@@ -119,12 +119,12 @@ subroutine gen_test(error, mol, model, qref, eref)
    if (present(eref)) then
       if (any(abs(energy - eref) > thr)) then
          call test_failed(error, "Energies do not match")
-         print'(a)', "Energy:"
-         print'(3es21.14)', energy
+         print"(a)", "Energy:"
+         print"(3es21.14)", energy
          print'("---")'
-         print'(3es21.14)', eref
+         print"(3es21.14)", eref
          print'("---")'
-         print'(3es21.14)', energy - eref
+         print"(3es21.14)", energy - eref
       end if
    end if
 
@@ -195,12 +195,12 @@ subroutine test_numgrad(error, mol, model)
 
    if (any(abs(gradient(:, :) - numgrad(:, :)) > thr2)) then
       call test_failed(error, "Derivative of energy does not match")
-      print'(a)', "gradient:"
-      print'(3es21.14)', gradient
-      print'(a)', "numgrad:"
-      print'(3es21.14)', numgrad
-      print'(a)', "diff:"
-      print'(3es21.14)', gradient - numgrad
+      print"(a)", "gradient:"
+      print"(3es21.14)", gradient
+      print"(a)", "numgrad:"
+      print"(3es21.14)", numgrad
+      print"(a)", "diff:"
+      print"(3es21.14)", gradient - numgrad
    end if
 
 end subroutine test_numgrad
@@ -282,12 +282,12 @@ subroutine test_numsigma(error, mol, model)
 
    if (any(abs(sigma(:, :) - numsigma(:, :)) > thr2)) then
       call test_failed(error, "Derivative of energy does not match")
-      print'(a)', "sigma:"
-      print'(3es21.14)', sigma
-      print'(a)', "numgrad:"
-      print'(3es21.14)', numsigma
-      print'(a)', "diff:"
-      print'(3es21.14)', sigma(:, :) - numsigma(:, :)
+      print"(a)", "sigma:"
+      print"(3es21.14)", sigma
+      print"(a)", "numgrad:"
+      print"(3es21.14)", numsigma
+      print"(a)", "diff:"
+      print"(3es21.14)", sigma(:, :) - numsigma(:, :)
    end if
 
 end subroutine test_numsigma
@@ -354,12 +354,12 @@ subroutine test_dbdr(error, mol, model)
 
    if (any(abs(dbdr(:, :, :) - numgrad(:, :, :)) > thr2)) then
       call test_failed(error, "Derivative of the b vector does not match")
-      print'(a)', "dbdr:"
-      print'(3es21.14)', dbdr
-      print'(a)', "numgrad:"
-      print'(3es21.14)', numgrad
-      print'(a)', "diff:"
-      print'(3es21.14)', dbdr - numgrad
+      print"(a)", "dbdr:"
+      print"(3es21.14)", dbdr
+      print"(a)", "numgrad:"
+      print"(3es21.14)", numgrad
+      print"(a)", "diff:"
+      print"(3es21.14)", dbdr - numgrad
    end if
 
 end subroutine test_dbdr
@@ -445,12 +445,12 @@ subroutine test_dbdL(error, mol, model)
 
    if (any(abs(dbdL(:, :, :) - numsigma(:, :, :)) > thr2)) then
       call test_failed(error, "Derivative of the b vector does not match")
-      print'(a)', "dbdL:"
-      print'(3es21.14)', dbdL
-      print'(a)', "numsigma:"
-      print'(3es21.14)', numsigma
-      print'(a)', "diff:"
-      print'(3es21.14)', dbdL - numsigma
+      print"(a)", "dbdL:"
+      print"(3es21.14)", dbdL
+      print"(a)", "numsigma:"
+      print"(3es21.14)", numsigma
+      print"(a)", "diff:"
+      print"(3es21.14)", dbdL - numsigma
    end if
 
 end subroutine test_dbdL
@@ -546,12 +546,12 @@ subroutine test_dadr(error, mol, model)
    ! higher tolerance for numerical gradient
    if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2_local)) then
       call test_failed(error, "Derivative of the A matrix does not match")
-      print'(a)', "dadr:"
-      print'(3es21.14)', dadr
-      print'(a)', "numgrad:"
-      print'(3es21.14)', numgrad
-      print'(a)', "diff:"
-      print'(3es21.14)', dadr - numgrad
+      print"(a)", "dadr:"
+      print"(3es21.14)", dadr
+      print"(a)", "numgrad:"
+      print"(3es21.14)", numgrad
+      print"(a)", "diff:"
+      print"(3es21.14)", dadr - numgrad
    end if
 
 end subroutine test_dadr
@@ -645,12 +645,12 @@ subroutine test_dadL(error, mol, model)
 
    if (any(abs(dadL(:, :, :) - numsigma(:, :, :)) > thr2)) then
       call test_failed(error, "Derivative of the A matrix does not match")
-      print'(a)', "dadL:"
-      print'(3es21.14)', dadL
-      print'(a)', "numsigma:"
-      print'(3es21.14)', numsigma
-      print'(a)', "diff:"
-      print'(3es21.14)', dadL - numsigma
+      print"(a)", "dadL:"
+      print"(3es21.14)", dadL
+      print"(a)", "numsigma:"
+      print"(3es21.14)", numsigma
+      print"(a)", "diff:"
+      print"(3es21.14)", dadL - numsigma
    end if
 
 end subroutine test_dadL
@@ -711,12 +711,12 @@ subroutine test_numdqdr(error, mol, model)
 
    if (any(abs(dqdr(:, :, :) - numdr(:, :, :)) > thr2)) then
       call test_failed(error, "Derivative of charges does not match")
-      print'(a)', "dqdr:"
-      print'(3es21.14)', dqdr
-      print'(a)', "numdr:"
-      print'(3es21.14)', numdr
-      print'(a)', "diff:"
-      print'(3es21.14)', dqdr - numdr
+      print"(a)", "dqdr:"
+      print"(3es21.14)", dqdr
+      print"(a)", "numdr:"
+      print"(3es21.14)", numdr
+      print"(a)", "diff:"
+      print"(3es21.14)", dqdr - numdr
    end if
 
 end subroutine test_numdqdr
@@ -793,12 +793,12 @@ subroutine test_numdqdL(error, mol, model)
 
    if (any(abs(dqdL(:, :, :) - numdL(:, :, :)) > thr2)) then
       call test_failed(error, "Derivative of charges does not match")
-      print'(a)', "dqdL:"
-      print'(3es21.14)', dqdL
-      print'(a)', "numdL:"
-      print'(3es21.14)', numdL
-      print'(a)', "diff:"
-      print'(3es21.14)', dqdL - numdL
+      print"(a)", "dqdL:"
+      print"(3es21.14)", dqdL
+      print"(a)", "numdL:"
+      print"(3es21.14)", numdL
+      print"(a)", "diff:"
+      print"(3es21.14)", dqdL - numdL
    end if
 
 end subroutine test_numdqdL

@@ -19,9 +19,9 @@
 
 !> Interface to the charge models
 module multicharge_charge
+   use mctc_cutoff, only : get_lattice_points
    use mctc_env, only : error_type, wp
    use mctc_io, only : structure_type
-   use mctc_cutoff, only : get_lattice_points
    use multicharge_model, only : mchrg_model_type
    use multicharge_param, only : new_eeq2019_model, new_eeqbc2025_model
    implicit none

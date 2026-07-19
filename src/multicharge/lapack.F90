@@ -135,7 +135,7 @@ subroutine mchrg_ssytrf(amat, ipiv, uplo, info)
    if (present(uplo)) then
       ula = uplo
    else
-      ula = 'u'
+      ula = "u"
    end if
    lda = max(1, size(amat, 1))
    n = size(amat, 2)
@@ -153,6 +153,7 @@ subroutine mchrg_ssytrf(amat, ipiv, uplo, info)
          stat = -1000_ik
       end if
       deallocate(work, stat=stat_dealloc)
+      if (stat == 0 .and. stat_dealloc /= 0) stat = -1000_ik
    end if
    if (present(info)) then
       info = stat
@@ -174,7 +175,7 @@ subroutine mchrg_dsytrf(amat, ipiv, uplo, info)
    if (present(uplo)) then
       ula = uplo
    else
-      ula = 'u'
+      ula = "u"
    end if
    lda = max(1, size(amat, 1))
    n = size(amat, 2)
@@ -192,6 +193,7 @@ subroutine mchrg_dsytrf(amat, ipiv, uplo, info)
          stat = -1000_ik
       end if
       deallocate(work, stat=stat_dealloc)
+      if (stat == 0 .and. stat_dealloc /= 0) stat = -1000_ik
    end if
    if (present(info)) then
       info = stat
@@ -212,7 +214,7 @@ subroutine mchrg_ssytrs(amat, bmat, ipiv, uplo, info)
    if (present(uplo)) then
       ula = uplo
    else
-      ula = 'u'
+      ula = "u"
    end if
    lda = max(1, size(amat, 1))
    ldb = max(1, size(bmat, 1))
@@ -238,7 +240,7 @@ subroutine mchrg_dsytrs(amat, bmat, ipiv, uplo, info)
    if (present(uplo)) then
       ula = uplo
    else
-      ula = 'u'
+      ula = "u"
    end if
    lda = max(1, size(amat, 1))
    ldb = max(1, size(bmat, 1))
@@ -312,7 +314,7 @@ subroutine mchrg_ssytri(amat, ipiv, uplo, info)
    if (present(uplo)) then
       ula = uplo
    else
-      ula = 'u'
+      ula = "u"
    end if
    lda = max(1, size(amat, 1))
    n = size(amat, 2)
@@ -324,6 +326,7 @@ subroutine mchrg_ssytri(amat, ipiv, uplo, info)
       stat = -1000_ik
    end if
    deallocate(work, stat=stat_dealloc)
+   if (stat == 0 .and. stat_dealloc /= 0) stat = -1000_ik
    if (present(info)) then
       info = stat
    else
@@ -343,7 +346,7 @@ subroutine mchrg_dsytri(amat, ipiv, uplo, info)
    if (present(uplo)) then
       ula = uplo
    else
-      ula = 'u'
+      ula = "u"
    end if
    lda = max(1, size(amat, 1))
    n = size(amat, 2)
@@ -355,6 +358,7 @@ subroutine mchrg_dsytri(amat, ipiv, uplo, info)
       stat = -1000_ik
    end if
    deallocate(work, stat=stat_dealloc)
+   if (stat == 0 .and. stat_dealloc /= 0) stat = -1000_ik
    if (present(info)) then
       info = stat
    else

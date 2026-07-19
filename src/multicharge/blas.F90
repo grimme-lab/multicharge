@@ -209,9 +209,9 @@ subroutine mchrg_sgemv312(amat, xvec, yvec, alpha, beta, trans)
    if (present(trans)) then
       tra = trans
    else
-      tra = 'n'
+      tra = "n"
    end if
-   if (any(tra == ['n', 'N'])) then
+   if (any(tra == ["n", "N"])) then
       aptr(1:size(amat, 1)*size(amat, 2), 1:size(amat, 3)) => amat
       yptr(1:size(yvec, 1)*size(yvec, 2)) => yvec
    else
@@ -234,9 +234,9 @@ subroutine mchrg_sgemv321(amat, xvec, yvec, alpha, beta, trans)
    if (present(trans)) then
       tra = trans
    else
-      tra = 'n'
+      tra = "n"
    end if
-   if (any(tra == ['n', 'N'])) then
+   if (any(tra == ["n", "N"])) then
       aptr(1:size(amat, 1), 1:size(amat, 2)*size(amat, 3)) => amat
       xptr(1:size(xvec, 1)*size(xvec, 2)) => xvec
    else
@@ -259,9 +259,9 @@ subroutine mchrg_dgemv312(amat, xvec, yvec, alpha, beta, trans)
    if (present(trans)) then
       tra = trans
    else
-      tra = 'n'
+      tra = "n"
    end if
-   if (any(tra == ['n', 'N'])) then
+   if (any(tra == ["n", "N"])) then
       aptr(1:size(amat, 1)*size(amat, 2), 1:size(amat, 3)) => amat
       yptr(1:size(yvec, 1)*size(yvec, 2)) => yvec
    else
@@ -284,9 +284,9 @@ subroutine mchrg_dgemv321(amat, xvec, yvec, alpha, beta, trans)
    if (present(trans)) then
       tra = trans
    else
-      tra = 'n'
+      tra = "n"
    end if
-   if (any(tra == ['n', 'N'])) then
+   if (any(tra == ["n", "N"])) then
       aptr(1:size(amat, 1), 1:size(amat, 2)*size(amat, 3)) => amat
       xptr(1:size(xvec, 1)*size(xvec, 2)) => xvec
    else
@@ -320,7 +320,7 @@ pure subroutine mchrg_sgemv(amat, xvec, yvec, alpha, beta, trans)
    if (present(trans)) then
       tra = trans
    else
-      tra = 'n'
+      tra = "n"
    end if
    incx = 1_ik
    incy = 1_ik
@@ -354,7 +354,7 @@ pure subroutine mchrg_dgemv(amat, xvec, yvec, alpha, beta, trans)
    if (present(trans)) then
       tra = trans
    else
-      tra = 'n'
+      tra = "n"
    end if
    incx = 1_ik
    incy = 1_ik
@@ -388,7 +388,7 @@ pure subroutine mchrg_ssymv(amat, xvec, yvec, uplo, alpha, beta)
    if (present(uplo)) then
       ula = uplo
    else
-      ula = 'u'
+      ula = "u"
    end if
    incx = 1_ik
    incy = 1_ik
@@ -421,7 +421,7 @@ pure subroutine mchrg_dsymv(amat, xvec, yvec, uplo, alpha, beta)
    if (present(uplo)) then
       ula = uplo
    else
-      ula = 'u'
+      ula = "u"
    end if
    incx = 1_ik
    incy = 1_ik
@@ -455,14 +455,14 @@ pure subroutine mchrg_sgemm(amat, bmat, cmat, transa, transb, alpha, beta)
    if (present(transa)) then
       tra = transa
    else
-      tra = 'n'
+      tra = "n"
    end if
    if (present(transb)) then
       trb = transb
    else
-      trb = 'n'
+      trb = "n"
    end if
-   if ((tra.eq.'n'.or.tra.eq.'N')) then
+   if ((tra=="n".or.tra=="N")) then
       k = size(amat, 2)
    else
       k = size(amat, 1)
@@ -500,14 +500,14 @@ pure subroutine mchrg_dgemm(amat, bmat, cmat, transa, transb, alpha, beta)
    if (present(transa)) then
       tra = transa
    else
-      tra = 'n'
+      tra = "n"
    end if
    if (present(transb)) then
       trb = transb
    else
-      trb = 'n'
+      trb = "n"
    end if
-   if ((tra.eq.'n'.or.tra.eq.'N')) then
+   if ((tra=="n".or.tra=="N")) then
       k = size(amat, 2)
    else
       k = size(amat, 1)
@@ -534,9 +534,9 @@ subroutine mchrg_sgemm323(amat, bmat, cmat, transa, transb, alpha, beta)
    if (present(transa)) then
       tra = transa
    else
-      tra = 'n'
+      tra = "n"
    end if
-   if (any(tra == ['n', 'N'])) then
+   if (any(tra == ["n", "N"])) then
       aptr(1:size(amat, 1)*size(amat, 2), 1:size(amat, 3)) => amat
    else
       aptr(1:size(amat, 1), 1:size(amat, 2)*size(amat, 3)) => amat
@@ -559,9 +559,9 @@ subroutine mchrg_sgemm233(amat, bmat, cmat, transa, transb, alpha, beta)
    if (present(transb)) then
       trb = transb
    else
-      trb = 'n'
+      trb = "n"
    end if
-   if (any(trb == ['n', 'N'])) then
+   if (any(trb == ["n", "N"])) then
       bptr(1:size(bmat, 1), 1:size(bmat, 2)*size(bmat, 3)) => bmat
    else
       bptr(1:size(bmat, 1)*size(bmat, 2), 1:size(bmat, 3)) => bmat
@@ -584,19 +584,19 @@ subroutine mchrg_sgemm332(amat, bmat, cmat, transa, transb, alpha, beta)
    if (present(transa)) then
       tra = transa
    else
-      tra = 'n'
+      tra = "n"
    end if
    if (present(transb)) then
       trb = transb
    else
-      trb = 'n'
+      trb = "n"
    end if
-   if (any(tra == ['n', 'N'])) then
+   if (any(tra == ["n", "N"])) then
       aptr(1:size(amat, 1), 1:size(amat, 2)*size(amat, 3)) => amat
    else
       aptr(1:size(amat, 1)*size(amat, 2), 1:size(amat, 3)) => amat
    end if
-   if (any(trb == ['n', 'N'])) then
+   if (any(trb == ["n", "N"])) then
       bptr(1:size(bmat, 1)*size(bmat, 2), 1:size(bmat, 3)) => bmat
    else
       bptr(1:size(bmat, 1), 1:size(bmat, 2)*size(bmat, 3)) => bmat
@@ -618,9 +618,9 @@ subroutine mchrg_dgemm323(amat, bmat, cmat, transa, transb, alpha, beta)
    if (present(transa)) then
       tra = transa
    else
-      tra = 'n'
+      tra = "n"
    end if
-   if (any(tra == ['n', 'N'])) then
+   if (any(tra == ["n", "N"])) then
       aptr(1:size(amat, 1)*size(amat, 2), 1:size(amat, 3)) => amat
    else
       aptr(1:size(amat, 1), 1:size(amat, 2)*size(amat, 3)) => amat
@@ -643,9 +643,9 @@ subroutine mchrg_dgemm233(amat, bmat, cmat, transa, transb, alpha, beta)
    if (present(transb)) then
       trb = transb
    else
-      trb = 'n'
+      trb = "n"
    end if
-   if (any(trb == ['n', 'N'])) then
+   if (any(trb == ["n", "N"])) then
       bptr(1:size(bmat, 1), 1:size(bmat, 2)*size(bmat, 3)) => bmat
    else
       bptr(1:size(bmat, 1)*size(bmat, 2), 1:size(bmat, 3)) => bmat
@@ -668,19 +668,19 @@ subroutine mchrg_dgemm332(amat, bmat, cmat, transa, transb, alpha, beta)
    if (present(transa)) then
       tra = transa
    else
-      tra = 'n'
+      tra = "n"
    end if
    if (present(transb)) then
       trb = transb
    else
-      trb = 'n'
+      trb = "n"
    end if
-   if (any(tra == ['n', 'N'])) then
+   if (any(tra == ["n", "N"])) then
       aptr(1:size(amat, 1), 1:size(amat, 2)*size(amat, 3)) => amat
    else
       aptr(1:size(amat, 1)*size(amat, 2), 1:size(amat, 3)) => amat
    end if
-   if (any(trb == ['n', 'N'])) then
+   if (any(trb == ["n", "N"])) then
       bptr(1:size(bmat, 1)*size(bmat, 2), 1:size(bmat, 3)) => bmat
    else
       bptr(1:size(bmat, 1), 1:size(bmat, 2)*size(bmat, 3)) => bmat

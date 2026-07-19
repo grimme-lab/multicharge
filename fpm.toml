@@ -15,3 +15,12 @@ mctc-lib.tag = "v0.5.2"
 [dev-dependencies]
 mstore.git = "https://github.com/grimme-lab/mstore.git"
 mstore.tag = "v0.3.0"
+
+[extra.fortitude.check]
+ignore = [
+  "C002",  # interface without implicit none
+  "C003",  # implicit none(external)
+]
+per-file-ignores."src/multicharge/blas.F90" = ["C071"]
+per-file-ignores."src/multicharge/lapack.F90" = ["C071"]
+line-length = 132

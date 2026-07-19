@@ -21,9 +21,9 @@
 
 !> Proxy module to reexport the charge model implementations
 module multicharge_model
-   use multicharge_model_type, only : mchrg_model_type
    use multicharge_model_eeq, only : eeq_model, new_eeq_model
    use multicharge_model_eeqbc, only : eeqbc_model, new_eeqbc_model
+   use multicharge_model_type, only : mchrg_model_type
    implicit none
    private
 

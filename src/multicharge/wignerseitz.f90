@@ -14,9 +14,9 @@
 ! limitations under the License.
 
 module multicharge_wignerseitz
+   use mctc_cutoff, only: get_lattice_points
    use mctc_env, only: wp
    use mctc_io, only: structure_type
-   use mctc_cutoff, only: get_lattice_points
    implicit none
    private
 

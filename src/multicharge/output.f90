@@ -16,8 +16,8 @@
 module multicharge_output
    use mctc_env, only : wp
    use mctc_io, only : structure_type
-   use mctc_io_convert, only : autoaa
    use mctc_io_constants, only : pi
+   use mctc_io_convert, only : autoaa
    use multicharge_model, only : mchrg_model_type
    use multicharge_version, only : get_multicharge_version
    implicit none
@@ -43,10 +43,10 @@ subroutine write_ascii_model(unit, mol, model)
 
    write(unit, '(a, ":")') "Charge model parameter"
    write(unit, '(54("-"))')
-   write(unit, '(a4,5x,*(1x,a10))') "Z", "chi/Eh", "kcn_chi/Eh", "eta/Eh", "rad/AA"
+   write(unit, "(a4,5x,*(1x,a10))") "Z", "chi/Eh", "kcn_chi/Eh", "eta/Eh", "rad/AA"
    write(unit, '(54("-"))')
    do isp = 1, mol%nid
-      write(unit, '(i4, 1x, a4, *(1x,f10.4))') &
+      write(unit, "(i4, 1x, a4, *(1x,f10.4))") &
          & mol%num(isp), mol%sym(isp), model%chi(isp), model%kcnchi(isp), &
          & model%eta(isp) + sqrt2pi/model%rad(isp), model%rad(isp) * autoaa
    end do
@@ -75,16 +75,16 @@ subroutine write_ascii_properties(unit, mol, model, cn, qvec)
 
    write(unit, '(a,":")') "Electrostatic properties (in atomic units)"
    write(unit, '(50("-"))')
-   write(unit, '(a6,1x,a4,5x,*(1x,a10))') "#", "Z", "CN", "q", "chi"
+   write(unit, "(a6,1x,a4,5x,*(1x,a10))") "#", "Z", "CN", "q", "chi"
    write(unit, '(50("-"))')
    do iat = 1, mol%nat
       isp = mol%id(iat)
-      write(unit, '(i6,1x,i4,1x,a4,*(1x,f10.4))') &
+      write(unit, "(i6,1x,i4,1x,a4,*(1x,f10.4))") &
          & iat, mol%num(isp), mol%sym(isp), cn(iat), qvec(iat), &
          & model%chi(isp) - model%kcnchi(isp) * sqrt(cn(iat))
    end do
    write(unit, '(50("-"))')
-   write(unit, '(a7,22x,f10.4)') &
+   write(unit, "(a7,22x,f10.4)") &
       & "Σ", sum(qvec)
    write(unit, '(50("-"),/)')
 
@@ -110,32 +110,32 @@ subroutine write_ascii_results(unit, mol, energy, gradient, sigma)
 
    write(unit, '(a,":", t25, es20.13, 1x, a)') &
       & "Electrostatic energy", sum(energy), "Eh"
-   write(unit, '(a)')
+   write(unit, "(a)")
    if (grad) then
       write(unit, '(a,":", t25, es20.13, 1x, a)') &
          & "Gradient norm", norm2(gradient), "Eh/a0"
       write(unit, '(50("-"))')
-      write(unit, '(a6,1x,a4,5x,*(1x,a10))') "#", "Z", "dE/dx", "dE/dy", "dE/dz"
+      write(unit, "(a6,1x,a4,5x,*(1x,a10))") "#", "Z", "dE/dx", "dE/dy", "dE/dz"
       write(unit, '(50("-"))')
       do iat = 1, mol%nat
          isp = mol%id(iat)
-         write(unit, '(i6,1x,i4,1x,a4,*(es11.3))') &
+         write(unit, "(i6,1x,i4,1x,a4,*(es11.3))") &
             & iat, mol%num(isp), mol%sym(isp), gradient(:, iat)
       end do
       write(unit, '(50("-"))')
-      write(unit, '(a)')
+      write(unit, "(a)")
 
       write(unit, '(a,":")') &
          & "Virial"
       write(unit, '(50("-"))')
-      write(unit, '(a15,1x,*(1x,a10))') "component", "x", "y", "z"
+      write(unit, "(a15,1x,*(1x,a10))") "component", "x", "y", "z"
       write(unit, '(50("-"))')
       do iat = 1, 3
-         write(unit, '(2x,4x,1x,a4,1x,4x,*(es11.3))') &
+         write(unit, "(2x,4x,1x,a4,1x,4x,*(es11.3))") &
             & comp(iat), sigma(:, iat)
       end do
       write(unit, '(50("-"))')
-      write(unit, '(a)')
+      write(unit, "(a)")
    end if
 
 end subroutine write_ascii_results
@@ -159,38 +159,38 @@ subroutine json_results(unit, indentation, energy, gradient, charges, cn)
       indent = ""
    end if
 
-   write(unit, '("{")', advance='no')
-   if (allocated(indent)) write(unit, '(/,a)', advance='no') repeat(indent, 1)
-   write(unit, jsonkey, advance='no') 'version'
-   write(unit, '(1x,a)', advance='no') '"'//version_string//'"'
+   write(unit, '("{")', advance="no")
+   if (allocated(indent)) write(unit, "(/,a)", advance="no") repeat(indent, 1)
+   write(unit, jsonkey, advance="no") "version"
+   write(unit, "(1x,a)", advance="no") '"'//version_string//'"'
    if (present(energy)) then
-      write(unit, '(",")', advance='no')
-      if (allocated(indent)) write(unit, '(/,a)', advance='no') repeat(indent, 1)
-      write(unit, jsonkey, advance='no') 'energy'
-      write(unit, '(1x,es25.16)', advance='no') energy
+      write(unit, '(",")', advance="no")
+      if (allocated(indent)) write(unit, "(/,a)", advance="no") repeat(indent, 1)
+      write(unit, jsonkey, advance="no") "energy"
+      write(unit, "(1x,es25.16)", advance="no") energy
    end if
    if (present(gradient)) then
-      write(unit, '(",")', advance='no')
-      if (allocated(indent)) write(unit, '(/,a)', advance='no') repeat(indent, 1)
-      write(unit, jsonkey, advance='no') 'gradient'
+      write(unit, '(",")', advance="no")
+      if (allocated(indent)) write(unit, "(/,a)", advance="no") repeat(indent, 1)
+      write(unit, jsonkey, advance="no") "gradient"
       array = reshape(gradient, [size(gradient)])
       call write_json_array(unit, array, indent)
    end if
    if (present(charges)) then
-      write(unit, '(",")', advance='no')
-      if (allocated(indent)) write(unit, '(/,a)', advance='no') repeat(indent, 1)
-      write(unit, jsonkey, advance='no') 'charges'
+      write(unit, '(",")', advance="no")
+      if (allocated(indent)) write(unit, "(/,a)", advance="no") repeat(indent, 1)
+      write(unit, jsonkey, advance="no") "charges"
       array = reshape(charges, [size(charges)])
       call write_json_array(unit, array, indent)
    end if
    if (present(cn)) then
-      write(unit, '(",")', advance='no')
-      if (allocated(indent)) write(unit, '(/,a)', advance='no') repeat(indent, 1)
-      write(unit, jsonkey, advance='no') 'coordination numbers'
+      write(unit, '(",")', advance="no")
+      if (allocated(indent)) write(unit, "(/,a)", advance="no") repeat(indent, 1)
+      write(unit, jsonkey, advance="no") "coordination numbers"
       array = reshape(cn, [size(cn)])
       call write_json_array(unit, array, indent)
    end if
-   if (allocated(indent)) write(unit, '(/)', advance='no')
+   if (allocated(indent)) write(unit, "(/)", advance="no")
    write(unit, '("}")')
 
 end subroutine json_results
@@ -201,14 +201,14 @@ subroutine write_json_array(unit, array, indent)
    real(wp), intent(in) :: array(:)
    character(len=:), allocatable, intent(in) :: indent
    integer :: i
-   write(unit, '("[")', advance='no')
+   write(unit, '("[")', advance="no")
    do i = 1, size(array)
-      if (allocated(indent)) write(unit, '(/,a)', advance='no') repeat(indent, 2)
-      write(unit, '(es23.16)', advance='no') array(i)
-      if (i /= size(array)) write(unit, '(",")', advance='no')
+      if (allocated(indent)) write(unit, "(/,a)", advance="no") repeat(indent, 2)
+      write(unit, "(es23.16)", advance="no") array(i)
+      if (i /= size(array)) write(unit, '(",")', advance="no")
    end do
-   if (allocated(indent)) write(unit, '(/,a)', advance='no') repeat(indent, 1)
-   write(unit, '("]")', advance='no')
+   if (allocated(indent)) write(unit, "(/,a)", advance="no") repeat(indent, 1)
+   write(unit, '("]")', advance="no")
 end subroutine write_json_array
 
 

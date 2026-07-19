@@ -14,13 +14,13 @@
 ! limitations under the License.
 
 module test_wignerseitz
+   use mctc_cutoff, only: get_lattice_points
    use mctc_env, only: wp
    use mctc_env_testing, only: new_unittest, unittest_type, error_type, check, &
       & test_failed
    use mctc_io_structure, only: structure_type
-   use mctc_cutoff, only: get_lattice_points
    use mstore, only: get_structure
-   use multicharge_wignerseitz
+   use multicharge_wignerseitz, only : wignerseitz_cell_type, new_wignerseitz_cell
    implicit none
    private
 

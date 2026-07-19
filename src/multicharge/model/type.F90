@@ -23,16 +23,16 @@
 !> General charge model
 module multicharge_model_type
 
+   use mctc_cutoff, only: get_lattice_points
    use mctc_env, only: error_type, fatal_error, wp, ik => IK
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
    use mctc_io_math, only: matinv_3x3
-   use mctc_cutoff, only: get_lattice_points
    use mctc_ncoord, only: ncoord_type
    use multicharge_blas, only: gemv, symv, gemm
    use multicharge_lapack, only: sytrf, sytrs, sytri
-   use multicharge_wignerseitz, only: wignerseitz_cell_type, new_wignerseitz_cell
    use multicharge_model_cache, only: model_cache, cache_container
+   use multicharge_wignerseitz, only: wignerseitz_cell_type, new_wignerseitz_cell
    implicit none
    private
 
@@ -218,7 +218,7 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
 
    ! Factorize the Coulomb matrix
    allocate(ipiv(ndim))
-   call sytrf(ainv, ipiv, info=info, uplo='l')
+   call sytrf(ainv, ipiv, info=info, uplo="l")
    if (info /= 0) then
       call fatal_error(error, "Bunch-Kaufman factorization failed.")
       return
@@ -226,13 +226,13 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
 
    if (cpq) then
       ! Inverted matrix is needed for coupled-perturbed equations
-      call sytri(ainv, ipiv, info=info, uplo='l')
+      call sytri(ainv, ipiv, info=info, uplo="l")
       if (info /= 0) then
          call fatal_error(error, "Inversion of factorized matrix failed.")
          return
       end if
       ! Solve the linear system
-      call symv(ainv, xvec, vrhs, uplo='l')
+      call symv(ainv, xvec, vrhs, uplo="l")
       do ic = 1, ndim
          do jc = ic + 1, ndim
             ainv(ic, jc) = ainv(jc, ic)
@@ -240,7 +240,7 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
       end do
    else
       ! Solve the linear system
-      call sytrs(ainv, vrhs, ipiv, info=info, uplo='l')
+      call sytrs(ainv, vrhs, ipiv, info=info, uplo="l")
       if (info /= 0) then
          call fatal_error(error, "Solution of linear system failed.")
          return
@@ -257,7 +257,7 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
       allocate(jmat(mol%nat, mol%nat))
       jmat = amat(:mol%nat, :mol%nat)
       call symv(jmat, vrhs(:mol%nat), xvec(:mol%nat), &
-         & alpha=0.5_wp, beta=-1.0_wp, uplo='l')
+         & alpha=0.5_wp, beta=-1.0_wp, uplo="l")
       energy(:) = energy(:) + vrhs(:mol%nat) * xvec(:mol%nat)
    end if
 

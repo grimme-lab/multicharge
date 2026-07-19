@@ -14,10 +14,10 @@
 ! limitations under the License.
 
 module multicharge_param
+   use mctc_data, only: get_covalent_rad, get_pauling_en, get_vdw_rad
    use mctc_env, only: error_type, wp
    use mctc_io, only: structure_type
    use mctc_io_convert, only: autoaa
-   use mctc_data, only: get_covalent_rad, get_pauling_en, get_vdw_rad
    use multicharge_model, only: mchrg_model_type, &
       & new_eeq_model, eeq_model, new_eeqbc_model, eeqbc_model
    use multicharge_param_eeq2019, only: get_eeq_chi, get_eeq_eta, &

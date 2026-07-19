@@ -15,9 +15,9 @@
 
 program main
    use, intrinsic :: iso_fortran_env, only: output_unit, error_unit, input_unit
+   use mctc_cutoff, only: get_lattice_points
    use mctc_env, only: error_type, fatal_error, get_argument, wp
    use mctc_io, only: structure_type, read_structure, filetype, get_filetype
-   use mctc_cutoff, only: get_lattice_points
    use multicharge, only: mchrg_model_type, mchrg_model, new_eeq2019_model, &
       & new_eeqbc2025_model, get_multicharge_version, &
       & write_ascii_model, write_ascii_properties, write_ascii_results
@@ -44,7 +44,7 @@ program main
 
    call get_arguments(input, model_id, input_format, grad, charge, json, error)
    if (allocated(error)) then
-      write(error_unit, '(a)') error%message
+      write(error_unit, "(a)") error%message
       error stop
    end if
 
@@ -55,7 +55,7 @@ program main
       call read_structure(mol, input, error, input_format)
    end if
    if (allocated(error)) then
-      write(error_unit, '(a)') error%message
+      write(error_unit, "(a)") error%message
       error stop
    end if
 
@@ -70,10 +70,10 @@ program main
          read(unit, *, iostat=stat) charge
          if (stat == 0) then
             mol%charge = charge
-            write(output_unit, '(a,/)') &
+            write(output_unit, "(a,/)") &
                "[Info] Molecular charge read from '"//chargeinput//"'"
          else
-            write(output_unit, '(a,/)') &
+            write(output_unit, "(a,/)") &
                "[Warn] Could not read molecular charge read from '"//chargeinput//"'"
          end if
          close(unit)
@@ -88,7 +88,7 @@ program main
       call fatal_error(error, "Invalid model was choosen.")
    end if
    if (allocated(error)) then
-      write(error_unit, '(a)') error%message
+      write(error_unit, "(a)") error%message
       error stop
    end if
 
@@ -118,7 +118,7 @@ program main
       & energy, gradient, sigma, qvec, dqdr, dqdL)
 
    if (allocated(error)) then
-      write(error_unit, '(a)') error%message
+      write(error_unit, "(a)") error%message
       error stop
    end if
 
@@ -129,7 +129,7 @@ program main
       open(file=json_output, newunit=unit)
       call json_results(unit, "  ", energy=sum(energy), gradient=gradient, charges=qvec, cn=cn)
       close(unit)
-      write(output_unit, '(a)') &
+      write(output_unit, "(a)") &
          "[Info] JSON dump of results written to '"//json_output//"'"
    end if
 
@@ -138,16 +138,16 @@ contains
 subroutine help(unit)
    integer, intent(in) :: unit
 
-   write(unit, '(a, *(1x, a))') &
+   write(unit, "(a, *(1x, a))") &
       "Usage: "//prog_name//" [options] <input>"
 
-   write(unit, '(a)') &
+   write(unit, "(a)") &
       "", &
       "Electronegativity equilibration model for atomic charges and", &
       "higher multipole moments", &
       ""
 
-   write(unit, '(2x, a, t35, a)') &
+   write(unit, "(2x, a, t35, a)") &
       "-m, -model, --model <model>", "Choose the charge model", &
       "-i, -input, --input <format>", "Hint for the format of the input file", &
       "-c, -charge, --charge <value>", "Set the molecular charge", &
@@ -156,7 +156,7 @@ subroutine help(unit)
       "-v, -version, --version", "Print program version and exit", &
       "-h, -help, --help", "Show this help message"
 
-   write(unit, '(a)')
+   write(unit, "(a)")
 
 end subroutine help
 
@@ -165,7 +165,7 @@ subroutine version(unit)
    character(len=:), allocatable :: version_string
 
    call get_multicharge_version(string=version_string)
-   write(unit, '(a, *(1x, a))') &
+   write(unit, "(a, *(1x, a))") &
       & prog_name, "version", version_string
 
 end subroutine version
@@ -174,7 +174,7 @@ subroutine get_arguments(input, model_id, input_format, grad, charge, &
    & json, error)
 
    !> Input file name
-   character(len=:), allocatable :: input
+   character(len=:), allocatable, intent(out) :: input
 
    !> ID of choosen model type
    integer, intent(out) :: model_id

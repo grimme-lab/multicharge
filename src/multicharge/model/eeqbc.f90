@@ -26,10 +26,10 @@ module multicharge_model_eeqbc
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
    use mctc_ncoord, only: new_ncoord, cn_count
-   use multicharge_wignerseitz, only: new_wignerseitz_cell, wignerseitz_cell_type
-   use multicharge_model_type, only: mchrg_model_type, get_dir_trans
    use multicharge_blas, only: gemv, gemm
    use multicharge_model_cache, only: cache_container, model_cache
+   use multicharge_model_type, only: mchrg_model_type, get_dir_trans
+   use multicharge_wignerseitz, only: new_wignerseitz_cell, wignerseitz_cell_type
    implicit none
    private
 
