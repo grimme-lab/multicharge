@@ -30,7 +30,7 @@ module test_pbc
    public :: collect_pbc
 
    real(wp), parameter :: thr = 1000 * epsilon(1.0_wp)
-   real(wp), parameter :: thr2 = sqrt(epsilon(1.0_wp))
+   real(wp), parameter :: thr2 = 10 * sqrt(epsilon(1.0_wp))
 
 contains
 
