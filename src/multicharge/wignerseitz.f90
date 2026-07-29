@@ -45,28 +45,34 @@ subroutine new_wignerseitz_cell(self, mol)
    !> Molecular structure data
    type(structure_type), intent(in) :: mol
 
-   integer :: iat, jat, ntr, nimg
+   integer :: iat, jat, ntr, nimg, nimg_max
    integer, allocatable :: tridx(:)
    real(wp) :: vec(3)
    real(wp), allocatable :: trans(:, :)
 
    call get_lattice_points(mol%periodic, mol%lattice, thr, trans)
    ntr = size(trans, 2)
-   allocate(self%nimg(mol%nat, mol%nat), self%tridx(ntr, mol%nat, mol%nat), &
-      & tridx(ntr))
+   allocate(self%nimg(mol%nat, mol%nat), self%tridx(ntr, mol%nat, mol%nat))
 
-   self%nimg_max = 0
-   !$omp parallel do default(none) schedule(runtime) collapse(2) &
-   !$omp shared(mol, trans, self) private(iat, jat, vec, nimg, tridx)
+   nimg_max = 0
+   !$omp parallel default(none) &
+   !$omp shared(mol, trans, self, ntr) private(iat, jat, vec, nimg, tridx) &
+   !$omp reduction(max:nimg_max)
+   allocate(tridx(ntr))
+   !$omp do collapse(2) schedule(runtime)
    do iat = 1, mol%nat
       do jat = 1, mol%nat
          vec(:) = mol%xyz(:, iat) - mol%xyz(:, jat)
          call get_pairs(nimg, trans, vec, tridx)
          self%nimg(jat, iat) = nimg
          self%tridx(:, jat, iat) = tridx
-         self%nimg_max = max(nimg, self%nimg_max)
+         nimg_max = max(nimg, nimg_max)
       end do
    end do
+   !$omp end do
+   deallocate(tridx)
+   !$omp end parallel
+   self%nimg_max = nimg_max
 
    call move_alloc(trans, self%trans)
 
@@ -107,6 +113,7 @@ subroutine get_pairs(iws, trans, rij, list)
    if (img <= iws) return
 
    do
+      if (iws >= img) exit
       pos = minloc(dist(:img), dim=1, mask=mask(:img))
       if (abs(dist(pos) - r2) > tol) exit
       mask(pos) = .false.
