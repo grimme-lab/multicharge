@@ -671,7 +671,7 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
    real(wp), intent(out) :: dadL(:, :, :)
    real(wp), intent(out) :: atrace(:, :)
 
-   integer :: iat, jat, izp, jzp
+   integer :: iat, jat, izp, jzp, kat
    real(wp) :: vec(3), r2, gam, arg, dtmp, norm_cn
    real(wp) :: radi, radj, dradi, dradj, dG(3), dS(3, 3), dgamdL(3, 3)
    real(wp), allocatable :: dgamdr(:, :)
@@ -689,7 +689,7 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
    !$omp parallel default(none) &
    !$omp shared(atrace, dadr, dadL, mol, self, cn, qloc, qvec) &
    !$omp shared(cmat, dcdr, dcdL, dcndr, dcndL, dqlocdr, dqlocdL) &
-   !$omp private(iat, izp, jat, jzp, gam, vec, r2, dtmp, norm_cn, arg) &
+   !$omp private(iat, izp, jat, jzp, kat, gam, vec, r2, dtmp, norm_cn, arg) &
    !$omp private(radi, radj, dradi, dradj, dgamdr, dgamdL, dG, dS) &
    !$omp private(atrace_local, dadr_local, dadL_local)
    allocate(atrace_local, source=atrace)
@@ -733,10 +733,12 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
 
          ! Effective charge width derivative
          dtmp = 2.0_wp * exp(-arg) / (sqrtpi)
-         atrace_local(:, iat) = -dtmp * qvec(jat) * dgamdr(:, jat) * cmat(jat, iat) + atrace_local(:, iat)
-         atrace_local(:, jat) = -dtmp * qvec(iat) * dgamdr(:, iat) * cmat(iat, jat) + atrace_local(:, jat)
-         dadr_local(:, iat, jat) = +dtmp * qvec(iat) * dgamdr(:, iat) * cmat(iat, jat) + dadr_local(:, iat, jat)
-         dadr_local(:, jat, iat) = +dtmp * qvec(jat) * dgamdr(:, jat) * cmat(jat, iat) + dadr_local(:, jat, iat)
+         atrace_local(:, iat) = +dtmp * qvec(jat) * dgamdr(:, iat) * cmat(jat, iat) + atrace_local(:, iat)
+         atrace_local(:, jat) = +dtmp * qvec(iat) * dgamdr(:, jat) * cmat(iat, jat) + atrace_local(:, jat)
+         dadr_local(:, :, iat) = +dtmp * qvec(jat) * dgamdr(:, :) * cmat(jat, iat) + dadr_local(:, :, iat)
+         dadr_local(:, iat, iat) = -dtmp * qvec(jat) * dgamdr(:, iat) * cmat(jat, iat) + dadr_local(:, iat, iat)
+         dadr_local(:, :, jat) = +dtmp * qvec(iat) * dgamdr(:, :) * cmat(iat, jat) + dadr_local(:, :, jat)
+         dadr_local(:, jat, jat) = -dtmp * qvec(iat) * dgamdr(:, jat) * cmat(iat, jat) + dadr_local(:, jat, jat)
          dadL_local(:, :, iat) = +dtmp * qvec(jat) * dgamdL(:, :) * cmat(jat, iat) + dadL_local(:, :, iat)
          dadL_local(:, :, jat) = +dtmp * qvec(iat) * dgamdL(:, :) * cmat(iat, jat) + dadL_local(:, :, jat)
 
@@ -875,10 +877,12 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
             dadL_local(:, :, iat) = +dS * qvec(jat) + dadL_local(:, :, iat)
 
             ! Effective charge width derivative
-            atrace_local(:, iat) = +dgam * qvec(jat) * dgamdr(:, jat) + atrace_local(:, iat)
-            atrace_local(:, jat) = +dgam * qvec(iat) * dgamdr(:, iat) + atrace_local(:, jat)
-            dadr_local(:, iat, jat) = -dgam * qvec(iat) * dgamdr(:, iat) + dadr_local(:, iat, jat)
-            dadr_local(:, jat, iat) = -dgam * qvec(jat) * dgamdr(:, jat) + dadr_local(:, jat, iat)
+            atrace_local(:, iat) = -dgam * qvec(jat) * dgamdr(:, iat) + atrace_local(:, iat)
+            atrace_local(:, jat) = -dgam * qvec(iat) * dgamdr(:, jat) + atrace_local(:, jat)
+            dadr_local(:, :, iat) = -dgam * qvec(jat) * dgamdr(:, :) + dadr_local(:, :, iat)
+            dadr_local(:, iat, iat) = +dgam * qvec(jat) * dgamdr(:, iat) + dadr_local(:, iat, iat)
+            dadr_local(:, :, jat) = -dgam * qvec(iat) * dgamdr(:, :) + dadr_local(:, :, jat)
+            dadr_local(:, jat, jat) = +dgam * qvec(iat) * dgamdr(:, jat) + dadr_local(:, jat, jat)
             dadL_local(:, :, iat) = -dgam * qvec(jat) * dgamdL(:, :) + dadL_local(:, :, iat)
             dadL_local(:, :, jat) = -dgam * qvec(iat) * dgamdL(:, :) + dadL_local(:, :, jat)
 
@@ -1318,7 +1322,7 @@ subroutine get_dcpair_dir(kbc, rij, trans, rvdw, capi, capj, dgpair, dspair)
    real(wp), intent(out) :: dspair(3, 3)
 
    integer :: itr
-   real(wp) :: r1, arg, dtmp, dgtmp(3), dstmp(3, 3), vec(3)
+   real(wp) :: r1, dgtmp(3), dstmp(3, 3), vec(3)
 
    dgpair(:) = 0.0_wp
    dspair(:, :) = 0.0_wp
