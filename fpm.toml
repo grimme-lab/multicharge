@@ -10,11 +10,11 @@ link = ["lapack", "blas"]
 
 [dependencies]
 mctc-lib.git = "https://github.com/grimme-lab/mctc-lib.git"
-mctc-lib.tag = "v0.5.2"
+mctc-lib.tag = "v0.6.1"
 
 [dev-dependencies]
 mstore.git = "https://github.com/grimme-lab/mstore.git"
-mstore.tag = "v0.3.0"
+mstore.tag = "v0.4.0"
 
 [extra.fortitude.check]
 ignore = [
