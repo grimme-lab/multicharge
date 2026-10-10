@@ -128,6 +128,10 @@ subroutine search_alpha(lattice, rec_lat, volume, tolerance, alpha)
       end if
    end if
 
+   if (alpha < 0.25_wp) then
+      if (dlen > 0.0_wp) alpha = max(alpha, 2.0_wp/dlen)
+      alpha = min(alpha, 0.25_wp)
+   end if
    if (stat /= 0) then
       alpha = 0.25_wp
    end if
