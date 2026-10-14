@@ -51,19 +51,65 @@ if get_option('openmp')
   lib_deps += omp_dep
 endif
 
-lapack_vendor = get_option('lapack')
-if lapack_vendor == 'auto'
-  if fc_id == 'intel'
-    lapack_vendor = 'mkl'
-  endif
-endif
-
 if get_option('ilp64')
   ilp64 = true
   add_project_arguments('-DIK=i8', language:'fortran')
 else
   add_project_arguments('-DIK=i4', language:'fortran')
   ilp64 = false
+endif
+
+lapack_vendor = get_option('lapack')
+if lapack_vendor == 'auto'
+  if fc_id == 'intel'
+    lapack_vendor = 'mkl'
+  else
+    # Probe common backends, first one providing both LAPACK and BLAS wins
+    suffix = ilp64 ? '64' : ''
+    candidates = [
+      ['openblas' + suffix],
+      ['openblas' + suffix, 'lapack' + suffix],
+      ['flexiblas' + suffix],
+      ['lapack' + suffix, 'blas' + suffix],
+    ]
+    if not ilp64
+      candidates += [['mkl_rt']]
+    endif
+    linalg_test = '''
+      program test
+        external dsytrs, dgemm
+        call dsytrs()
+        call dgemm()
+      end program test
+    '''
+    foreach candidate : candidates
+      candidate_deps = []
+      foreach name : candidate
+        dep = dependency(name, required: false)
+        if not dep.found()
+          dep = cc.find_library(name, required: false)
+        endif
+        if dep.found()
+          candidate_deps += dep
+        endif
+      endforeach
+      if candidate_deps.length() != candidate.length()
+        continue
+      endif
+      test_deps = get_option('openmp') ? [candidate_deps, omp_dep] : candidate_deps
+      if fc.links(linalg_test, dependencies: test_deps, name: 'LAPACK/BLAS via ' + ', '.join(candidate))
+        lapack_vendor = 'auto-found'
+        lib_deps += candidate_deps
+        break
+      endif
+    endforeach
+    if lapack_vendor != 'auto-found'
+      error(
+        'No working LAPACK/BLAS found (tried OpenBLAS, FlexiBLAS, netlib, MKL runtime). ' +
+        'Install one, or select a backend with -Dlapack=... / -Dlapack=custom -Dcustom_libraries=...'
+      )
+    endif
+  endif
 endif
 
 if lapack_vendor == 'mkl'
@@ -135,7 +181,7 @@ elif lapack_vendor == 'custom'
 
   lib_deps += custom_deps
 
-else
+elif lapack_vendor == 'netlib'
   lapack_dep = dependency(ilp64 ? 'lapack64' : 'lapack', required: false)
   if not lapack_dep.found()
     lapack_dep = cc.find_library(ilp64 ? 'lapack64' : 'lapack') 

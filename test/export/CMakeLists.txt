@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.24)
 project(test-test Fortran)
 
 find_package(multicharge CONFIG REQUIRED)

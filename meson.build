@@ -87,11 +87,16 @@ if install
     subdirs: ['', module_id],
   )
 
+  # Locate the prefix relative to the installed config file, as configure_package_config_file does
+  cmake_install_dir = get_option('libdir') / 'cmake' / meson.project_name()
+  cmake_prefix_rel = []
+  foreach _ : cmake_install_dir.split('/')
+    cmake_prefix_rel += '..'
+  endforeach
   cmake_data = configuration_data({
     'PROJECT_NAME': meson.project_name(),
     'PROJECT_VERSION': meson.project_version(),
-    'PACKAGE_INIT': '',
-    'CMAKE_INSTALL_PREFIX': get_option('prefix'),
+    'PACKAGE_INIT': 'get_filename_component(PACKAGE_PREFIX_DIR "${CMAKE_CURRENT_LIST_DIR}/' + '/'.join(cmake_prefix_rel) + '" ABSOLUTE)',
     'CMAKE_INSTALL_INCLUDEDIR': get_option('includedir'),
     'CMAKE_INSTALL_LIBDIR': get_option('libdir'),
     'MULTICHARGE_WITH_OpenMP': get_option('openmp') ? 'ON' : 'OFF',
@@ -102,7 +107,13 @@ if install
   cmake_files = [
     configure_file(
       input: files('config'/'template-config.cmake'),
-      output: meson.project_name() + '-config.cmake',
+      # Must match the naming of the version file below
+      output: meson.project_name() + 'Config.cmake',
+      configuration: cmake_data,
+    ),
+    configure_file(
+      input: files('config'/'template-config-version.cmake'),
+      output: meson.project_name() + 'ConfigVersion.cmake',
       configuration: cmake_data,
     ),
     configure_file(
@@ -110,15 +121,10 @@ if install
       output: meson.project_name() + '-targets.cmake',
       configuration: cmake_data,
     ),
-    files('config'/'cmake'/'Findcustom-blas.cmake'),
-    files('config'/'cmake'/'Findcustom-lapack.cmake'),
-    files('config'/'cmake'/'Findmctc-lib.cmake'),
-    files('config'/'cmake'/'Findmstore.cmake'),
-    files('config'/'cmake'/'multicharge-utils.cmake'),
   ]
   install_data(
     cmake_files,
-    install_dir: get_option('libdir')/'cmake'/meson.project_name(),
+    install_dir: cmake_install_dir,
     install_tag: 'devel',
   )
 

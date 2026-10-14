@@ -8,20 +8,21 @@ enable_language("Fortran")
 
 if(NOT TARGET "@PROJECT_NAME@::@PROJECT_NAME@")
   include(CMakeFindDependencyMacro)
-  list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
 
   if(NOT TARGET "OpenMP::OpenMP_Fortran" AND MULTICHARGE_WITH_OpenMP)
     find_dependency("OpenMP")
   endif()
 
   if(NOT TARGET "LAPACK::LAPACK")
+    if(MULTICHARGE_WITH_ILP64)
+      set(BLA_SIZEOF_INTEGER 8)
+    endif()
     find_dependency("LAPACK")
   endif()
 
   if(NOT TARGET "mctc-lib::mctc-lib" AND MULTICHARGE_USE_MCTCLIB)
-    find_dependency("mctc-lib")
+    find_dependency("mctc-lib" CONFIG)
   endif()
 
-  list(REMOVE_AT CMAKE_MODULE_PATH -1)
   include("${CMAKE_CURRENT_LIST_DIR}/@PROJECT_NAME@-targets.cmake")
 endif()
