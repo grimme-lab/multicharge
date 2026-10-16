@@ -22,13 +22,15 @@
 !> and S. Grimme, *J. Chem. Phys.*, **2019**, 150, 154122.
 !> DOI: [10.1063/1.5090222](https://dx.doi.org/10.1063/1.5090222)
 module multicharge_model_eeq
-   use mctc_env, only: error_type, wp
+   use mctc_env, only: error_type, fatal_error, wp
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
    use mctc_io_math, only: matdet_3x3
    use mctc_ncoord, only: new_ncoord, cn_count
+   use multicharge_blas, only: gemm
    use multicharge_ewald, only: get_alpha
    use multicharge_model_cache, only: cache_container, model_cache
+   use multicharge_model_hessian, only: coulomb_kernel, add_pair_hessian
    use multicharge_model_type, only: mchrg_model_type, get_dir_trans, get_rec_trans
    use multicharge_wignerseitz, only: wignerseitz_cell_type, new_wignerseitz_cell
    implicit none
@@ -51,6 +53,8 @@ module multicharge_model_eeq
       procedure :: get_xvec
       !> Calculate EN vector derivatives
       procedure :: get_xvec_derivs
+      !> Molecular second-response curvature
+      procedure :: add_model_hessian
    end type eeq_model
 
    real(wp), parameter :: sqrtpi = sqrt(pi)
@@ -172,12 +176,60 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
    !$omp private(iat, izp, tmp)
    do iat = 1, mol%nat
       izp = mol%id(iat)
-      tmp = self%kcnchi(izp) / sqrt(ptr%cn(iat) + reg)
-      dxdr(:, :, iat) = 0.5_wp * tmp * ptr%dcndr(:, :, iat) + dxdr(:, :, iat)
-      dxdL(:, :, iat) = 0.5_wp * tmp * ptr%dcndL(:, :, iat) + dxdL(:, :, iat)
+      tmp = self%kcnchi(izp) * (0.5_wp*ptr%cn(iat) + reg) / (ptr%cn(iat) + reg)**1.5_wp
+      dxdr(:, :, iat) = tmp * ptr%dcndr(:, :, iat)
+      dxdL(:, :, iat) = tmp * ptr%dcndL(:, :, iat)
    end do
 
 end subroutine get_xvec_derivs
+
+!> u^T(x_ab-A_ab q), with u and q held fixed.
+subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
+   class(eeq_model), intent(in) :: self
+   type(structure_type), intent(in) :: mol
+   type(error_type), allocatable, intent(out) :: error
+   type(cache_container), intent(inout) :: cache
+   real(wp), intent(in) :: adj(:)
+   real(wp), intent(inout) :: hessian(:, :)
+
+   type(eeq_cache), pointer :: ptr
+   integer :: iat, jat, izp, jzp, nat
+   real(wp), parameter :: reg = 1.0e-14_wp, trans(3, 1) = 0.0_wp
+   real(wp) :: c, vec(3), r, gam, val, dr, drr, weight
+   real(wp), allocatable :: dEdcn(:), dcndr(:, :), work(:, :)
+
+   call view(cache, ptr)
+   if (.not. associated(ptr)) then
+      call fatal_error(error, "Incompatible EEQ response cache")
+      return
+   end if
+   nat = mol%nat
+   allocate(dEdcn(nat), work(3*nat, nat))
+   dcndr = reshape(ptr%dcndr, [3*nat, nat])
+   do iat = 1, nat
+      izp = mol%id(iat)
+      c = ptr%cn(iat)
+      dEdcn(iat) = adj(iat)*self%kcnchi(izp)*(0.5_wp*c+reg)/(c+reg)**1.5_wp
+      weight = -adj(iat)*self%kcnchi(izp)*(0.25_wp*c+reg)/(c+reg)**2.5_wp
+      work(:, iat) = weight*dcndr(:, iat)
+   end do
+   call self%ncoord%add_coordination_number_hessian(mol, trans, dEdcn, hessian)
+   call gemm(work, dcndr, hessian, transb="t", beta=1.0_wp)
+
+   do iat = 1, nat
+      izp = mol%id(iat)
+      do jat = 1, iat-1
+         jzp = mol%id(jat)
+         vec = mol%xyz(:, iat)-mol%xyz(:, jat)
+         r = norm2(vec)
+         gam = 1.0_wp/sqrt(self%rad(izp)**2+self%rad(jzp)**2)
+         call coulomb_kernel(r, gam, val, dr, drr)
+         weight = -(adj(iat)*cache%qvec(jat)+adj(jat)*cache%qvec(iat))
+         call add_pair_hessian(iat, jat, vec, weight*dr, weight*drr, hessian)
+      end do
+   end do
+end subroutine add_model_hessian
+
 
 subroutine get_coulomb_matrix(self, mol, cache, amat)
    class(eeq_model), intent(in) :: self

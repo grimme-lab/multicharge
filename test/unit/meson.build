@@ -30,6 +30,7 @@ endif
 
 tests = [
   'model',
+  'hessian',
   'pbc',
   'wignerseitz',
 ]
