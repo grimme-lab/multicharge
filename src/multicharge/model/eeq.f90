@@ -22,6 +22,7 @@
 !> and S. Grimme, *J. Chem. Phys.*, **2019**, 150, 154122.
 !> DOI: [10.1063/1.5090222](https://dx.doi.org/10.1063/1.5090222)
 module multicharge_model_eeq
+   use mctc_cutoff, only: get_lattice_points
    use mctc_env, only: error_type, fatal_error, wp
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
@@ -30,7 +31,7 @@ module multicharge_model_eeq
    use multicharge_blas, only: gemm
    use multicharge_ewald, only: get_alpha
    use multicharge_model_cache, only: cache_container, model_cache
-   use multicharge_model_hessian, only: coulomb_kernel, add_pair_hessian
+   use multicharge_model_hessian, only: coulomb_kernel, radial_hessian, add_pair_hessian, add_pair_block
    use multicharge_model_type, only: mchrg_model_type, get_dir_trans, get_rec_trans
    use multicharge_wignerseitz, only: wignerseitz_cell_type, new_wignerseitz_cell
    implicit none
@@ -53,7 +54,7 @@ module multicharge_model_eeq
       procedure :: get_xvec
       !> Calculate EN vector derivatives
       procedure :: get_xvec_derivs
-      !> Molecular second-response curvature
+      !> Cartesian second-response curvature at fixed lattice
       procedure :: add_model_hessian
    end type eeq_model
 
@@ -194,9 +195,9 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
 
    type(eeq_cache), pointer :: ptr
    integer :: iat, jat, izp, jzp, nat
-   real(wp), parameter :: reg = 1.0e-14_wp, trans(3, 1) = 0.0_wp
+   real(wp), parameter :: reg = 1.0e-14_wp
    real(wp) :: c, vec(3), r, gam, val, dr, drr, weight
-   real(wp), allocatable :: dEdcn(:), dcndr(:, :), work(:, :)
+   real(wp), allocatable :: dEdcn(:), dcndr(:, :), work(:, :), trans(:, :)
 
    call view(cache, ptr)
    if (.not. associated(ptr)) then
@@ -213,8 +214,14 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
       weight = -adj(iat)*self%kcnchi(izp)*(0.25_wp*c+reg)/(c+reg)**2.5_wp
       work(:, iat) = weight*dcndr(:, iat)
    end do
+   call get_lattice_points(mol%periodic, mol%lattice, self%ncoord%cutoff, trans)
    call self%ncoord%add_coordination_number_hessian(mol, trans, dEdcn, hessian)
    call gemm(work, dcndr, hessian, transb="t", beta=1.0_wp)
+
+   if (any(mol%periodic)) then
+      call add_periodic_hessian(self, mol, ptr%wsc, ptr%alpha, cache%qvec, adj, hessian)
+      return
+   end if
 
    do iat = 1, nat
       izp = mol%id(iat)
@@ -229,6 +236,58 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
       end do
    end do
 end subroutine add_model_hessian
+
+!> Curvature of the same finite Ewald sums and WS average used for A.
+!> The lattice, Ewald parameter, and self-image distances are fixed here.
+subroutine add_periodic_hessian(self, mol, wsc, alpha, qvec, adj, hessian)
+   class(eeq_model), intent(in) :: self
+   type(structure_type), intent(in) :: mol
+   type(wignerseitz_cell_type), intent(in) :: wsc
+   real(wp), intent(in) :: alpha, qvec(:), adj(:)
+   real(wp), intent(inout) :: hessian(:, :)
+   integer :: iat, jat, izp, jzp, img, itr
+   real(wp) :: rij(3), vec(3), box(3, 3), gam, r, g2, fac, weight, wsw
+   real(wp) :: val, dr, drr, ar, arr
+   real(wp), allocatable :: dtrans(:, :), rtrans(:, :), rec_weight(:)
+
+   call get_dir_trans(mol%lattice, dtrans)
+   call get_rec_trans(mol%lattice, rtrans)
+   fac = 4.0_wp*pi/abs(matdet_3x3(mol%lattice))
+   allocate(rec_weight(size(rtrans, 2)), source=0.0_wp)
+   do itr = 1, size(rtrans, 2)
+      g2 = sum(rtrans(:, itr)**2)
+      if (g2 < eps) cycle
+      rec_weight(itr) = fac*exp(-0.25_wp*g2/alpha**2)/g2
+   end do
+
+   do iat = 1, mol%nat
+      izp = mol%id(iat)
+      do jat = 1, iat-1
+         jzp = mol%id(jat)
+         gam = 1.0_wp/sqrt(self%rad(izp)**2+self%rad(jzp)**2)
+         weight = -(adj(iat)*qvec(jat)+adj(jat)*qvec(iat))
+         wsw = 1.0_wp/real(wsc%nimg(jat, iat), wp)
+         box = 0.0_wp
+         do img = 1, wsc%nimg(jat, iat)
+            rij = mol%xyz(:, iat)-mol%xyz(:, jat)-wsc%trans(:, wsc%tridx(img, jat, iat))
+            do itr = 1, size(dtrans, 2)
+               vec = rij+dtrans(:, itr)
+               r = norm2(vec)
+               if (r < eps) cycle
+               call coulomb_kernel(r, gam, val, dr, drr)
+               call coulomb_kernel(r, alpha, val, ar, arr)
+               box = box+wsw*radial_hessian(vec, dr-ar, drr-arr)
+            end do
+            do itr = 1, size(rtrans, 2)
+               vec = rtrans(:, itr)
+               box = box-wsw*rec_weight(itr)*cos(dot_product(rij, vec)) &
+                  & *spread(vec, 1, 3)*spread(vec, 2, 3)
+            end do
+         end do
+         call add_pair_block(iat, jat, weight*box, hessian)
+      end do
+   end do
+end subroutine add_periodic_hessian
 
 
 subroutine get_coulomb_matrix(self, mol, cache, amat)

@@ -319,7 +319,7 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
    end if
 end subroutine solve
 
-!> Add the Cartesian charge Hessian contracted with fixed weights.
+!> Add the Cartesian charge Hessian contracted with fixed weights and lattice.
 !> Ay=x, A^T u=(weights,0): H_ab=u^T(x_ab-A_ab y-A_a y_b-A_b y_a).
 subroutine add_charge_hessian(self, mol, error, weights, hessian, cache)
    class(mchrg_model_type), intent(in) :: self
@@ -335,8 +335,8 @@ subroutine add_charge_hessian(self, mol, error, weights, hessian, cache)
    real(wp), pointer :: da(:, :), dq(:, :)
 
    nat = mol%nat
-   if (any(mol%periodic)) then
-      call fatal_error(error, "Analytical charge Hessian is only available for molecules")
+   if (any(mol%periodic) .and. .not. all(mol%periodic)) then
+      call fatal_error(error, "Analytical charge Hessian requires molecular or 3D periodic boundary conditions")
       return
    end if
    if (size(weights) /= nat .or. any(shape(hessian) /= 3*nat)) then

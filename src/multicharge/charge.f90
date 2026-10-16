@@ -82,7 +82,7 @@ subroutine get_charges(mchrg_model, mol, error, qvec, dqdr, dqdL, cache)
 end subroutine get_charges
 
 
-!> Add sum_i weights(i) d2q_i/dR2, holding weights fixed in the contraction.
+!> Add sum_i weights(i) d2q_i/dR2, holding weights and lattice fixed.
 !> The cache must come from get_charges with the same structure and model.
 subroutine add_charge_hessian(mchrg_model, mol, error, weights, hessian, cache)
    class(mchrg_model_type), intent(in) :: mchrg_model
