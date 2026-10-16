@@ -984,11 +984,9 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
             dadL_local(:, :, jat) = +dS * qvec(iat) + dadL_local(:, :, jat)
             dadL_local(:, :, iat) = +dS * qvec(jat) + dadL_local(:, :, iat)
 
-            ! Effective charge width derivative
-            atrace_local(:, iat) = +dgam * qvec(jat) * dgamdr(:, jat) + atrace_local(:, iat)
-            atrace_local(:, jat) = +dgam * qvec(iat) * dgamdr(:, iat) + atrace_local(:, jat)
-            dadr_local(:, iat, jat) = -dgam * qvec(iat) * dgamdr(:, iat) + dadr_local(:, iat, jat)
-            dadr_local(:, jat, iat) = -dgam * qvec(jat) * dgamdr(:, jat) + dadr_local(:, jat, iat)
+            ! CN-dependent widths respond to every atom, including third atoms.
+            dadr_local(:, :, iat) = dadr_local(:, :, iat) - dgam * qvec(jat) * dgamdr
+            dadr_local(:, :, jat) = dadr_local(:, :, jat) - dgam * qvec(iat) * dgamdr
             dadL_local(:, :, iat) = -dgam * qvec(jat) * dgamdL(:, :) + dadL_local(:, :, iat)
             dadL_local(:, :, jat) = -dgam * qvec(iat) * dgamdL(:, :) + dadL_local(:, :, jat)
 
@@ -1017,7 +1015,8 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
 
       ! diagonal explicit, charge width, and capacitance derivative terms
       gam = 1.0_wp / sqrt(2.0_wp * radi**2)
-      dtmp = -sqrt2pi * dradi / (radi**2) * qvec(iat)
+      dgamdr = -2.0_wp * radi * dradi * gam**3 * dcndr(:, :, iat)
+      dgamdL = -2.0_wp * radi * dradi * gam**3 * dcndL(:, :, iat)
       rvdw = self%rvdw(iat, iat)
       wsw = 1.0_wp / real(wsc%nimg(iat, iat), wp)
       do img = 1, wsc%nimg(iat, iat)
@@ -1028,10 +1027,10 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
          ! Explicit derivative
          dadL_local(:, :, iat) = +dS * wsw * qvec(iat) + dadL_local(:, :, iat)
 
-         ! Effective charge width derivative
-         atrace_local(:, iat) = +dtmp * dcndr(:, iat, iat) * dgam + atrace_local(:, iat)
-         dadr_local(:, iat, iat) = -dtmp * dcndr(:, iat, iat) * dgam + dadr_local(:, iat, iat)
-         dadL_local(:, :, iat) = -dtmp * dcndL(:, :, iat) * dgam + dadL_local(:, :, iat)
+         ! Self-image distances are fixed under atomic displacements, but their
+         ! Gaussian width still changes through the CN of this atom.
+         dadr_local(:, :, iat) = dadr_local(:, :, iat) - dgam * qvec(iat) * dgamdr
+         dadL_local(:, :, iat) = dadL_local(:, :, iat) - dgam * qvec(iat) * dgamdL
 
          ! Capacitance derivative
          call get_damat_dc_dir(vec, dtrans, capi, capi, rvdw, self%kbc, gam, dG, dS)
