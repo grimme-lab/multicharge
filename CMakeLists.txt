@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.22)
 get_directory_property(is-subproject PARENT_DIRECTORY)
 
 project(
@@ -33,12 +33,42 @@ if(NOT TARGET "OpenMP::OpenMP_Fortran" AND MULTICHARGE_WITH_OpenMP)
   find_package("OpenMP" REQUIRED)
 endif()
 
+# Find Lapack
 if(MULTICHARGE_WITH_ILP64)
   message(STATUS "Using LAPACK/BLAS ILP64 interface")
+  set(BLA_SIZEOF_INTEGER 8)
+else()
+  set(BLA_SIZEOF_INTEGER 4)
 endif()
 
-if(NOT TARGET "LAPACK::LAPACK")
-  find_package("custom-lapack" REQUIRED)
+if(NOT TARGET LAPACK::LAPACK)
+  if(BLA_VENDOR STREQUAL "NVPL")
+    find_package(nvpl REQUIRED)
+
+    if(BLA_SIZEOF_INTEGER STREQUAL "8")
+      set(_nvpl_int ilp64)
+    else()
+      set(_nvpl_int lp64)
+    endif()
+    if(BLA_THREAD STREQUAL "OMP" OR BLA_THREAD STREQUAL "ANY")
+      set(_nvpl_thread omp)
+    else()
+      set(_nvpl_thread seq)
+    endif()
+
+    set(_nvpl_lapack "nvpl::lapack_${_nvpl_int}_${_nvpl_thread}")
+    set(_nvpl_blas "nvpl::blas_${_nvpl_int}_${_nvpl_thread}")
+    if(TARGET "${_nvpl_lapack}" AND TARGET "${_nvpl_blas}")
+      add_library(LAPACK::LAPACK INTERFACE IMPORTED)
+      target_link_libraries(LAPACK::LAPACK INTERFACE "${_nvpl_lapack}"
+                                                     "${_nvpl_blas}")
+    endif()
+  else()
+    if(BLA_VENDOR MATCHES "^Intel" OR DEFINED ENV{MKLROOT})
+      enable_language(C)
+    endif()
+    find_package(LAPACK REQUIRED)
+  endif()
 endif()
 
 # Collect subprojects
@@ -79,7 +109,6 @@ target_link_libraries(
   PUBLIC
   "${lib-deps}"
   "LAPACK::LAPACK"
-  "$<$<VERSION_LESS:${CMAKE_VERSION},3.20>:BLAS::BLAS>"
 )
 if(MULTICHARGE_WITH_OpenMP)
   target_link_libraries(
