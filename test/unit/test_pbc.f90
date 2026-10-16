@@ -18,7 +18,7 @@ module test_pbc
    use mctc_env, only: wp
    use mctc_env_testing, only: new_unittest, unittest_type, error_type, &
       & test_failed
-   use mctc_io_structure, only: structure_type
+   use mctc_io_structure, only: structure_type, new
    use mstore, only: get_structure
    use multicharge_model, only: mchrg_model_type
    use multicharge_model_cache, only: cache_container
@@ -54,6 +54,7 @@ subroutine collect_pbc(testsuite)
       & new_unittest("eeqbc-dbdr-co2", test_eeqbc_dbdr_co2), &
       & new_unittest("eeqbc-dbdL-co2", test_eeqbc_dbdL_co2), &
       & new_unittest("eeqbc-dadr-ice", test_eeqbc_dadr_ice), &
+      & new_unittest("eeqbc-response-znoh", test_eeqbc_response_znoh), &
       & new_unittest("eeqbc-dadL-ice", test_eeqbc_dadL_ice), &
       & new_unittest("eeqbc-gradient-co2", test_eeqbc_g_co2), &
       & new_unittest("eeqbc-sigma-ice", test_eeqbc_s_ice), &
@@ -62,6 +63,26 @@ subroutine collect_pbc(testsuite)
       & ]
 
 end subroutine collect_pbc
+
+!> Compact skew cell probes nonlocal widths and their periodic self images.
+subroutine test_eeqbc_response_znoh(error)
+   type(error_type), allocatable, intent(out) :: error
+   type(structure_type) :: mol
+   class(mchrg_model_type), allocatable :: model
+
+   call new(mol, [30, 8, 1], reshape([ &
+      & 0.0_wp, 0.0_wp, 0.0_wp, 3.0_wp, 0.1_wp, 0.2_wp, &
+      & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3]), charge=1.0_wp, &
+      & lattice=reshape([5.1_wp, 0.0_wp, 0.0_wp, 0.4_wp, 6.2_wp, 0.0_wp, &
+      & 0.2_wp, 0.7_wp, 7.1_wp], [3, 3]), periodic=[.true., .true., .true.])
+   call new_eeqbc2025_model(mol, model, error)
+   if (allocated(error)) return
+   call test_dadr(error, mol, model)
+   if (allocated(error)) return
+   call test_dadL(error, mol, model)
+   if (allocated(error)) return
+   call test_numdqdr(error, mol, model)
+end subroutine test_eeqbc_response_znoh
 
 subroutine gen_test(error, mol, model, qref, eref)
 
