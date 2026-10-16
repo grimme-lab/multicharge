@@ -23,6 +23,8 @@ subroutine collect_hessian(testsuite)
       & new_unittest("eeqbc-cn-cap", test_eeqbc_cap), &
       & new_unittest("eeq-charged", test_eeq_charged), &
       & new_unittest("eeqbc-charged", test_eeqbc_charged), &
+      & new_unittest("eeq-periodic", test_eeq_periodic), &
+      & new_unittest("eeqbc-periodic", test_eeqbc_periodic), &
       & new_unittest("isolated-atom", test_atom), &
       & new_unittest("response-cache", test_cache), &
       & new_unittest("invalid-response", test_invalid) &
@@ -59,6 +61,24 @@ subroutine test_eeqbc_charged(error)
    call run_case(error, .true., 3)
 end subroutine test_eeqbc_charged
 
+subroutine test_eeq_periodic(error)
+   type(error_type), allocatable, intent(out) :: error
+   integer :: icase
+   do icase = 5, 9
+      call run_case(error, .false., icase)
+      if (allocated(error)) return
+   end do
+end subroutine test_eeq_periodic
+
+subroutine test_eeqbc_periodic(error)
+   type(error_type), allocatable, intent(out) :: error
+   integer :: icase
+   do icase = 5, 9
+      call run_case(error, .true., icase)
+      if (allocated(error)) return
+   end do
+end subroutine test_eeqbc_periodic
+
 subroutine test_atom(error)
    type(error_type), allocatable, intent(out) :: error
    call run_case(error, .false., 4)
@@ -72,6 +92,10 @@ subroutine run_case(error, bond_capacity, icase)
    integer, intent(in) :: icase
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
+   real(wp), parameter :: lattice(3, 3) = reshape([ &
+      & 5.1_wp, 0.0_wp, 0.0_wp, 0.4_wp, 6.2_wp, 0.0_wp, &
+      & 0.2_wp, 0.7_wp, 7.1_wp], [3, 3])
+   character(len=30) :: label
 
    select case(icase)
    case(1, 2)
@@ -82,6 +106,22 @@ subroutine run_case(error, bond_capacity, icase)
          & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3]), charge=1.0_wp)
    case(4)
       call new(mol, [8], reshape([0.0_wp, 0.0_wp, 0.0_wp], [3, 1]), charge=-1.0_wp)
+   case(5, 6)
+      call new(mol, [30, 8, 1], reshape([ &
+         & 0.0_wp, 0.0_wp, 0.0_wp, 3.0_wp, 0.1_wp, 0.2_wp, &
+         & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3]), charge=1.0_wp, &
+         & lattice=lattice, periodic=[.true., .true., .true.])
+   case(7)
+      call get_structure(mol, "X23", "urea")
+   case(8)
+      call new(mol, [8], reshape([0.0_wp, 0.0_wp, 0.0_wp], [3, 1]), charge=-1.0_wp, &
+         & lattice=lattice, periodic=[.true., .true., .true.])
+   case(9)
+      ! The half-cell displacement has two equivalent WS images.
+      call new(mol, [8, 1], reshape([0.0_wp, 0.0_wp, 0.0_wp, &
+         & 3.0_wp, 0.2_wp, 0.3_wp], [3, 2]), lattice=reshape([ &
+         & 6.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 7.0_wp, 0.0_wp, &
+         & 0.0_wp, 0.0_wp, 8.0_wp], [3, 3]), periodic=[.true., .true., .true.])
    case default
       call test_failed(error, "Unknown charge Hessian test case")
       return
@@ -93,8 +133,12 @@ subroutine run_case(error, bond_capacity, icase)
    end if
    if (allocated(error)) return
    ! Force an appreciable smooth-cap curvature in both models.
-   if (icase == 2) model%ncoord%cut = 2.5_wp
+   if (icase == 2 .or. icase == 6) model%ncoord%cut = 2.5_wp
    call check_response(error, mol, model)
+   if (allocated(error)) then
+      write(label, "(a, i0, a)") "Case ", icase, ": "
+      error%message = trim(label)//" "//error%message
+   end if
 end subroutine run_case
 
 !> Independent reference: central differences of the weighted first response.
@@ -234,10 +278,10 @@ subroutine test_invalid(error)
    end if
    call get_charges(model, mol, error, q, cache=cache)
    if (allocated(error)) return
-   mol%periodic = .true.
+   mol%periodic = [.true., .false., .false.]
    call add_charge_hessian(model, mol, expected, [1.0_wp], hess, cache)
    if (.not. allocated(expected)) then
-      call test_failed(error, "Periodic second response is not implemented yet")
+      call test_failed(error, "Partial periodicity is not supported by the 3D response")
       return
    end if
    if (any(hess /= 0.125_wp)) call test_failed(error, "Rejected calls changed the Hessian")
