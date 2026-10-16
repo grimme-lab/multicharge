@@ -733,10 +733,9 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
 
          ! Effective charge width derivative
          dtmp = 2.0_wp * exp(-arg) / (sqrtpi)
-         atrace_local(:, iat) = -dtmp * qvec(jat) * dgamdr(:, jat) * cmat(jat, iat) + atrace_local(:, iat)
-         atrace_local(:, jat) = -dtmp * qvec(iat) * dgamdr(:, iat) * cmat(iat, jat) + atrace_local(:, jat)
-         dadr_local(:, iat, jat) = +dtmp * qvec(iat) * dgamdr(:, iat) * cmat(iat, jat) + dadr_local(:, iat, jat)
-         dadr_local(:, jat, iat) = +dtmp * qvec(jat) * dgamdr(:, jat) * cmat(jat, iat) + dadr_local(:, jat, iat)
+         ! The widths depend on CN, so every atom can contribute to this pair.
+         dadr_local(:, :, iat) = dadr_local(:, :, iat) + dtmp * qvec(jat) * cmat(jat, iat) * dgamdr
+         dadr_local(:, :, jat) = dadr_local(:, :, jat) + dtmp * qvec(iat) * cmat(iat, jat) * dgamdr
          dadL_local(:, :, iat) = +dtmp * qvec(jat) * dgamdL(:, :) * cmat(jat, iat) + dadL_local(:, :, iat)
          dadL_local(:, :, jat) = +dtmp * qvec(iat) * dgamdL(:, :) * cmat(iat, jat) + dadL_local(:, :, jat)
 
