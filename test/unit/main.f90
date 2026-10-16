@@ -19,6 +19,7 @@ program tester
    use mctc_env, only : get_argument
    use mctc_env_testing, only : run_testsuite, new_testsuite, testsuite_type, &
       & select_suite, run_selected
+   use test_hessian, only : collect_hessian
    use test_model, only : collect_model
    use test_pbc, only : collect_pbc
    use test_wignerseitz, only : collect_wignerseitz
@@ -32,6 +33,7 @@ program tester
 
    testsuites = [ &
       & new_testsuite("model", collect_model), &
+      & new_testsuite("hessian", collect_hessian), &
       & new_testsuite("pbc", collect_pbc), &
       & new_testsuite("wignerseitz", collect_wignerseitz) &
       & ]

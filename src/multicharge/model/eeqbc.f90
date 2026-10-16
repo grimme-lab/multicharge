@@ -22,12 +22,13 @@
 !> *J. Chem. Phys.*, **2025**, 162, 214109.
 !> DOI: [10.1063/5.0268978](https://dx.doi.org/10.1063/5.0268978)
 module multicharge_model_eeqbc
-   use mctc_env, only: error_type, wp
+   use mctc_env, only: error_type, fatal_error, wp
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
    use mctc_ncoord, only: new_ncoord, cn_count
    use multicharge_blas, only: gemv, gemm
    use multicharge_model_cache, only: cache_container, model_cache
+   use multicharge_model_hessian, only: coulomb_kernel, add_pair_hessian, add_chain_hessian
    use multicharge_model_type, only: mchrg_model_type, get_dir_trans
    use multicharge_wignerseitz, only: new_wignerseitz_cell, wignerseitz_cell_type
    implicit none
@@ -75,6 +76,8 @@ module multicharge_model_eeqbc
       procedure :: get_xvec
       !> Calculate derivatives of EN vector
       procedure :: get_xvec_derivs
+      !> Add u^T (x_ab - A_ab q) for a molecule
+      procedure :: add_model_hessian
       !> Calculate constraint matrix (molecular)
       procedure :: get_cmat_0d
       !> Calculate full constraint matrix (periodic)
@@ -455,6 +458,114 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
    end if
 
 end subroutine get_xvec_derivs
+
+!> Differentiate u^T(x-Aq), holding u and q fixed. Each bond contributes
+!> c_ij [(u_i-u_j)(v_i-v_j) - u_i q_i h_i - u_j q_j h_j
+!>       + (u_i q_j+u_j q_i) J_ij]. CN and local-charge chain rules are
+!> accumulated separately so all intermediates remain quadratic in nat.
+subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
+   class(eeqbc_model), intent(in) :: self
+   type(structure_type), intent(in) :: mol
+   type(error_type), allocatable, intent(out) :: error
+   type(cache_container), intent(inout) :: cache
+   real(wp), intent(in) :: adj(:)
+   real(wp), intent(inout) :: hessian(:, :)
+
+   type(eeqbc_cache), pointer :: ptr
+   integer :: nat, iat, jat, izp, jzp
+   real(wp), parameter :: trans(3, 1) = 0.0_wp
+   real(wp) :: vec(3), unit(3), r, gam, gi, gj, gii, gjj, gij
+   real(wp) :: val, dr, drr, dg, drg, dgg, cap, dcap, ddcap, k, t
+   real(wp) :: udiff, piq, pjq, cross, term, ti, tj, li, lj, ri, rj
+   real(wp), allocatable :: width(:), dw(:), v(:), hard(:), dh(:), ddh(:)
+   real(wp), allocatable :: dEdcn(:), dEdqloc(:), second(:, :)
+   real(wp), allocatable :: mixed(:, :, :), mixed_loc(:, :, :)
+
+   call view(cache, ptr)
+   if (.not. associated(ptr)) then
+      call fatal_error(error, "Incompatible EEQBC response cache")
+      return
+   end if
+   nat = mol%nat
+   allocate(width(nat), dw(nat), v(nat), hard(nat), dh(nat), ddh(nat))
+   allocate(dEdcn(nat), dEdqloc(nat), second(nat, nat))
+   allocate(mixed(3, nat, nat), mixed_loc(3, nat, nat))
+   dEdcn = 0.0_wp
+   dEdqloc = 0.0_wp
+   second = 0.0_wp
+   mixed = 0.0_wp
+   mixed_loc = 0.0_wp
+   do iat = 1, nat
+      izp = mol%id(iat)
+      dw(iat) = -self%rad(izp)*self%kcnrad/self%avg_cn(izp)**self%norm_exp
+      width(iat) = self%rad(izp)+dw(iat)*ptr%cn(iat)
+      v(iat) = -self%chi(izp)+self%kcnchi(izp)*ptr%cn(iat) &
+         & + self%kqchi(izp)*ptr%qloc(iat)
+      hard(iat) = self%eta(izp)+self%kqeta(izp)*ptr%qloc(iat)+sqrt2pi/width(iat)
+      dh(iat) = -sqrt2pi*dw(iat)/width(iat)**2
+      ddh(iat) = 2.0_wp*sqrt2pi*dw(iat)**2/width(iat)**3
+   end do
+
+   do iat = 1, nat
+      izp = mol%id(iat)
+      do jat = 1, iat-1
+         jzp = mol%id(jat)
+         vec = mol%xyz(:, iat)-mol%xyz(:, jat)
+         r = norm2(vec)
+         unit = vec/r
+         gam = 1.0_wp/sqrt(width(iat)**2+width(jat)**2)
+         gi = -width(iat)*dw(iat)*gam**3
+         gj = -width(jat)*dw(jat)*gam**3
+         gii = -dw(iat)**2*gam**3+3.0_wp*(width(iat)*dw(iat))**2*gam**5
+         gjj = -dw(jat)**2*gam**3+3.0_wp*(width(jat)*dw(jat))**2*gam**5
+         gij = 3.0_wp*width(iat)*width(jat)*dw(iat)*dw(jat)*gam**5
+         call coulomb_kernel(r, gam, val, dr, drr, dg, drg, dgg)
+         k = self%kbc/self%rvdw(iat, jat)
+         t = -k*(r-self%rvdw(iat, jat))
+         cap = sqrt(self%cap(izp)*self%cap(jzp))
+         dcap = -cap*k/sqrtpi*exp(-t*t)
+         ddcap = 2.0_wp*k*t*dcap
+         cap = 0.5_wp*cap*(1.0_wp+erf(t))
+
+         udiff = adj(iat)-adj(jat)
+         piq = adj(iat)*cache%qvec(iat)
+         pjq = adj(jat)*cache%qvec(jat)
+         cross = adj(iat)*cache%qvec(jat)+adj(jat)*cache%qvec(iat)
+         term = udiff*(v(iat)-v(jat))-piq*hard(iat)-pjq*hard(jat)+cross*val
+         call add_pair_hessian(iat, jat, vec, dcap*term+cap*cross*dr, &
+            & ddcap*term+2.0_wp*dcap*cross*dr+cap*cross*drr, hessian)
+
+         ti = udiff*self%kcnchi(izp)-piq*dh(iat)+cross*dg*gi
+         tj = -udiff*self%kcnchi(jzp)-pjq*dh(jat)+cross*dg*gj
+         li = udiff*self%kqchi(izp)-piq*self%kqeta(izp)
+         lj = -udiff*self%kqchi(jzp)-pjq*self%kqeta(jzp)
+         dEdcn(iat) = dEdcn(iat)+cap*ti
+         dEdcn(jat) = dEdcn(jat)+cap*tj
+         dEdqloc(iat) = dEdqloc(iat)+cap*li
+         dEdqloc(jat) = dEdqloc(jat)+cap*lj
+         second(iat, iat) = second(iat, iat)+cap*(-piq*ddh(iat)+cross*(dgg*gi*gi+dg*gii))
+         second(jat, jat) = second(jat, jat)+cap*(-pjq*ddh(jat)+cross*(dgg*gj*gj+dg*gjj))
+         second(iat, jat) = cap*cross*(dgg*gi*gj+dg*gij)
+         second(jat, iat) = second(iat, jat)
+
+         ri = dcap*ti+cap*cross*drg*gi
+         rj = dcap*tj+cap*cross*drg*gj
+         mixed(:, iat, iat) = mixed(:, iat, iat)+unit*ri
+         mixed(:, jat, iat) = mixed(:, jat, iat)-unit*ri
+         mixed(:, iat, jat) = mixed(:, iat, jat)+unit*rj
+         mixed(:, jat, jat) = mixed(:, jat, jat)-unit*rj
+         mixed_loc(:, iat, iat) = mixed_loc(:, iat, iat)+unit*dcap*li
+         mixed_loc(:, jat, iat) = mixed_loc(:, jat, iat)-unit*dcap*li
+         mixed_loc(:, iat, jat) = mixed_loc(:, iat, jat)+unit*dcap*lj
+         mixed_loc(:, jat, jat) = mixed_loc(:, jat, jat)-unit*dcap*lj
+      end do
+   end do
+
+   call self%ncoord%add_coordination_number_hessian(mol, trans, dEdcn, hessian)
+   call self%ncoord_en%add_coordination_number_hessian(mol, trans, dEdqloc, hessian)
+   call add_chain_hessian(ptr%dcndr, mixed, hessian, second)
+   call add_chain_hessian(ptr%dqlocdr, mixed_loc, hessian)
+end subroutine add_model_hessian
 
 subroutine get_coulomb_matrix(self, mol, cache, amat)
    class(eeqbc_model), intent(in) :: self

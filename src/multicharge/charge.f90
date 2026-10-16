@@ -23,18 +23,19 @@ module multicharge_charge
    use mctc_env, only : error_type, wp
    use mctc_io, only : structure_type
    use multicharge_model, only : mchrg_model_type
+   use multicharge_model_cache, only : cache_container
    use multicharge_param, only : new_eeq2019_model, new_eeqbc2025_model
    implicit none
    private
 
-   public :: get_charges, get_eeq_charges, get_eeqbc_charges
+   public :: get_charges, get_eeq_charges, get_eeqbc_charges, add_charge_hessian
 
 
 contains
 
 
 !> Classical electronegativity equilibration charges
-subroutine get_charges(mchrg_model, mol, error, qvec, dqdr, dqdL)
+subroutine get_charges(mchrg_model, mol, error, qvec, dqdr, dqdL, cache)
 
    !> Multicharge model
    class(mchrg_model_type), intent(in) :: mchrg_model
@@ -54,12 +55,16 @@ subroutine get_charges(mchrg_model, mol, error, qvec, dqdr, dqdL)
    !> Derivative of the partial charges w.r.t. strain deformations
    real(wp), intent(out), contiguous, optional :: dqdL(:, :, :)
 
+   !> Retain the solution and Cartesian response for add_charge_hessian.
+   !> Recompute after any change to the geometry, charge, or model.
+   type(cache_container), intent(inout), optional :: cache
+
    logical :: grad
    real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :)
    real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
    real(wp), allocatable :: trans(:, :)
 
-   grad = present(dqdr) .and. present(dqdL)
+   grad = (present(dqdr) .and. present(dqdL)) .or. present(cache)
 
    allocate(cn(mol%nat), qloc(mol%nat))
    if (grad) then
@@ -72,9 +77,23 @@ subroutine get_charges(mchrg_model, mol, error, qvec, dqdr, dqdL)
    call mchrg_model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
    call mchrg_model%solve(mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
-      & qvec=qvec, dqdr=dqdr, dqdL=dqdL)
+      & qvec=qvec, dqdr=dqdr, dqdL=dqdL, response=cache)
 
 end subroutine get_charges
+
+
+!> Add sum_i weights(i) d2q_i/dR2, holding weights fixed in the contraction.
+!> The cache must come from get_charges with the same structure and model.
+subroutine add_charge_hessian(mchrg_model, mol, error, weights, hessian, cache)
+   class(mchrg_model_type), intent(in) :: mchrg_model
+   type(structure_type), intent(in) :: mol
+   type(error_type), allocatable, intent(out) :: error
+   real(wp), intent(in) :: weights(:)
+   real(wp), intent(inout) :: hessian(:, :)
+   type(cache_container), intent(inout) :: cache
+
+   call mchrg_model%add_charge_hessian(mol, error, weights, hessian, cache)
+end subroutine add_charge_hessian
 
 
 !> Obtain charges from electronegativity equilibration model
