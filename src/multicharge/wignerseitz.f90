@@ -55,7 +55,6 @@ subroutine new_wignerseitz_cell(self, mol)
    allocate(self%nimg(mol%nat, mol%nat), self%tridx(ntr, mol%nat, mol%nat), &
       & tridx(ntr))
 
-   self%nimg_max = 0
    !$omp parallel do default(none) schedule(runtime) collapse(2) &
    !$omp shared(mol, trans, self) private(iat, jat, vec, nimg, tridx)
    do iat = 1, mol%nat
@@ -64,9 +63,9 @@ subroutine new_wignerseitz_cell(self, mol)
          call get_pairs(nimg, trans, vec, tridx)
          self%nimg(jat, iat) = nimg
          self%tridx(:, jat, iat) = tridx
-         self%nimg_max = max(nimg, self%nimg_max)
       end do
    end do
+   self%nimg_max = maxval(self%nimg)
 
    call move_alloc(trans, self%trans)
 
@@ -80,7 +79,7 @@ subroutine get_pairs(iws, trans, rij, list)
 
    logical :: mask(size(list))
    real(wp) :: dist(size(list)), vec(3), r2
-   integer :: itr, img, pos
+   integer :: itr, img, pos, indices(size(list))
 
    iws = 0
    img = 0
@@ -93,6 +92,7 @@ subroutine get_pairs(iws, trans, rij, list)
       if (r2 < thr) cycle
       img = img + 1
       dist(img) = r2
+      indices(img) = itr
    end do
 
    if (img == 0) return
@@ -103,7 +103,7 @@ subroutine get_pairs(iws, trans, rij, list)
    mask(pos) = .false.
 
    iws = 1
-   list(iws) = pos
+   list(iws) = indices(pos)
    if (img <= iws) return
 
    do
@@ -111,7 +111,8 @@ subroutine get_pairs(iws, trans, rij, list)
       if (abs(dist(pos) - r2) > tol) exit
       mask(pos) = .false.
       iws = iws + 1
-      list(iws) = pos
+      list(iws) = indices(pos)
+      if (iws == img) exit
    end do
 
 end subroutine get_pairs

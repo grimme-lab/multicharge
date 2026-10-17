@@ -18,7 +18,7 @@ module test_wignerseitz
    use mctc_env, only: wp
    use mctc_env_testing, only: new_unittest, unittest_type, error_type, check, &
       & test_failed
-   use mctc_io_structure, only: structure_type
+   use mctc_io_structure, only: structure_type, new
    use mstore, only: get_structure
    use multicharge_wignerseitz, only : wignerseitz_cell_type, new_wignerseitz_cell
    implicit none
@@ -41,7 +41,8 @@ subroutine collect_wignerseitz(testsuite)
       & new_unittest("lattice-points-0d", test_latticepoints_0d), &
       & new_unittest("lattice-points-3d", test_latticepoints_3d), &
       & new_unittest("wignerseitz-cell-0d", test_wsc_0d), &
-      & new_unittest("wignerseitz-cell-3d", test_wsc_3d) &
+      & new_unittest("wignerseitz-cell-3d", test_wsc_3d), &
+      & new_unittest("wignerseitz-self-images", test_self_images) &
       & ]
 
 end subroutine collect_wignerseitz
@@ -143,5 +144,47 @@ subroutine test_wsc_3d(error)
    if (allocated(error)) return
 
 end subroutine test_wsc_3d
+
+!> Excluding the zero image must preserve the original translation indices.
+subroutine test_self_images(error)
+   type(error_type), allocatable, intent(out) :: error
+   type(structure_type) :: mol
+   type(wignerseitz_cell_type) :: wsc
+   real(wp) :: lattice(3, 3), vec(3), total(3)
+   integer :: icase, i, expected
+
+   do icase = 1, 2
+      lattice = reshape([5.1_wp, 0.0_wp, 0.0_wp, 0.4_wp, 6.2_wp, 0.0_wp, &
+         & 0.2_wp, 0.7_wp, 7.1_wp], [3, 3])
+      expected = 2
+      if (icase == 2) then
+         lattice = 0.0_wp
+         do i = 1, 3
+            lattice(i, i) = 5.1_wp
+         end do
+         expected = 6
+      end if
+      call new(mol, [8], reshape([0.0_wp, 0.0_wp, 0.0_wp], [3, 1]), &
+         & lattice=lattice, periodic=[.true., .true., .true.])
+      call new_wignerseitz_cell(wsc, mol)
+      call check(error, wsc%nimg(1, 1), expected)
+      if (allocated(error)) return
+      call check(error, wsc%nimg_max, expected)
+      if (allocated(error)) return
+      total = 0.0_wp
+      do i = 1, wsc%nimg(1, 1)
+         vec = wsc%trans(:, wsc%tridx(i, 1, 1))
+         if (abs(norm2(vec)-5.1_wp) > thr) then
+            call test_failed(error, "Selected self image is not a closest lattice point")
+            return
+         end if
+         total = total+vec
+      end do
+      if (maxval(abs(total)) > thr) then
+         call test_failed(error, "Closest self images do not occur in opposite pairs")
+         return
+      end if
+   end do
+end subroutine test_self_images
 
 end module test_wignerseitz

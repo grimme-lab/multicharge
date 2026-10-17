@@ -22,12 +22,14 @@
 !> *J. Chem. Phys.*, **2025**, 162, 214109.
 !> DOI: [10.1063/5.0268978](https://dx.doi.org/10.1063/5.0268978)
 module multicharge_model_eeqbc
-   use mctc_env, only: error_type, wp
+   use mctc_cutoff, only: get_lattice_points
+   use mctc_env, only: error_type, fatal_error, wp
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
    use mctc_ncoord, only: new_ncoord, cn_count
    use multicharge_blas, only: gemv, gemm
    use multicharge_model_cache, only: cache_container, model_cache
+   use multicharge_model_hessian, only: coulomb_kernel, add_pair_hessian, add_chain_hessian
    use multicharge_model_type, only: mchrg_model_type, get_dir_trans
    use multicharge_wignerseitz, only: new_wignerseitz_cell, wignerseitz_cell_type
    implicit none
@@ -75,6 +77,8 @@ module multicharge_model_eeqbc
       procedure :: get_xvec
       !> Calculate derivatives of EN vector
       procedure :: get_xvec_derivs
+      !> Add u^T (x_ab - A_ab q) at fixed lattice
+      procedure :: add_model_hessian
       !> Calculate constraint matrix (molecular)
       procedure :: get_cmat_0d
       !> Calculate full constraint matrix (periodic)
@@ -456,6 +460,136 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
 
 end subroutine get_xvec_derivs
 
+!> Differentiate u^T(x-Aq), holding u and q fixed. Each bond contributes
+!> c_ij [(u_i-u_j)(v_i-v_j) - u_i q_i h_i - u_j q_j h_j
+!>       + (u_i q_j+u_j q_i) J_ij]. A self image uses half this weight,
+!> yielding c_ii u_i q_i (J_ii-h_i). Its position is fixed but its width
+!> depends on CN. Collect chain rules before Cartesian contraction.
+subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
+   class(eeqbc_model), intent(in) :: self
+   type(structure_type), intent(in) :: mol
+   type(error_type), allocatable, intent(out) :: error
+   type(cache_container), intent(inout) :: cache
+   real(wp), intent(in) :: adj(:)
+   real(wp), intent(inout) :: hessian(:, :)
+
+   type(eeqbc_cache), pointer :: ptr
+   integer :: nat, iat, jat, izp, jzp, img, itr, nimg
+   logical :: periodic
+   real(wp) :: rij(3), vec(3), unit(3), r, gam, gi, gj, gii, gjj, gij, wsw
+   real(wp) :: val, dr, drr, dg, drg, dgg, cap, dcap, ddcap, k, t
+   real(wp) :: udiff, piq, pjq, cross, term, ti, tj, li, lj, ri, rj, cij
+   real(wp), allocatable :: width(:), dw(:), v(:), hard(:), dh(:), ddh(:)
+   real(wp), allocatable :: dEdcn(:), dEdqloc(:), second(:, :), trans(:, :), dtrans(:, :)
+   real(wp), allocatable :: mixed(:, :, :), mixed_loc(:, :, :)
+
+   call view(cache, ptr)
+   if (.not. associated(ptr)) then
+      call fatal_error(error, "Incompatible EEQBC response cache")
+      return
+   end if
+   nat = mol%nat
+   periodic = any(mol%periodic)
+   if (periodic) then
+      call get_dir_trans(mol%lattice, dtrans)
+   else
+      allocate(dtrans(3, 1), source=0.0_wp)
+   end if
+   allocate(width(nat), dw(nat), v(nat), hard(nat), dh(nat), ddh(nat))
+   allocate(dEdcn(nat), dEdqloc(nat), second(nat, nat))
+   allocate(mixed(3, nat, nat), mixed_loc(3, nat, nat))
+   dEdcn = 0.0_wp
+   dEdqloc = 0.0_wp
+   second = 0.0_wp
+   mixed = 0.0_wp
+   mixed_loc = 0.0_wp
+   do iat = 1, nat
+      izp = mol%id(iat)
+      dw(iat) = -self%rad(izp)*self%kcnrad/self%avg_cn(izp)**self%norm_exp
+      width(iat) = self%rad(izp)+dw(iat)*ptr%cn(iat)
+      v(iat) = -self%chi(izp)+self%kcnchi(izp)*ptr%cn(iat) &
+         & + self%kqchi(izp)*ptr%qloc(iat)
+      hard(iat) = self%eta(izp)+self%kqeta(izp)*ptr%qloc(iat)+sqrt2pi/width(iat)
+      dh(iat) = -sqrt2pi*dw(iat)/width(iat)**2
+      ddh(iat) = 2.0_wp*sqrt2pi*dw(iat)**2/width(iat)**3
+   end do
+
+   do iat = 1, nat
+      izp = mol%id(iat)
+      do jat = 1, iat
+         if (iat == jat .and. .not. periodic) cycle
+         jzp = mol%id(jat)
+         gam = 1.0_wp/sqrt(width(iat)**2+width(jat)**2)
+         gi = -width(iat)*dw(iat)*gam**3
+         gj = -width(jat)*dw(jat)*gam**3
+         gii = -dw(iat)**2*gam**3+3.0_wp*(width(iat)*dw(iat))**2*gam**5
+         gjj = -dw(jat)**2*gam**3+3.0_wp*(width(jat)*dw(jat))**2*gam**5
+         gij = 3.0_wp*width(iat)*width(jat)*dw(iat)*dw(jat)*gam**5
+         udiff = adj(iat)-adj(jat)
+         piq = adj(iat)*cache%qvec(iat)
+         pjq = adj(jat)*cache%qvec(jat)
+         cross = adj(iat)*cache%qvec(jat)+adj(jat)*cache%qvec(iat)
+         li = udiff*self%kqchi(izp)-piq*self%kqeta(izp)
+         lj = -udiff*self%kqchi(jzp)-pjq*self%kqeta(jzp)
+         k = self%kbc/self%rvdw(iat, jat)
+         nimg = 1
+         if (periodic) nimg = ptr%wsc%nimg(jat, iat)
+         wsw = 1.0_wp/real(nimg, wp)
+         if (iat == jat) wsw = 0.5_wp*wsw
+         do img = 1, nimg
+            rij = mol%xyz(:, iat)-mol%xyz(:, jat)
+            if (periodic) rij = rij-ptr%wsc%trans(:, ptr%wsc%tridx(img, jat, iat))
+            do itr = 1, size(dtrans, 2)
+               vec = rij+dtrans(:, itr)
+               r = norm2(vec)
+               if (r < eps) cycle
+               call coulomb_kernel(r, gam, val, dr, drr, dg, drg, dgg)
+               t = -k*(r-self%rvdw(iat, jat))
+               cap = wsw*sqrt(self%cap(izp)*self%cap(jzp))
+               dcap = -cap*k/sqrtpi*exp(-t*t)
+               ddcap = 2.0_wp*k*t*dcap
+               cap = 0.5_wp*cap*(1.0_wp+erf(t))
+
+               ti = udiff*self%kcnchi(izp)-piq*dh(iat)+cross*dg*gi
+               tj = -udiff*self%kcnchi(jzp)-pjq*dh(jat)+cross*dg*gj
+               dEdcn(iat) = dEdcn(iat)+cap*ti
+               dEdcn(jat) = dEdcn(jat)+cap*tj
+               dEdqloc(iat) = dEdqloc(iat)+cap*li
+               dEdqloc(jat) = dEdqloc(jat)+cap*lj
+               second(iat, iat) = second(iat, iat)+cap*(-piq*ddh(iat)+cross*(dgg*gi*gi+dg*gii))
+               second(jat, jat) = second(jat, jat)+cap*(-pjq*ddh(jat)+cross*(dgg*gj*gj+dg*gjj))
+               cij = cap*cross*(dgg*gi*gj+dg*gij)
+               second(iat, jat) = second(iat, jat)+cij
+               second(jat, iat) = second(jat, iat)+cij
+
+               ! Self images contribute through CN and local charge only.
+               if (iat == jat) cycle
+               term = udiff*(v(iat)-v(jat))-piq*hard(iat)-pjq*hard(jat)+cross*val
+               call add_pair_hessian(iat, jat, vec, dcap*term+cap*cross*dr, &
+                  & ddcap*term+2.0_wp*dcap*cross*dr+cap*cross*drr, hessian)
+               unit = vec/r
+               ri = dcap*ti+cap*cross*drg*gi
+               rj = dcap*tj+cap*cross*drg*gj
+               mixed(:, iat, iat) = mixed(:, iat, iat)+unit*ri
+               mixed(:, jat, iat) = mixed(:, jat, iat)-unit*ri
+               mixed(:, iat, jat) = mixed(:, iat, jat)+unit*rj
+               mixed(:, jat, jat) = mixed(:, jat, jat)-unit*rj
+               mixed_loc(:, iat, iat) = mixed_loc(:, iat, iat)+unit*dcap*li
+               mixed_loc(:, jat, iat) = mixed_loc(:, jat, iat)-unit*dcap*li
+               mixed_loc(:, iat, jat) = mixed_loc(:, iat, jat)+unit*dcap*lj
+               mixed_loc(:, jat, jat) = mixed_loc(:, jat, jat)-unit*dcap*lj
+            end do
+         end do
+      end do
+   end do
+
+   call get_lattice_points(mol%periodic, mol%lattice, self%ncoord%cutoff, trans)
+   call self%ncoord%add_coordination_number_hessian(mol, trans, dEdcn, hessian)
+   call self%ncoord_en%add_coordination_number_hessian(mol, trans, dEdqloc, hessian)
+   call add_chain_hessian(ptr%dcndr, mixed, hessian, second)
+   call add_chain_hessian(ptr%dqlocdr, mixed_loc, hessian)
+end subroutine add_model_hessian
+
 subroutine get_coulomb_matrix(self, mol, cache, amat)
    class(eeqbc_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
@@ -733,10 +867,9 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
 
          ! Effective charge width derivative
          dtmp = 2.0_wp * exp(-arg) / (sqrtpi)
-         atrace_local(:, iat) = -dtmp * qvec(jat) * dgamdr(:, jat) * cmat(jat, iat) + atrace_local(:, iat)
-         atrace_local(:, jat) = -dtmp * qvec(iat) * dgamdr(:, iat) * cmat(iat, jat) + atrace_local(:, jat)
-         dadr_local(:, iat, jat) = +dtmp * qvec(iat) * dgamdr(:, iat) * cmat(iat, jat) + dadr_local(:, iat, jat)
-         dadr_local(:, jat, iat) = +dtmp * qvec(jat) * dgamdr(:, jat) * cmat(jat, iat) + dadr_local(:, jat, iat)
+         ! The widths depend on CN, so every atom can contribute to this pair.
+         dadr_local(:, :, iat) = dadr_local(:, :, iat) + dtmp * qvec(jat) * cmat(jat, iat) * dgamdr
+         dadr_local(:, :, jat) = dadr_local(:, :, jat) + dtmp * qvec(iat) * cmat(iat, jat) * dgamdr
          dadL_local(:, :, iat) = +dtmp * qvec(jat) * dgamdL(:, :) * cmat(jat, iat) + dadL_local(:, :, iat)
          dadL_local(:, :, jat) = +dtmp * qvec(iat) * dgamdL(:, :) * cmat(iat, jat) + dadL_local(:, :, jat)
 
@@ -874,11 +1007,9 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
             dadL_local(:, :, jat) = +dS * qvec(iat) + dadL_local(:, :, jat)
             dadL_local(:, :, iat) = +dS * qvec(jat) + dadL_local(:, :, iat)
 
-            ! Effective charge width derivative
-            atrace_local(:, iat) = +dgam * qvec(jat) * dgamdr(:, jat) + atrace_local(:, iat)
-            atrace_local(:, jat) = +dgam * qvec(iat) * dgamdr(:, iat) + atrace_local(:, jat)
-            dadr_local(:, iat, jat) = -dgam * qvec(iat) * dgamdr(:, iat) + dadr_local(:, iat, jat)
-            dadr_local(:, jat, iat) = -dgam * qvec(jat) * dgamdr(:, jat) + dadr_local(:, jat, iat)
+            ! CN-dependent widths respond to every atom, including third atoms.
+            dadr_local(:, :, iat) = dadr_local(:, :, iat) - dgam * qvec(jat) * dgamdr
+            dadr_local(:, :, jat) = dadr_local(:, :, jat) - dgam * qvec(iat) * dgamdr
             dadL_local(:, :, iat) = -dgam * qvec(jat) * dgamdL(:, :) + dadL_local(:, :, iat)
             dadL_local(:, :, jat) = -dgam * qvec(iat) * dgamdL(:, :) + dadL_local(:, :, jat)
 
@@ -907,7 +1038,8 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
 
       ! diagonal explicit, charge width, and capacitance derivative terms
       gam = 1.0_wp / sqrt(2.0_wp * radi**2)
-      dtmp = -sqrt2pi * dradi / (radi**2) * qvec(iat)
+      dgamdr = -2.0_wp * radi * dradi * gam**3 * dcndr(:, :, iat)
+      dgamdL = -2.0_wp * radi * dradi * gam**3 * dcndL(:, :, iat)
       rvdw = self%rvdw(iat, iat)
       wsw = 1.0_wp / real(wsc%nimg(iat, iat), wp)
       do img = 1, wsc%nimg(iat, iat)
@@ -918,10 +1050,10 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
          ! Explicit derivative
          dadL_local(:, :, iat) = +dS * wsw * qvec(iat) + dadL_local(:, :, iat)
 
-         ! Effective charge width derivative
-         atrace_local(:, iat) = +dtmp * dcndr(:, iat, iat) * dgam + atrace_local(:, iat)
-         dadr_local(:, iat, iat) = -dtmp * dcndr(:, iat, iat) * dgam + dadr_local(:, iat, iat)
-         dadL_local(:, :, iat) = -dtmp * dcndL(:, :, iat) * dgam + dadL_local(:, :, iat)
+         ! Self-image distances are fixed under atomic displacements, but their
+         ! Gaussian width still changes through the CN of this atom.
+         dadr_local(:, :, iat) = dadr_local(:, :, iat) - dgam * qvec(iat) * dgamdr
+         dadL_local(:, :, iat) = dadL_local(:, :, iat) - dgam * qvec(iat) * dgamdL
 
          ! Capacitance derivative
          call get_damat_dc_dir(vec, dtrans, capi, capi, rvdw, self%kbc, gam, dG, dS)

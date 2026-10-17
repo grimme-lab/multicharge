@@ -27,6 +27,8 @@ module multicharge_model_cache
    type, public :: cache_container
       !> Mutable data attribute
       class(*), allocatable :: raw
+      !> Optional charge-response data, refreshed by get_charges/solve.
+      real(wp), allocatable :: qvec(:), ainv(:, :), dqdr(:, :, :)
    end type cache_container
 
    !> Cache for the charge model

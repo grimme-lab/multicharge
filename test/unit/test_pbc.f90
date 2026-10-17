@@ -18,7 +18,7 @@ module test_pbc
    use mctc_env, only: wp
    use mctc_env_testing, only: new_unittest, unittest_type, error_type, &
       & test_failed
-   use mctc_io_structure, only: structure_type
+   use mctc_io_structure, only: structure_type, new
    use mstore, only: get_structure
    use multicharge_model, only: mchrg_model_type
    use multicharge_model_cache, only: cache_container
@@ -54,6 +54,7 @@ subroutine collect_pbc(testsuite)
       & new_unittest("eeqbc-dbdr-co2", test_eeqbc_dbdr_co2), &
       & new_unittest("eeqbc-dbdL-co2", test_eeqbc_dbdL_co2), &
       & new_unittest("eeqbc-dadr-ice", test_eeqbc_dadr_ice), &
+      & new_unittest("eeqbc-response-znoh", test_eeqbc_response_znoh), &
       & new_unittest("eeqbc-dadL-ice", test_eeqbc_dadL_ice), &
       & new_unittest("eeqbc-gradient-co2", test_eeqbc_g_co2), &
       & new_unittest("eeqbc-sigma-ice", test_eeqbc_s_ice), &
@@ -62,6 +63,26 @@ subroutine collect_pbc(testsuite)
       & ]
 
 end subroutine collect_pbc
+
+!> Compact skew cell probes nonlocal widths and their periodic self images.
+subroutine test_eeqbc_response_znoh(error)
+   type(error_type), allocatable, intent(out) :: error
+   type(structure_type) :: mol
+   class(mchrg_model_type), allocatable :: model
+
+   call new(mol, [30, 8, 1], reshape([ &
+      & 0.0_wp, 0.0_wp, 0.0_wp, 3.0_wp, 0.1_wp, 0.2_wp, &
+      & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3]), charge=1.0_wp, &
+      & lattice=reshape([5.1_wp, 0.0_wp, 0.0_wp, 0.4_wp, 6.2_wp, 0.0_wp, &
+      & 0.2_wp, 0.7_wp, 7.1_wp], [3, 3]), periodic=[.true., .true., .true.])
+   call new_eeqbc2025_model(mol, model, error)
+   if (allocated(error)) return
+   call test_dadr(error, mol, model)
+   if (allocated(error)) return
+   call test_dadL(error, mol, model)
+   if (allocated(error)) return
+   call test_numdqdr(error, mol, model)
+end subroutine test_eeqbc_response_znoh
 
 subroutine gen_test(error, mol, model, qref, eref)
 
@@ -840,15 +861,16 @@ subroutine test_eeq_e_formamide(error)
 
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
+   ! Updated for the corrected closest self-image indices in the finite Ewald sum.
    real(wp), parameter :: ref(24) = [&
-      & 4.01878116759118E-1_wp, 4.01884779867146E-1_wp, 4.01836430415694E-1_wp, &
-      & 4.01859412981015E-1_wp, 4.30132679242368E-1_wp, 4.30105708698129E-1_wp, &
-      & 4.30085668404029E-1_wp, 4.30108945050621E-1_wp, 1.90400193163051E-1_wp, &
-      & 1.90401822781550E-1_wp, 1.90404130981992E-1_wp, 1.90407447306916E-1_wp, &
-      & 3.33868335196572E-1_wp, 3.33848682655264E-1_wp, 3.33875977331594E-1_wp, &
-      & 3.33893030511429E-1_wp, -8.35635584733599E-1_wp, -8.35614926719694E-1_wp, &
-      &-8.35542684637248E-1_wp, -8.35589488474056E-1_wp, -6.31079122091240E-1_wp, &
-      &-6.31059677948463E-1_wp, -6.31085206912995E-1_wp, -6.31081747027041E-1_wp]
+      & 4.01878374848218E-1_wp, 4.01885037960585E-1_wp, 4.01836688451938E-1_wp, &
+      & 4.01859671045163E-1_wp, 4.30132953863926E-1_wp, 4.30105983289177E-1_wp, &
+      & 4.30085942964261E-1_wp, 4.30109219640357E-1_wp, 1.90400204980586E-1_wp, &
+      & 1.90401834599991E-1_wp, 1.90404142802720E-1_wp, 1.90407459129532E-1_wp, &
+      & 3.33868772616625E-1_wp, 3.33849120047752E-1_wp, 3.33876414748715E-1_wp, &
+      & 3.33893467953259E-1_wp, -8.35636285924796E-1_wp, -8.35615627876539E-1_wp, &
+      &-8.35543385695695E-1_wp, -8.35590189606622E-1_wp, -6.31079471173689E-1_wp, &
+      &-6.31060027005050E-1_wp, -6.31085556003547E-1_wp, -6.31082096115175E-1_wp]
 
    call get_structure(mol, "X23", "formamide")
    call new_eeq2019_model(mol, model, error)

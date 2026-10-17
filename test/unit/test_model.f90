@@ -63,6 +63,7 @@ subroutine collect_model(testsuite)
       & new_unittest("gradient-znooh", test_g_znooh), &
       & new_unittest("dqdr-znooh", test_dqdr_znooh), &
       & new_unittest("eeqbc-dadr-mb01", test_eeqbc_dadr_mb01), &
+      & new_unittest("eeqbc-response-znoh", test_eeqbc_response_znoh), &
       & new_unittest("eeqbc-dadL-mb01", test_eeqbc_dadL_mb01), &
       & new_unittest("eeqbc-dbdr-mb01", test_eeqbc_dbdr_mb01), &
       & new_unittest("eeqbc-dbdL-mb01", test_eeqbc_dbdL_mb01), &
@@ -85,6 +86,23 @@ subroutine collect_model(testsuite)
       & ]
 
 end subroutine collect_model
+
+!> A third atom changes the charge widths of a Coulomb pair through its CN.
+subroutine test_eeqbc_response_znoh(error)
+   type(error_type), allocatable, intent(out) :: error
+   type(structure_type) :: mol
+   class(mchrg_model_type), allocatable :: model
+
+   call new(mol, [30, 8, 1], reshape([ &
+      & 0.0_wp, 0.0_wp, 0.0_wp, &
+      & 3.0_wp, 0.1_wp, 0.2_wp, &
+      & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3]), charge=1.0_wp)
+   call new_eeqbc2025_model(mol, model, error)
+   if (allocated(error)) return
+   call test_dadr(error, mol, model)
+   if (allocated(error)) return
+   call test_numdqdr(error, mol, model)
+end subroutine test_eeqbc_response_znoh
 
 subroutine test_dadr(error, mol, model)
 
