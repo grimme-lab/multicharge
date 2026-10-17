@@ -322,6 +322,7 @@ end subroutine solve
 !> Add the Cartesian charge Hessian contracted with fixed weights and lattice.
 !> Ay=x, A^T u=(weights,0): H_ab=u^T(x_ab-A_ab y-A_a y_b-A_b y_a).
 subroutine add_charge_hessian(self, mol, error, weights, hessian, cache)
+   use multicharge_model_hessian, only: add_symmetric_product
    class(mchrg_model_type), intent(in) :: self
    type(structure_type), intent(in) :: mol
    type(error_type), allocatable, intent(out) :: error
@@ -369,8 +370,7 @@ subroutine add_charge_hessian(self, mol, error, weights, hessian, cache)
    end do
    da(1:3*nat, 1:nat+1) => dadr
    dq(1:3*nat, 1:nat) => cache%dqdr
-   call gemm(da(:, :nat), dq, hessian, transb="t", alpha=-1.0_wp, beta=1.0_wp)
-   call gemm(dq, da(:, :nat), hessian, transb="t", alpha=-1.0_wp, beta=1.0_wp)
+   call add_symmetric_product(da(:, :nat), dq, hessian, alpha=-1.0_wp)
 end subroutine add_charge_hessian
 
 

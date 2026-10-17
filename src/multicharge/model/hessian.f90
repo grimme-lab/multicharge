@@ -21,6 +21,7 @@ module multicharge_model_hessian
    implicit none
    private
    public :: coulomb_kernel, radial_hessian, add_pair_hessian, add_pair_block, add_chain_hessian
+   public :: add_symmetric_product
 
 contains
 
@@ -57,20 +58,24 @@ end function radial_hessian
 
 
 !> Add the Cartesian blocks of a radial pair term (vec=R_i-R_j-T).
-subroutine add_pair_hessian(iat, jat, vec, dr, drr, hessian)
+subroutine add_pair_hessian(iat, jat, vec, dr, drr, hessian, diagonal)
    integer, intent(in) :: iat, jat
    real(wp), intent(in) :: vec(3), dr, drr
    real(wp), intent(inout) :: hessian(:, :)
+   real(wp), intent(inout), optional :: diagonal(:, :, :)
 
-   call add_pair_block(iat, jat, radial_hessian(vec, dr, drr), hessian)
+   call add_pair_block(iat, jat, radial_hessian(vec, dr, drr), hessian, diagonal)
 end subroutine add_pair_hessian
 
 
 !> Scatter a pair curvature after summing its periodic images.
-subroutine add_pair_block(iat, jat, box, hessian)
+subroutine add_pair_block(iat, jat, box, hessian, diagonal)
    integer, intent(in) :: iat, jat
    real(wp), intent(in) :: box(3, 3)
    real(wp), intent(inout) :: hessian(:, :)
+   !> Separate diagonal accumulator for pair-parallel callers. Each off-diagonal
+   !> block must have a unique owner; only this O(N) array then needs reduction.
+   real(wp), intent(inout), optional :: diagonal(:, :, :)
    integer :: ic, jc, ii, jj, ik, jk
 
    do jc = 1, 3
@@ -79,8 +84,13 @@ subroutine add_pair_block(iat, jat, box, hessian)
       do ic = 1, 3
          ii = 3*(iat-1)+ic
          ik = 3*(jat-1)+ic
-         hessian(ii, jj) = hessian(ii, jj) + box(ic, jc)
-         hessian(ik, jk) = hessian(ik, jk) + box(ic, jc)
+         if (present(diagonal)) then
+            diagonal(ic, jc, iat) = diagonal(ic, jc, iat) + box(ic, jc)
+            diagonal(ic, jc, jat) = diagonal(ic, jc, jat) + box(ic, jc)
+         else
+            hessian(ii, jj) = hessian(ii, jj) + box(ic, jc)
+            hessian(ik, jk) = hessian(ik, jk) + box(ic, jc)
+         end if
          hessian(ii, jk) = hessian(ii, jk) - box(ic, jc)
          hessian(ik, jj) = hessian(ik, jj) - box(ic, jc)
       end do
@@ -101,13 +111,33 @@ subroutine add_chain_hessian(dzdr, mixed, hessian, second)
    ndim = size(dzdr, 1)*size(dzdr, 2)
    dr(1:ndim, 1:nat) => dzdr
    cross(1:ndim, 1:nat) => mixed
-   call gemm(cross, dr, hessian, transb="t", beta=1.0_wp)
-   call gemm(dr, cross, hessian, transb="t", beta=1.0_wp)
+   call add_symmetric_product(cross, dr, hessian)
    if (present(second)) then
       allocate(work(ndim, nat))
       call gemm(dr, second, work)
       call gemm(work, dr, hessian, transb="t", beta=1.0_wp)
    end if
 end subroutine add_chain_hessian
+
+!> Add alpha*(A B^T + B A^T), computing the transposed product only once.
+!> Preserve the existing Hessian, including any asymmetric contribution.
+subroutine add_symmetric_product(a, b, hessian, alpha)
+   real(wp), intent(in) :: a(:, :), b(:, :)
+   real(wp), intent(inout) :: hessian(:, :)
+   real(wp), intent(in), optional :: alpha
+   real(wp), allocatable :: work(:, :)
+   integer :: ii, jj, ndim
+
+   ndim = size(hessian, 1)
+   allocate(work(ndim, ndim))
+   call gemm(a, b, work, transb="t", alpha=alpha)
+   !$omp parallel do collapse(2) default(none) schedule(static) shared(hessian, work, ndim)
+   do jj = 1, ndim
+      do ii = 1, ndim
+         hessian(ii, jj) = hessian(ii, jj) + work(ii, jj) + work(jj, ii)
+      end do
+   end do
+   !$omp end parallel do
+end subroutine add_symmetric_product
 
 end module multicharge_model_hessian
