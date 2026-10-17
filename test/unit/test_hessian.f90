@@ -203,10 +203,15 @@ subroutine check_response(error, mol, model)
       end if
    end do
    ! The same response cache may serve several weight vectors and accumulations.
-   again = 0.125_wp
+   do j = 1, 3*n
+      do i = 1, 3*n
+         numeric(i, j) = 0.125_wp + real(i+2*j, wp)*1.0e-6_wp
+      end do
+   end do
+   again = numeric
    call add_charge_hessian(model, mol, error, weights, again, cache)
    if (allocated(error)) return
-   if (maxval(abs(again-hess-0.125_wp)) > 1.0e-11_wp*scale) then
+   if (maxval(abs(again-hess-numeric)) > 1.0e-11_wp*scale) then
       call test_failed(error, "Charge Hessian does not accumulate")
       return
    end if
