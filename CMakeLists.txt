@@ -19,8 +19,8 @@ get_directory_property(is-subproject PARENT_DIRECTORY)
 project(
   "multicharge"
   LANGUAGES "Fortran"
-  VERSION "0.5.0"
-  DESCRIPTION "Molecular structure store for testing"
+  VERSION "0.6.0"
+  DESCRIPTION "Electronegativity equilibration model for charges and multipoles"
 )
 
 # Follow GNU conventions for installing directories

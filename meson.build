@@ -16,7 +16,7 @@
 project(
   'multicharge',
   'fortran',
-  version: '0.5.0',
+  version: '0.6.0',
   license: 'Apache-2.0',
   meson_version: '>=0.60',
   default_options: [
