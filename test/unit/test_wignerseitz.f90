@@ -19,8 +19,8 @@ module test_wignerseitz
    use mctc_env_testing, only: new_unittest, unittest_type, error_type, check, &
       & test_failed
    use mctc_io_structure, only: structure_type, new
+   use mctc_wignerseitz, only: wignerseitz_cell, new_wignerseitz_cell
    use mstore, only: get_structure
-   use multicharge_wignerseitz, only : wignerseitz_cell_type, new_wignerseitz_cell
    implicit none
    private
 
@@ -111,7 +111,7 @@ subroutine test_wsc_0d(error)
    type(error_type), allocatable, intent(out) :: error
 
    type(structure_type) :: mol
-   type(wignerseitz_cell_type) :: wsc
+   type(wignerseitz_cell) :: wsc
 
    call get_structure(mol, "MB16-43", "02")
 
@@ -131,7 +131,7 @@ subroutine test_wsc_3d(error)
    type(error_type), allocatable, intent(out) :: error
 
    type(structure_type) :: mol
-   type(wignerseitz_cell_type) :: wsc
+   type(wignerseitz_cell) :: wsc
 
    call get_structure(mol, "X23", "pyrazole")
 
@@ -149,7 +149,7 @@ end subroutine test_wsc_3d
 subroutine test_self_images(error)
    type(error_type), allocatable, intent(out) :: error
    type(structure_type) :: mol
-   type(wignerseitz_cell_type) :: wsc
+   type(wignerseitz_cell) :: wsc
    real(wp) :: lattice(3, 3), vec(3), total(3)
    integer :: icase, i, expected
 

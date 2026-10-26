@@ -28,12 +28,12 @@ module multicharge_model_eeq
    use mctc_io_constants, only: pi
    use mctc_io_math, only: matdet_3x3
    use mctc_ncoord, only: new_ncoord, cn_count
+   use mctc_wignerseitz, only: wignerseitz_cell, new_wignerseitz_cell
    use multicharge_blas, only: gemm
    use multicharge_ewald, only: get_alpha
    use multicharge_model_cache, only: cache_container, model_cache
    use multicharge_model_hessian, only: coulomb_kernel, radial_hessian, add_pair_hessian, add_pair_block
    use multicharge_model_type, only: mchrg_model_type, get_dir_trans, get_rec_trans
-   use multicharge_wignerseitz, only: wignerseitz_cell_type, new_wignerseitz_cell
    implicit none
    private
 
@@ -258,7 +258,7 @@ end subroutine add_model_hessian
 subroutine add_periodic_hessian(self, mol, wsc, alpha, qvec, adj, hessian, diagonal)
    class(eeq_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
-   type(wignerseitz_cell_type), intent(in) :: wsc
+   type(wignerseitz_cell), intent(in) :: wsc
    real(wp), intent(in) :: alpha, qvec(:), adj(:)
    real(wp), intent(inout) :: hessian(:, :)
    real(wp), intent(inout) :: diagonal(:, :, :)
@@ -267,7 +267,7 @@ subroutine add_periodic_hessian(self, mol, wsc, alpha, qvec, adj, hessian, diago
    real(wp) :: val, dr, drr, ar, arr
    real(wp), allocatable :: dtrans(:, :), rtrans(:, :), rec_weight(:)
 
-   call get_dir_trans(mol%lattice, dtrans)
+   call get_dir_trans(mol, dtrans)
    call get_rec_trans(mol%lattice, rtrans)
    call get_rec_weights(abs(matdet_3x3(mol%lattice)), alpha, rtrans, rec_weight)
 
@@ -368,7 +368,7 @@ end subroutine get_amat_0d
 subroutine get_amat_3d(self, mol, wsc, alpha, amat)
    class(eeq_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
-   type(wignerseitz_cell_type), intent(in) :: wsc
+   type(wignerseitz_cell), intent(in) :: wsc
    real(wp), intent(in) :: alpha
    real(wp), intent(out) :: amat(:, :)
 
@@ -376,7 +376,7 @@ subroutine get_amat_3d(self, mol, wsc, alpha, amat)
    real(wp) :: vec(3), gam, wsw, dtmp, rtmp, tmp
    real(wp), allocatable :: dtrans(:, :), rtrans(:, :), rec_weight(:)
 
-   call get_dir_trans(mol%lattice, dtrans)
+   call get_dir_trans(mol, dtrans)
    call get_rec_trans(mol%lattice, rtrans)
    call get_rec_weights(abs(matdet_3x3(mol%lattice)), alpha, rtrans, rec_weight)
 
@@ -512,7 +512,7 @@ end subroutine get_damat_0d
 subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
    class(eeq_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
-   type(wignerseitz_cell_type), intent(in) :: wsc
+   type(wignerseitz_cell), intent(in) :: wsc
    real(wp), intent(in) :: alpha, qvec(:)
    real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
 
@@ -523,7 +523,7 @@ subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
 
    atrace(:, :) = 0.0_wp
    dadL(:, :, :) = 0.0_wp
-   call get_dir_trans(mol%lattice, dtrans)
+   call get_dir_trans(mol, dtrans)
    call get_rec_trans(mol%lattice, rtrans)
    call get_rec_weights(abs(matdet_3x3(mol%lattice)), alpha, rtrans, rec_weight, rec_strain)
 
