@@ -19,8 +19,8 @@ module test_wignerseitz
    use mctc_env_testing, only: new_unittest, unittest_type, error_type, check, &
       & test_failed
    use mctc_io_structure, only: structure_type, new
-   use mstore, only: get_structure
    use mctc_wignerseitz, only: wignerseitz_cell, new_wignerseitz_cell
+   use mstore, only: get_structure
    implicit none
    private
 
