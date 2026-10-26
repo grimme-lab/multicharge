@@ -22,6 +22,7 @@ list(
   "${dir}/eeq.f90"
   "${dir}/eeqbc.f90"
   "${dir}/type.F90"
+  "${dir}/cache.f90"
 )
 
 set(srcs "${srcs}" PARENT_SCOPE)

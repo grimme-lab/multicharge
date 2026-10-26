@@ -20,6 +20,7 @@ set(
   "hessian"
   "pbc"
   "wignerseitz"
+  "solver"
 )
 set(
   test-srcs

@@ -6,7 +6,7 @@ module test_hessian
    use mctc_env_testing, only: new_unittest, unittest_type, error_type, test_failed
    use mctc_io, only: structure_type, new
    use mstore, only: get_structure
-   use multicharge, only: get_charges, add_charge_hessian, cache_container
+   use multicharge, only: get_charges, add_charge_hessian, mchrg_cache
    use multicharge_model, only: mchrg_model_type
    use multicharge_param, only: new_eeq2019_model, new_eeqbc2025_model
    implicit none
@@ -146,7 +146,7 @@ subroutine check_response(error, mol, model)
    type(error_type), allocatable, intent(out) :: error
    type(structure_type), intent(inout) :: mol
    class(mchrg_model_type), intent(in) :: model
-   type(cache_container) :: cache
+   type(mchrg_cache) :: cache
    real(wp), parameter :: step = 1.0e-4_wp
    real(wp) :: xyz, delta, scale
    real(wp), allocatable :: q(:), weights(:), hess(:, :), numeric(:, :), again(:, :)
@@ -229,7 +229,7 @@ end subroutine check_response
 subroutine test_cache(error)
    type(error_type), allocatable, intent(out) :: error
    type(structure_type) :: mol
-   type(cache_container) :: cache, fresh
+   type(mchrg_cache) :: cache, fresh
    class(mchrg_model_type), allocatable :: model
    real(wp) :: q1(1), q(3), refq(3), dqdr(3, 3, 3), refdr(3, 3, 3), dqdL(3, 3, 3)
    real(wp) :: hess(9, 9), refhess(9, 9), weights(3)
@@ -268,7 +268,7 @@ subroutine test_invalid(error)
    type(error_type), allocatable, intent(out) :: error
    type(error_type), allocatable :: expected
    type(structure_type) :: mol
-   type(cache_container) :: cache
+   type(mchrg_cache) :: cache
    class(mchrg_model_type), allocatable :: model
    real(wp) :: hess(3, 3), q(1)
 
