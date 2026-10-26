@@ -153,7 +153,7 @@ mctc_dep = dependency('mctc-lib', required: false)
 if not mctc_dep.found()
   mctc_prj = subproject(
     'mctc-lib',
-    version: '>=0.5.1',
+    version: '>=0.7.0',
     default_options: [
       'default_library=static',
     ],

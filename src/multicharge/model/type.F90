@@ -61,6 +61,10 @@ module multicharge_model_type
    contains
       !> Solve linear equations for the charge model
       procedure :: solve
+      !> Contract the second charge response with fixed atomic weights
+      procedure :: add_charge_hessian
+      !> Model-specific curvature u^T (x_ab - A_ab q)
+      procedure :: add_model_hessian
       !> Calculate local charges from electronegativity weighted CN
       procedure :: local_charge
       !> Update cache
@@ -149,7 +153,7 @@ subroutine get_rec_trans(lattice, trans)
 end subroutine get_rec_trans
 
 subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
-   & energy, gradient, sigma, qvec, dqdr, dqdL)
+   & energy, gradient, sigma, qvec, dqdr, dqdL, response)
    !> Electronegativity equilibration model
    class(mchrg_model_type), intent(in) :: self
    !> Molecular structure data
@@ -181,6 +185,9 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
    !> Optional derivative of the atomic partial charges w.r.t. lattice vectors
    real(wp), intent(out), contiguous, optional :: dqdL(:, :, :)
 
+   !> Retain data for a subsequent weighted second-response calculation
+   type(cache_container), optional, target, intent(inout) :: response
+
    integer :: ic, jc, iat, ndim
    logical :: grad, cpq, dcn
    integer(ik) :: info
@@ -192,16 +199,29 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
    ! Gradients
    real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
    real(wp), allocatable :: dxdr(:, :, :), dxdL(:, :, :)
-   type(cache_container), allocatable :: cache
+   type(cache_container), target :: local_cache
+   type(cache_container), pointer :: cache
    real(wp), allocatable :: trans(:, :)
 
    ! Calculate gradient if the respective arrays are present
    dcn = present(dcndr) .and. present(dcndL)
    grad = present(gradient) .and. present(sigma) .and. dcn
-   cpq = present(dqdr) .and. present(dqdL) .and. dcn
+   cpq = ((present(dqdr) .and. present(dqdL)) .or. present(response)) .and. dcn
+
+   cache => local_cache
+   if (present(response)) then
+      cache => response
+      if (allocated(cache%qvec)) deallocate(cache%qvec)
+      if (allocated(cache%ainv)) deallocate(cache%ainv)
+      if (allocated(cache%dqdr)) deallocate(cache%dqdr)
+      if (allocated(cache%raw)) deallocate(cache%raw)
+      if (.not. dcn) then
+         call fatal_error(error, "Retaining charge response requires CN derivatives")
+         return
+      end if
+   end if
 
    ! Update cache
-   allocate(cache)
    call self%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
 
    ! Setup the Coulomb matrix
@@ -286,10 +306,86 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
          dadL(:, :, iat) = -dxdL(:, :, iat) + dadL(:, :, iat)
       end do
 
-      call gemm(dadr, ainv(:, :mol%nat), dqdr, alpha=-1.0_wp)
-      call gemm(dadL, ainv(:, :mol%nat), dqdL, alpha=-1.0_wp)
+      if (present(dqdL)) call gemm(dadL, ainv(:, :mol%nat), dqdL, alpha=-1.0_wp)
+      if (present(response)) then
+         allocate(cache%dqdr(3, mol%nat, mol%nat))
+         call gemm(dadr, ainv(:, :mol%nat), cache%dqdr, alpha=-1.0_wp)
+         if (present(dqdr)) dqdr(:, :, :) = cache%dqdr
+         call move_alloc(vrhs, cache%qvec)
+         call move_alloc(ainv, cache%ainv)
+      else
+         call gemm(dadr, ainv(:, :mol%nat), dqdr, alpha=-1.0_wp)
+      end if
    end if
 end subroutine solve
+
+!> Add the Cartesian charge Hessian contracted with fixed weights and lattice.
+!> Ay=x, A^T u=(weights,0): H_ab=u^T(x_ab-A_ab y-A_a y_b-A_b y_a).
+subroutine add_charge_hessian(self, mol, error, weights, hessian, cache)
+   use multicharge_model_hessian, only: add_symmetric_product
+   class(mchrg_model_type), intent(in) :: self
+   type(structure_type), intent(in) :: mol
+   type(error_type), allocatable, intent(out) :: error
+   real(wp), intent(in) :: weights(:)
+   real(wp), intent(inout) :: hessian(:, :)
+   type(cache_container), target, intent(inout) :: cache
+
+   integer :: nat, iat
+   real(wp), allocatable :: adj(:), rhs(:), dadL(:, :,:), atrace(:, :)
+   real(wp), allocatable, target :: dadr(:, :, :)
+   real(wp), pointer :: da(:, :), dq(:, :)
+
+   nat = mol%nat
+   if (any(mol%periodic) .and. .not. all(mol%periodic)) then
+      call fatal_error(error, "Analytical charge Hessian requires molecular or 3D periodic boundary conditions")
+      return
+   end if
+   if (size(weights) /= nat .or. any(shape(hessian) /= 3*nat)) then
+      call fatal_error(error, "Invalid dimensions for charge Hessian contraction")
+      return
+   end if
+   if (.not. allocated(cache%qvec) .or. .not. allocated(cache%ainv) &
+      & .or. .not. allocated(cache%dqdr) .or. .not. allocated(cache%raw)) then
+      call fatal_error(error, "Charge Hessian requires a response cache from get_charges")
+      return
+   end if
+   if (size(cache%qvec) /= nat+1 .or. any(shape(cache%ainv) /= nat+1) &
+      & .or. any(shape(cache%dqdr) /= [3, nat, nat])) then
+      call fatal_error(error, "Charge response cache has incompatible dimensions")
+      return
+   end if
+
+   allocate(adj(nat+1), rhs(nat+1))
+   rhs(:nat) = weights
+   rhs(nat+1) = 0.0_wp
+   call symv(cache%ainv, rhs, adj, uplo="l")
+   call self%add_model_hessian(mol, error, cache, adj, hessian)
+   if (allocated(error)) return
+
+   ! Reuse the first derivative action with the adjoint in place of the charges.
+   allocate(dadr(3, nat, nat+1), dadL(3, 3, nat+1), atrace(3, nat))
+   call self%get_coulomb_derivs(mol, cache, adj, dadr, dadL, atrace)
+   do iat = 1, nat
+      dadr(:, iat, iat) = dadr(:, iat, iat) + atrace(:, iat)
+   end do
+   da(1:3*nat, 1:nat+1) => dadr
+   dq(1:3*nat, 1:nat) => cache%dqdr
+   call add_symmetric_product(da(:, :nat), dq, hessian, alpha=-1.0_wp)
+end subroutine add_charge_hessian
+
+
+!> Concrete models override this curvature contraction when supported.
+subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
+   class(mchrg_model_type), intent(in) :: self
+   type(structure_type), intent(in) :: mol
+   type(error_type), allocatable, intent(out) :: error
+   type(cache_container), intent(inout) :: cache
+   real(wp), intent(in) :: adj(:)
+   real(wp), intent(inout) :: hessian(:, :)
+
+   call fatal_error(error, "Analytical charge Hessian is not implemented for this model")
+end subroutine add_model_hessian
+
 
 subroutine local_charge(self, mol, trans, qloc, dqlocdr, dqlocdL)
    !> Electronegativity equilibration model
