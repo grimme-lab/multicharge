@@ -25,6 +25,5 @@ srcs += files(
   'output.f90',
   'param.f90',
   'version.f90',
-  'wignerseitz.f90',
   'cache.f90',
 )

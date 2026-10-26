@@ -32,7 +32,6 @@ module multicharge_model_type
    use multicharge_blas, only: gemv, symv, gemm
    use multicharge_lapack, only: sytrf, sytrs, sytri
    use multicharge_model_cache, only: model_cache, cache_container
-   use multicharge_wignerseitz, only: wignerseitz_cell_type, new_wignerseitz_cell
    implicit none
    private
 
@@ -132,12 +131,24 @@ module multicharge_model_type
 
 contains
 
-subroutine get_dir_trans(lattice, trans)
-   real(wp), intent(in) :: lattice(:, :)
+!> Generate direct lattice translation vectors for a periodic structure
+subroutine get_dir_trans(mol, trans, cutoff)
+   !> Molecular structure data
+   type(structure_type), intent(in) :: mol
+
+   !> Translation vectors
    real(wp), allocatable, intent(out) :: trans(:, :)
+
+   !> Optional lattice-vector cutoff
+   real(wp), intent(in), optional :: cutoff
+
    integer, parameter :: rep(3) = [2, 2, 2]
 
-   call get_lattice_points(lattice, rep, .true., trans)
+   if (present(cutoff)) then
+      call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   else
+      call get_lattice_points(mol%lattice, rep, .true., trans)
+   end if
 
 end subroutine get_dir_trans
 

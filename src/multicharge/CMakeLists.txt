@@ -28,7 +28,6 @@ list(
   "${dir}/output.f90"
   "${dir}/param.f90"
   "${dir}/version.f90"
-  "${dir}/wignerseitz.f90"
   "${dir}/cache.f90"
 )
 

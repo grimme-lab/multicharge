@@ -27,11 +27,11 @@ module multicharge_model_eeqbc
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
    use mctc_ncoord, only: new_ncoord, cn_count
+   use mctc_wignerseitz, only: wignerseitz_cell, new_wignerseitz_cell
    use multicharge_blas, only: gemv, gemm
    use multicharge_model_cache, only: cache_container, model_cache
    use multicharge_model_hessian, only: coulomb_kernel, add_pair_hessian, add_chain_hessian
    use multicharge_model_type, only: mchrg_model_type, get_dir_trans
-   use multicharge_wignerseitz, only: new_wignerseitz_cell, wignerseitz_cell_type
    implicit none
    private
 
@@ -286,7 +286,7 @@ subroutine get_xvec(self, mol, cache, xvec)
    call gemv(ptr%cmat, ptr%xtmp, xvec)
 
    if (any(mol%periodic)) then
-      call get_dir_trans(mol%lattice, dtrans)
+      call get_dir_trans(mol, dtrans, self%ncoord%cutoff)
       !$omp parallel default(none) &
       !$omp shared(mol, self, ptr, xvec, dtrans) private(iat, izp, img, wsw) &
       !$omp private(capi, vec, rvdw, ctmp, xvec_local)
@@ -366,7 +366,7 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
    call gemm(dtmpdL, ptr%cmat, dxdL)
 
    if (any(mol%periodic)) then
-      call get_dir_trans(mol%lattice, dtrans)
+      call get_dir_trans(mol, dtrans, self%ncoord%cutoff)
       !$omp parallel default(none) &
       !$omp shared(mol, self, ptr, dxdr, dxdL, dtrans) &
       !$omp private(iat, izp, jat, jzp, img, wsw) &
@@ -491,7 +491,7 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
    nat = mol%nat
    periodic = any(mol%periodic)
    if (periodic) then
-      call get_dir_trans(mol%lattice, dtrans)
+      call get_dir_trans(mol, dtrans, self%ncoord%cutoff)
    else
       allocate(dtrans(3, 1), source=0.0_wp)
    end if
@@ -666,7 +666,7 @@ end subroutine get_amat_0d
 subroutine get_amat_3d(self, mol, wsc, cn, qloc, cmat, amat)
    class(eeqbc_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
-   type(wignerseitz_cell_type), intent(in) :: wsc
+   type(wignerseitz_cell), intent(in) :: wsc
    real(wp), intent(in) :: cn(:), qloc(:), cmat(:, :)
    real(wp), intent(out) :: amat(:, :)
 
@@ -677,7 +677,7 @@ subroutine get_amat_3d(self, mol, wsc, cn, qloc, cmat, amat)
    ! Thread-private array for reduction
    real(wp), allocatable :: amat_local(:, :)
 
-   call get_dir_trans(mol%lattice, dtrans)
+   call get_dir_trans(mol, dtrans, self%ncoord%cutoff)
 
    amat(:, :) = 0.0_wp
 
@@ -923,7 +923,7 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
    & dqlocdL, cmat, dcdr, dcdL, dadr, dadL, atrace)
    class(eeqbc_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
-   type(wignerseitz_cell_type), intent(in) :: wsc
+   type(wignerseitz_cell), intent(in) :: wsc
    real(wp), intent(in) :: cn(:)
    real(wp), intent(in) :: qloc(:)
    real(wp), intent(in) :: qvec(:)
@@ -948,7 +948,7 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
    real(wp), allocatable :: atrace_local(:, :)
    real(wp), allocatable :: dadr_local(:, :, :), dadL_local(:, :, :)
 
-   call get_dir_trans(mol%lattice, dtrans)
+   call get_dir_trans(mol, dtrans, self%ncoord%cutoff)
 
    allocate(dgamdr(3, mol%nat))
 
@@ -1197,7 +1197,7 @@ end subroutine get_cmat_0d
 subroutine get_cmat_3d(self, mol, wsc, cmat)
    class(eeqbc_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
-   type(wignerseitz_cell_type), intent(in) :: wsc
+   type(wignerseitz_cell), intent(in) :: wsc
    real(wp), intent(out) :: cmat(:, :)
 
    integer :: iat, jat, izp, jzp, img
@@ -1207,7 +1207,7 @@ subroutine get_cmat_3d(self, mol, wsc, cmat)
    ! Thread-private array for reduction
    real(wp), allocatable :: cmat_local(:, :)
 
-   call get_dir_trans(mol%lattice, dtrans)
+   call get_dir_trans(mol, dtrans, self%ncoord%cutoff)
 
    cmat(:, :) = 0.0_wp
 
@@ -1375,7 +1375,7 @@ end subroutine get_dcmat_0d
 subroutine get_dcmat_3d(self, mol, wsc, dcdr, dcdL)
    class(eeqbc_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
-   type(wignerseitz_cell_type), intent(in) :: wsc
+   type(wignerseitz_cell), intent(in) :: wsc
    real(wp), intent(out) :: dcdr(:, :, :)
    real(wp), intent(out) :: dcdL(:, :, :)
 
@@ -1386,7 +1386,7 @@ subroutine get_dcmat_3d(self, mol, wsc, dcdr, dcdL)
    ! Thread-private arrays for reduction
    real(wp), allocatable :: dcdr_local(:, :, :), dcdL_local(:, :, :)
 
-   call get_dir_trans(mol%lattice, dtrans)
+   call get_dir_trans(mol, dtrans, self%ncoord%cutoff)
 
    dcdr(:, :, :) = 0.0_wp
    dcdL(:, :, :) = 0.0_wp
