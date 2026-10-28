@@ -15,6 +15,7 @@
 
 subdir('model')
 subdir('param')
+subdir('solver')
 
 srcs += files(
   'blas.F90',
@@ -24,6 +25,6 @@ srcs += files(
   'model.f90',
   'output.f90',
   'param.f90',
+  'solver.f90',
   'version.f90',
-  'cache.f90',
 )

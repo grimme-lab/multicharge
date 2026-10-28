@@ -19,12 +19,15 @@
 
 !> Interface to the charge models
 module multicharge_charge
+   use, intrinsic :: iso_fortran_env, only : output_unit
    use mctc_cutoff, only : get_lattice_points
    use mctc_env, only : error_type, wp
    use mctc_io, only : structure_type
-   use multicharge_model, only : mchrg_model_type
-   use multicharge_model_cache, only : cache_container
+   use multicharge_model_cache, only : mchrg_cache
+   use multicharge_model_type, only : mchrg_model_type
    use multicharge_param, only : new_eeq2019_model, new_eeqbc2025_model
+   use multicharge_solver_direct, only : direct_solver, new_direct_solver, &
+      & direct_input
    implicit none
    private
 
@@ -57,27 +60,41 @@ subroutine get_charges(mchrg_model, mol, error, qvec, dqdr, dqdL, cache)
 
    !> Retain the solution and Cartesian response for add_charge_hessian.
    !> Recompute after any change to the geometry, charge, or model.
-   type(cache_container), intent(inout), optional :: cache
+   type(mchrg_cache), intent(out), optional :: cache
 
+   type(mchrg_cache), allocatable :: local_cache
    logical :: grad
-   real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :)
-   real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
    real(wp), allocatable :: trans(:, :)
+   real(wp), allocatable :: dqdr_resp(:, :, :), dqdL_resp(:, :, :)
 
-   grad = (present(dqdr) .and. present(dqdL)) .or. present(cache)
+   class(direct_solver), allocatable :: solver
+   class(direct_input), allocatable :: solver_input
 
-   allocate(cn(mol%nat), qloc(mol%nat))
-   if (grad) then
-      allocate(dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat))
-      allocate (dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat))
+   allocate(solver_input)
+   allocate(solver)
+   call new_direct_solver(solver, solver_input)
+
+   grad = present(dqdr) .and. present(dqdL)
+
+   call get_lattice_points(mol%periodic, mol%lattice, &
+      & mchrg_model%ncoord%cutoff, trans)
+
+   if (present(cache)) then
+      ! The charge Hessian needs the full inverse and the Cartesian response
+      allocate(dqdr_resp(3, mol%nat, mol%nat), dqdL_resp(3, 3, mol%nat))
+      call mchrg_model%update(mol, cache, trans, .true.)
+      call mchrg_model%solve(mol, solver, cache, error, &
+         & qvec=qvec, dqdr=dqdr_resp, dqdL=dqdL_resp, unit=output_unit)
+      if (allocated(error)) return
+      if (present(dqdr)) dqdr(:, :, :) = dqdr_resp
+      if (present(dqdL)) dqdL(:, :, :) = dqdL_resp
+      call move_alloc(dqdr_resp, cache%dqdr)
+   else
+      allocate(local_cache)
+      call mchrg_model%update(mol, local_cache, trans, grad)
+      call mchrg_model%solve(mol, solver, local_cache, error, &
+         & qvec=qvec, dqdr=dqdr, dqdL=dqdL, unit=output_unit)
    end if
-
-   call get_lattice_points(mol%periodic, mol%lattice, mchrg_model%ncoord%cutoff, trans)
-   call mchrg_model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
-   call mchrg_model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
-
-   call mchrg_model%solve(mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
-      & qvec=qvec, dqdr=dqdr, dqdL=dqdL, response=cache)
 
 end subroutine get_charges
 
@@ -90,9 +107,12 @@ subroutine add_charge_hessian(mchrg_model, mol, error, weights, hessian, cache)
    type(error_type), allocatable, intent(out) :: error
    real(wp), intent(in) :: weights(:)
    real(wp), intent(inout) :: hessian(:, :)
-   type(cache_container), intent(inout) :: cache
+
+   !> Response cache retained by get_charges
+   type(mchrg_cache), intent(inout) :: cache
 
    call mchrg_model%add_charge_hessian(mol, error, weights, hessian, cache)
+
 end subroutine add_charge_hessian
 
 

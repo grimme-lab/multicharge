@@ -16,9 +16,10 @@
 # Unit testing
 set(
   tests
-  "model"
   "hessian"
+  "model"
   "pbc"
+  "solver"
   "wignerseitz"
 )
 set(

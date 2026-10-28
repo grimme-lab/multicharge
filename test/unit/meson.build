@@ -29,9 +29,10 @@ if not mstore_dep.found()
 endif
 
 tests = [
-  'model',
   'hessian',
+  'model',
   'pbc',
+  'solver',
   'wignerseitz',
 ]
 
@@ -50,5 +51,5 @@ tester = executable(
 )
 
 foreach t : tests
-  test(t, tester, args: t)
+  test(t, tester, args: t, timeout: 120)
 endforeach

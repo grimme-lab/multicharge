@@ -86,6 +86,8 @@ subroutine new_eeqbc2025_model(mol, model, error)
    real(wp), parameter :: cn_exp = 2.0_wp
    real(wp), parameter :: norm_exp = 0.75_wp
 
+   integer :: isp, jsp, izp, jzp
+
    real(wp), allocatable :: chi(:), eta(:), rad(:), kcnchi(:), &
       & kqchi(:), kqeta(:), cap(:), rcov(:), avg_cn(:), en(:), &
       & rvdw(:, :)
@@ -111,8 +113,16 @@ subroutine new_eeqbc2025_model(mol, model, error)
    en = merge(1.20_wp, en, mol%num == 93 .or. mol%num == 94 &
       &.or. mol%num == 97 .or. mol%num == 103)
    en = en / 3.98_wp
-   rvdw = get_vdw_rad(spread(mol%num(mol%id), 2, mol%nat), &
-      & spread(mol%num(mol%id), 1, mol%nat)) * autoaa
+
+   allocate(rvdw(mol%nid, mol%nid))
+   do isp = 1, mol%nid
+      izp = mol%num(isp)
+      do jsp = 1, mol%nid
+         jzp = mol%num(jsp)
+         rvdw(jsp, isp) = get_vdw_rad(jzp, izp) * autoaa
+         rvdw(isp, jsp) = rvdw(jsp, isp)
+      end do
+   end do
 
    allocate(eeqbc)
    call new_eeqbc_model(eeqbc, mol=mol, error=error, chi=chi, &

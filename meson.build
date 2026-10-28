@@ -41,6 +41,12 @@ subdir('config')
 srcs = []
 subdir('src')
 
+# MinGW exports all symbols of a DLL
+lib_link_args = []
+if os == 'windows' and fc_id == 'gcc'
+  lib_link_args += '-Wl,--exclude-libs,ALL'
+endif
+
 # Library target
 multicharge_lib = library(
   meson.project_name(),
@@ -48,6 +54,7 @@ multicharge_lib = library(
   version: meson.project_version(),
   dependencies: lib_deps,
   include_directories: inc_dirs,
+  link_args: lib_link_args,
   install: install,
 )
 

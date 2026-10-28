@@ -22,6 +22,7 @@ program tester
    use test_hessian, only : collect_hessian
    use test_model, only : collect_model
    use test_pbc, only : collect_pbc
+   use test_solver, only : collect_solver
    use test_wignerseitz, only : collect_wignerseitz
    implicit none
    integer :: stat, is
@@ -32,9 +33,10 @@ program tester
    stat = 0
 
    testsuites = [ &
-      & new_testsuite("model", collect_model), &
       & new_testsuite("hessian", collect_hessian), &
+      & new_testsuite("model", collect_model), &
       & new_testsuite("pbc", collect_pbc), &
+      & new_testsuite("solver", collect_solver), &
       & new_testsuite("wignerseitz", collect_wignerseitz) &
       & ]
 
