@@ -29,7 +29,7 @@ module multicharge_solver_type
    type, abstract :: mchrg_solver_type
 
       !> Whether the solver requires a positive-definite matrix
-      logical, allocatable :: need_pos_def
+      logical :: need_pos_def = .false.
    contains
 
       !> Solve the linear system

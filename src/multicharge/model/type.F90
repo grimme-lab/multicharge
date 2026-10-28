@@ -398,7 +398,7 @@ subroutine solve(self, mol, solver, cache, error, &
    ! Electrostatic energy if present
    if (present(energy)) then
       call timer%push("energy")
-      call symv(cache%amat, cache%vrhs, cache%xvec(:mol%nat), &
+      call symv(cache%amat, cache%vrhs(:ndim), cache%xvec(:ndim), &
          & alpha=0.5_wp, beta=-1.0_wp, uplo="l")
       if (ndim > mol%nat) then
          ! Correct xvec to exclude constraint term

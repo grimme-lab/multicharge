@@ -25,9 +25,9 @@ module test_pbc
    use multicharge_model_eeqbc, only: eeqbc_model
    use multicharge_model_type, only : mchrg_model_type
    use multicharge_param, only: new_eeq2019_model, new_eeqbc2025_model
-   use multicharge_solver_cg, only : cg_solver, new_cg_solver, cg_input
-   use multicharge_solver_direct, only : direct_solver, new_direct_solver, &
-      & direct_input
+   use multicharge_solver, only : new_mchrg_solver
+   use multicharge_solver_cg, only : cg_input
+   use multicharge_solver_direct, only : direct_input
    use multicharge_solver_type, only : mchrg_solver_type, mchrg_solver_input
    implicit none
    private
@@ -70,41 +70,6 @@ subroutine collect_pbc(testsuite)
 end subroutine collect_pbc
 
 
-!> Construct a solver matching the dynamic type of the solver input
-subroutine solver_maker(solver, input, error)
-
-   !> Solver type
-   class(mchrg_solver_type), intent(out), allocatable :: solver
-
-   !> Solver input
-   class(mchrg_solver_input), intent(in) :: input
-
-   !> Error handling
-   type(error_type), allocatable, intent(out) :: error
-
-   select type (input)
-   type is (cg_input)
-      block
-         class(cg_solver), allocatable :: tmp
-         allocate(tmp)
-         call new_cg_solver(tmp, input)
-         call move_alloc(tmp, solver)
-      end block
-   type is (direct_input)
-      block
-         class(direct_solver), allocatable :: tmp
-         allocate(tmp)
-         call new_direct_solver(tmp, input)
-         call move_alloc(tmp, solver)
-      end block
-   class default
-      allocate(error)
-      return
-   end select
-
-end subroutine solver_maker
-
-
 subroutine gen_test(error, mol, model, qref, eref)
 
    !> Error handling
@@ -145,7 +110,8 @@ subroutine gen_test(error, mol, model, qref, eref)
       solver_input%verbosity = verbosity
       ndim = mol%nat
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    allocate(cache)
 
@@ -223,7 +189,8 @@ subroutine test_numgrad(error, mol, model)
       solver_input%verbosity = verbosity
       ndim = mol%nat
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    allocate(cache)
 
@@ -307,7 +274,8 @@ subroutine test_numsigma(error, mol, model)
       solver_input%verbosity = verbosity
       ndim = mol%nat + 1
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    allocate(cache)
 
@@ -407,7 +375,8 @@ subroutine test_dbdr(error, mol, model)
       solver_input%verbosity = verbosity
       ndim = mol%nat
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    allocate(cache)
 
@@ -497,7 +466,8 @@ subroutine test_dbdL(error, mol, model)
       solver_input%verbosity = verbosity
       ndim = mol%nat
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    allocate(cache)
 
@@ -602,7 +572,8 @@ subroutine test_dadr(error, mol, model)
       solver_input%verbosity = verbosity
       ndim = mol%nat
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    allocate(cache)
 
@@ -735,7 +706,8 @@ subroutine test_dadL(error, mol, model)
       solver_input%verbosity = verbosity
       ndim = mol%nat
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    allocate(cache)
 
@@ -848,7 +820,8 @@ subroutine test_numdqdr(error, mol, model)
       solver_input%verbosity = verbosity
       ndim = mol%nat+1
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    allocate (cache)
 
@@ -926,7 +899,8 @@ subroutine test_numdqdL(error, mol, model)
       solver_input%verbosity = verbosity
       ndim = mol%nat + 1
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    allocate (cache)
 

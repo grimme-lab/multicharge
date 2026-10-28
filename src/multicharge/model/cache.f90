@@ -56,7 +56,7 @@ module multicharge_model_cache
       !> Coulomb matrix
       real(wp), allocatable :: amat(:, :)
 
-      !> Inversed amat
+      !> Inverse of amat
       real(wp), allocatable :: ainv(:, :)
 
       !> Solution of the ES equation

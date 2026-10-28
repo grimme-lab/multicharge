@@ -86,7 +86,7 @@ subroutine new_eeqbc2025_model(mol, model, error)
    real(wp), parameter :: cn_exp = 2.0_wp
    real(wp), parameter :: norm_exp = 0.75_wp
 
-   integer :: isp, jsp, ksp, izp, jzp
+   integer :: isp, jsp, izp, jzp
 
    real(wp), allocatable :: chi(:), eta(:), rad(:), kcnchi(:), &
       & kqchi(:), kqeta(:), cap(:), rcov(:), avg_cn(:), en(:), &

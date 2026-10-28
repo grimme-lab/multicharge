@@ -43,9 +43,6 @@ module multicharge_solver_cg
       !> Output verbosity
       integer, allocatable :: verbosity
 
-      !> Whether to use the iterative conjugate-gradient solver
-      logical :: cg = .true.
-
    end type cg_input
 
    !> Conjugate-gradient solver with a Jacobi preconditioner

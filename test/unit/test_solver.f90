@@ -16,6 +16,7 @@
 module test_solver
    use mctc_env, only : wp
    use mctc_env_testing, only : new_unittest, unittest_type, error_type, test_failed
+   use multicharge_solver, only : new_mchrg_solver
    use multicharge_solver_cg, only : cg_solver, new_cg_solver, cg_input
    use multicharge_solver_direct, only : direct_solver, new_direct_solver, &
       & direct_input
@@ -29,6 +30,10 @@ module test_solver
    real(wp), parameter :: thr1 = 1.0e5_wp*epsilon(1.0_wp)
    real(wp), parameter :: thr2 = sqrt(epsilon(1.0_wp))
    real(wp), parameter :: thr_rel = 1.0e-6_wp
+
+   !> Solver input unknown to the solver factory
+   type, extends(mchrg_solver_input) :: unknown_input
+   end type unknown_input
 
 
 contains
@@ -54,45 +59,12 @@ subroutine collect_solver(testsuite)
       & new_unittest("cg-verbosity", test_cg_verbosity), &
       & new_unittest("direct-inverse", test_direct_inverse), &
       & new_unittest("direct-singular", test_direct_singular), &
-      & new_unittest("direct-verbosity", test_direct_verbosity) &
+      & new_unittest("direct-verbosity", test_direct_verbosity), &
+      & new_unittest("solver-factory", test_solver_factory), &
+      & new_unittest("solver-factory-unknown", test_solver_factory_unknown) &
       & ]
 
 end subroutine collect_solver
-
-
-!> Construct a solver matching the dynamic type of the solver input
-subroutine solver_maker(solver, input, error)
-
-   !> Solver type
-   class(mchrg_solver_type), intent(out), allocatable :: solver
-
-   !> Solver input
-   class(mchrg_solver_input), intent(in) :: input
-
-   !> Error handling
-   type(error_type), allocatable, intent(out) :: error
-
-   select type (input)
-   type is (cg_input)
-      block
-         class(cg_solver), allocatable :: tmp
-         allocate(tmp)
-         call new_cg_solver(tmp, input)
-         call move_alloc(tmp, solver)
-      end block
-   type is (direct_input)
-      block
-         class(direct_solver), allocatable :: tmp
-         allocate(tmp)
-         call new_direct_solver(tmp, input)
-         call move_alloc(tmp, solver)
-      end block
-   class default
-      allocate(error)
-      return
-   end select
-
-end subroutine solver_maker
 
 
 !> Check that a solution satisfies the linear system
@@ -149,7 +121,8 @@ subroutine test_cg_identity_2x2(error)
       solver_input%cgmiter = maxiter
       solver_input%verbosity = verbosity
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    ! Identity matrix
    amat = 0.0_wp
@@ -174,7 +147,8 @@ subroutine test_cg_identity_2x2(error)
    type is (direct_input)
       solver_input%verbosity = verbosity
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
    expected = [0.0_wp, 0.0_wp]
    call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
 
@@ -215,7 +189,8 @@ subroutine test_cg_diagonal_5x5(error)
       solver_input%cgmiter = maxiter
       solver_input%verbosity = verbosity
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    ! Diagonal matrix with increasing values
    amat = 0.0_wp
@@ -242,7 +217,8 @@ subroutine test_cg_diagonal_5x5(error)
    type is (direct_input)
       solver_input%verbosity = verbosity
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
    expected = [0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp]
    call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
 
@@ -282,7 +258,8 @@ subroutine test_cg_spd_small(error)
       solver_input%cgmiter = maxiter
       solver_input%verbosity = verbosity
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    ! SPD matrix
    amat = reshape([4.0_wp, 1.0_wp, 1.0_wp, &
@@ -307,7 +284,8 @@ subroutine test_cg_spd_small(error)
    type is (direct_input)
       solver_input%verbosity = verbosity
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
    expected = [1.0_wp, 1.0_wp, 1.0_wp]
    call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
 
@@ -348,7 +326,8 @@ subroutine test_cg_spd_large(error)
       solver_input%cgmiter = maxiter
       solver_input%verbosity = verbosity
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    allocate(amat(n,n), xvec(n), vrhs(n), expected(n), b(n))
 
@@ -390,7 +369,8 @@ subroutine test_cg_spd_large(error)
    type is (direct_input)
       solver_input%verbosity = verbosity
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    ! Reference solution
    call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
@@ -432,7 +412,8 @@ subroutine test_cg_ill_conditioned(error)
       solver_input%cgmiter = maxiter
       solver_input%verbosity = verbosity
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    ! Create an ill-conditioned diagonal matrix
    amat = 0.0_wp
@@ -465,7 +446,8 @@ subroutine test_cg_ill_conditioned(error)
    type is (direct_input)
       solver_input%verbosity = verbosity
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    ! Reference solution
    call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
@@ -507,7 +489,8 @@ subroutine test_cg_zero_rhs(error)
       solver_input%cgmiter = maxiter
       solver_input%verbosity = verbosity
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    ! Create a simple SPD matrix
    amat = 0.0_wp
@@ -538,7 +521,8 @@ subroutine test_cg_zero_rhs(error)
    type is (direct_input)
       solver_input%verbosity = verbosity
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    ! Reference solution
    call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
@@ -582,7 +566,8 @@ subroutine test_cg_random_spd(error)
       solver_input%cgmiter = maxiter
       solver_input%verbosity = verbosity
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    allocate(amat(n,n), xvec(n), vrhs(n), expected(n), b(n), temp(n,n))
 
@@ -650,7 +635,8 @@ subroutine test_cg_random_spd(error)
    type is (direct_input)
       solver_input%verbosity = verbosity
    end select
-   call solver_maker(solver, solver_input, error)
+   call new_mchrg_solver(solver, solver_input, error)
+   if (allocated(error)) return
 
    ! Reference solution
    call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
@@ -944,6 +930,67 @@ subroutine test_direct_verbosity(error)
    if (allocated(error)) print '("Verbosity: ", i0)', verbosity
 
 end subroutine test_direct_verbosity
+
+
+!> Test: The solver factory constructs the solver matching its input
+subroutine test_solver_factory(error)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   type(cg_input) :: cg_inp
+   type(direct_input) :: direct_inp
+   class(mchrg_solver_type), allocatable :: solver
+
+   call new_mchrg_solver(solver, cg_inp, error)
+   if (allocated(error)) return
+   select type (solver)
+   type is (cg_solver)
+      if (.not. solver%need_pos_def) then
+         call test_failed(error, &
+            & "CG solver does not require a positive-definite matrix")
+         return
+      end if
+   class default
+      call test_failed(error, "Factory did not construct a CG solver")
+      return
+   end select
+
+   call new_mchrg_solver(solver, direct_inp, error)
+   if (allocated(error)) return
+   select type (solver)
+   type is (direct_solver)
+      if (solver%need_pos_def) then
+         call test_failed(error, &
+            & "Direct solver requires a positive-definite matrix")
+      end if
+   class default
+      call test_failed(error, "Factory did not construct a direct solver")
+   end select
+
+end subroutine test_solver_factory
+
+
+!> Test: The solver factory rejects an unknown solver input
+subroutine test_solver_factory_unknown(error)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   type(unknown_input) :: input
+   class(mchrg_solver_type), allocatable :: solver
+   type(error_type), allocatable :: factory_error
+
+   call new_mchrg_solver(solver, input, factory_error)
+   if (.not. allocated(factory_error)) then
+      call test_failed(error, "Factory accepted an unknown solver input")
+      return
+   end if
+   if (allocated(solver)) then
+      call test_failed(error, "Factory constructed a solver for an unknown input")
+   end if
+
+end subroutine test_solver_factory_unknown
 
 
 end module test_solver

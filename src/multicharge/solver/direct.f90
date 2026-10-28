@@ -34,9 +34,6 @@ module multicharge_solver_direct
    !> Input configuration for the direct solver
    type, extends(mchrg_solver_input) :: direct_input
 
-      !> Whether to use the direct solver
-      logical :: direct = .true.
-
       !> Optional output verbosity
       integer, allocatable :: verbosity
    end type direct_input
