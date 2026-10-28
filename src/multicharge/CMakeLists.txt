@@ -28,8 +28,8 @@ list(
   "${dir}/model.f90"
   "${dir}/output.f90"
   "${dir}/param.f90"
-  "${dir}/version.f90"
   "${dir}/solver.f90"
+  "${dir}/version.f90"
 )
 
 set(srcs "${srcs}" PARENT_SCOPE)

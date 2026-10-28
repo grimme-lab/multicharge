@@ -25,6 +25,6 @@ srcs += files(
   'model.f90',
   'output.f90',
   'param.f90',
-  'version.f90',
   'solver.f90',
+  'version.f90',
 )

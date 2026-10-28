@@ -16,11 +16,11 @@
 # Unit testing
 set(
   tests
-  "model"
   "hessian"
+  "model"
   "pbc"
-  "wignerseitz"
   "solver"
+  "wignerseitz"
 )
 set(
   test-srcs

@@ -33,10 +33,10 @@ program tester
    stat = 0
 
    testsuites = [ &
-      & new_testsuite("solver", collect_solver), &
-      & new_testsuite("model", collect_model), &
       & new_testsuite("hessian", collect_hessian), &
+      & new_testsuite("model", collect_model), &
       & new_testsuite("pbc", collect_pbc), &
+      & new_testsuite("solver", collect_solver), &
       & new_testsuite("wignerseitz", collect_wignerseitz) &
       & ]
 

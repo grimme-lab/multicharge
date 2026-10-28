@@ -135,9 +135,6 @@ subroutine test_cg_identity_2x2(error)
    real(wp) :: amat(n, n), xvec(n), vrhs(n)
    real(wp) :: expected(n)
 
-   ! Timer variables
-   real(wp) :: start_cg, end_cg, start_direct, end_direct
-
    ! Solver variables
    class(mchrg_solver_type), allocatable :: solver
    class(mchrg_solver_input), allocatable :: solver_input
@@ -166,10 +163,8 @@ subroutine test_cg_identity_2x2(error)
    vrhs = [0.0_wp, 0.0_wp]
 
    ! Solve iteratively
-   call cpu_time(start_cg)
    call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=error)
    if (allocated(error)) return
-   call cpu_time(end_cg)
 
    ! Reference direct solver
    deallocate(solver_input)
@@ -181,9 +176,7 @@ subroutine test_cg_identity_2x2(error)
    end select
    call solver_maker(solver, solver_input, error)
    expected = [0.0_wp, 0.0_wp]
-   call cpu_time(start_direct)
    call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
-   call cpu_time(end_direct)
 
    ! Check solution
    if (any(abs(vrhs - expected) > thr)) then
@@ -192,11 +185,6 @@ subroutine test_cg_identity_2x2(error)
       print"(3es21.14)", vrhs
       print"(a)", "Expected:"
       print"(3es21.14)", expected
-   else
-      print '("CG Solver CPU Time : ",f6.3," seconds.")', end_cg - start_cg
-      print '("Direct Solver CPU Time : ",f6.3," seconds.")', end_direct - start_direct
-      print '("CG Solver time profit : ",f6.3)', &
-         & (end_direct - start_direct) / (end_cg - start_cg)
    end if
 
 end subroutine test_cg_identity_2x2
@@ -212,9 +200,6 @@ subroutine test_cg_diagonal_5x5(error)
    real(wp) :: amat(n, n), xvec(n), vrhs(n)
    real(wp) :: expected(n), diag(n)
    integer :: i
-
-   ! Timer variables
-   real(wp) :: start_cg, end_cg, start_direct, end_direct
 
    ! Solver variables
    class(mchrg_solver_type), allocatable :: solver
@@ -246,10 +231,8 @@ subroutine test_cg_diagonal_5x5(error)
    vrhs = [0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp]
 
    ! Solve
-   call cpu_time(start_cg)
    call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=error)
    if (allocated(error)) return
-   call cpu_time(end_cg)
 
    ! Reference direct solver
    deallocate(solver_input)
@@ -260,10 +243,8 @@ subroutine test_cg_diagonal_5x5(error)
       solver_input%verbosity = verbosity
    end select
    call solver_maker(solver, solver_input, error)
-   call cpu_time(start_direct)
    expected = [0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp]
    call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
-   call cpu_time(end_direct)
 
    ! Check solution
    if (any(abs(vrhs - expected) > thr)) then
@@ -272,11 +253,6 @@ subroutine test_cg_diagonal_5x5(error)
       print"(3es21.14)", vrhs
       print"(a)", "Expected:"
       print"(3es21.14)", expected
-   else
-      print '("CG Solver CPU Time : ",f6.3," seconds.")', end_cg - start_cg
-      print '("Direct Solver CPU Time : ",f6.3," seconds.")', end_direct - start_direct
-      print '("CG Solver time profit : ",f6.3)', &
-         & (end_direct - start_direct) / (end_cg - start_cg)
    end if
 
 end subroutine test_cg_diagonal_5x5
@@ -291,9 +267,6 @@ subroutine test_cg_spd_small(error)
    integer, parameter :: n = 3
    real(wp) :: amat(n, n), xvec(n), vrhs(n)
    real(wp) :: expected(n)
-
-   ! Timer variables
-   real(wp) :: start_cg, end_cg, start_direct, end_direct
 
    ! Solver variables
    class(mchrg_solver_type), allocatable :: solver
@@ -323,10 +296,8 @@ subroutine test_cg_spd_small(error)
    vrhs = [0.0_wp, 0.0_wp, 0.0_wp]
 
    ! Solve
-   call cpu_time(start_cg)
    call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=error)
    if (allocated(error)) return
-   call cpu_time(end_cg)
 
    ! Reference direct solver
    deallocate(solver_input)
@@ -338,9 +309,7 @@ subroutine test_cg_spd_small(error)
    end select
    call solver_maker(solver, solver_input, error)
    expected = [1.0_wp, 1.0_wp, 1.0_wp]
-   call cpu_time(start_direct)
    call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
-   call cpu_time(end_direct)
 
    ! Check solution
    if (any(abs(vrhs - expected) > thr)) then
@@ -349,11 +318,6 @@ subroutine test_cg_spd_small(error)
       print"(3es21.14)", vrhs
       print"(a)", "Expected:"
       print"(3es21.14)", expected
-   else
-      print '("CG Solver CPU Time : ",f6.3," seconds.")', end_cg - start_cg
-      print '("Direct Solver CPU Time : ",f6.3," seconds.")', end_direct - start_direct
-      print '("CG Solver time profit : ",f6.3)', &
-         & (end_direct - start_direct) / (end_cg - start_cg)
    end if
 
 end subroutine test_cg_spd_small
@@ -369,9 +333,6 @@ subroutine test_cg_spd_large(error)
    real(wp), allocatable :: amat(:,:), xvec(:), vrhs(:)
    real(wp), allocatable :: expected(:), b(:)
    integer :: i, j
-
-   ! Timer variables
-   real(wp) :: start_cg, end_cg, start_direct, end_direct
 
    ! Solver variables
    class(mchrg_solver_type), allocatable :: solver
@@ -418,10 +379,8 @@ subroutine test_cg_spd_large(error)
    xvec = b
 
    ! Solve
-   call cpu_time(start_cg)
    call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=error)
    if (allocated(error)) return
-   call cpu_time(end_cg)
 
    ! Reference direct solver
    deallocate(solver_input)
@@ -434,9 +393,7 @@ subroutine test_cg_spd_large(error)
    call solver_maker(solver, solver_input, error)
 
    ! Reference solution
-   call cpu_time(start_direct)
    call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
-   call cpu_time(end_direct)
 
    ! Check solution
    if (any(abs(vrhs - expected) / max(1.0_wp, abs(expected)) > thr_rel)) then
@@ -445,11 +402,6 @@ subroutine test_cg_spd_large(error)
       print"(3es21.14)", vrhs
       print"(a)", "Expected:"
       print"(3es21.14)", expected
-   else
-      print '("CG Solver CPU Time : ",f6.3," seconds.")', end_cg - start_cg
-      print '("Direct Solver CPU Time : ",f6.3," seconds.")', end_direct - start_direct
-      print '("CG Solver time profit : ",f6.3)', &
-         & (end_direct - start_direct) / (end_cg - start_cg)
    end if
 
 end subroutine test_cg_spd_large
@@ -465,9 +417,6 @@ subroutine test_cg_ill_conditioned(error)
    real(wp) :: amat(n, n), xvec(n), vrhs(n)
    real(wp) :: expected(n), b(n)
    integer :: i
-
-   ! Timer variables
-   real(wp) :: start_cg, end_cg, start_direct, end_direct
 
    ! Solver variables
    class(mchrg_solver_type), allocatable :: solver
@@ -505,10 +454,8 @@ subroutine test_cg_ill_conditioned(error)
    xvec = b
 
    ! Solve
-   call cpu_time(start_cg)
    call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=error)
    if (allocated(error)) return
-   call cpu_time(end_cg)
 
    ! Reference direct solver
    deallocate(solver_input)
@@ -521,9 +468,7 @@ subroutine test_cg_ill_conditioned(error)
    call solver_maker(solver, solver_input, error)
 
    ! Reference solution
-   call cpu_time(start_direct)
    call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
-   call cpu_time(end_direct)
 
    ! Check solution
    if (any(abs(vrhs - expected) / max(1.0_wp, abs(expected)) > thr_rel)) then
@@ -532,11 +477,6 @@ subroutine test_cg_ill_conditioned(error)
       print"(3es21.14)", vrhs
       print"(a)", "Expected:"
       print"(3es21.14)", expected
-   else
-      print '("CG Solver CPU Time : ",f6.3," seconds.")', end_cg - start_cg
-      print '("Direct Solver CPU Time : ",f6.3," seconds.")', end_direct - start_direct
-      print '("CG Solver time profit : ",f6.3)', &
-         & (end_direct - start_direct) / (end_cg - start_cg)
    end if
 
 end subroutine test_cg_ill_conditioned
@@ -552,9 +492,6 @@ subroutine test_cg_zero_rhs(error)
    real(wp) :: amat(n, n), xvec(n), vrhs(n)
    real(wp) :: expected(n)
    integer :: i
-
-   ! Timer variables
-   real(wp) :: start_cg, end_cg, start_direct, end_direct
 
    ! Solver variables
    class(mchrg_solver_type), allocatable :: solver
@@ -590,10 +527,8 @@ subroutine test_cg_zero_rhs(error)
    expected = 0.0_wp
 
    ! Solve
-   call cpu_time(start_cg)
    call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=error)
    if (allocated(error)) return
-   call cpu_time(end_cg)
 
    ! Reference direct solver
    deallocate(solver_input)
@@ -606,9 +541,7 @@ subroutine test_cg_zero_rhs(error)
    call solver_maker(solver, solver_input, error)
 
    ! Reference solution
-   call cpu_time(start_direct)
    call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
-   call cpu_time(end_direct)
 
    ! Check solution
    if (any(abs(vrhs - expected) / max(1.0_wp, abs(expected)) > thr_rel)) then
@@ -617,11 +550,6 @@ subroutine test_cg_zero_rhs(error)
       print"(3es21.14)", vrhs
       print"(a)", "Expected:"
       print"(3es21.14)", expected
-   else
-      print '("CG Solver CPU Time : ",f6.3," seconds.")', end_cg - start_cg
-      print '("Direct Solver CPU Time : ",f6.3," seconds.")', end_direct - start_direct
-      print '("CG Solver time profit : ",f6.3)', &
-         & (end_direct - start_direct) / (end_cg - start_cg)
    end if
 
 end subroutine test_cg_zero_rhs
@@ -639,9 +567,6 @@ subroutine test_cg_random_spd(error)
    integer :: i, j, k, seed_size
    integer, allocatable :: seed(:)
    real(wp) :: r
-
-   ! Timer variables
-   real(wp) :: start_cg, end_cg, start_direct, end_direct
 
    ! Solver variables
    class(mchrg_solver_type), allocatable :: solver
@@ -714,10 +639,8 @@ subroutine test_cg_random_spd(error)
    xvec = b
 
    ! Solve
-   call cpu_time(start_cg)
    call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=error)
    if (allocated(error)) return
-   call cpu_time(end_cg)
 
    ! Reference direct solver
    deallocate(solver_input)
@@ -730,9 +653,7 @@ subroutine test_cg_random_spd(error)
    call solver_maker(solver, solver_input, error)
 
    ! Reference solution
-   call cpu_time(start_direct)
    call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
-   call cpu_time(end_direct)
 
    ! Check solution
    if (any(abs(vrhs - expected) / max(1.0_wp, abs(expected)) > thr_rel)) then
@@ -741,11 +662,6 @@ subroutine test_cg_random_spd(error)
       print"(3es21.14)", vrhs
       print"(a)", "Expected:"
       print"(3es21.14)", expected
-   else
-      print '("CG Solver CPU Time : ",f6.3," seconds.")', end_cg - start_cg
-      print '("Direct Solver CPU Time : ",f6.3," seconds.")', end_direct - start_direct
-      print '("CG Solver time profit : ",f6.3)', &
-         & (end_direct - start_direct) / (end_cg - start_cg)
    end if
 
 end subroutine test_cg_random_spd
