@@ -14,9 +14,9 @@
 ! limitations under the License.
 
 module multicharge_ewald
-   use mctc_env, only : wp
-   use mctc_io_constants, only : pi
-   use mctc_io_math, only : matdet_3x3, matinv_3x3
+   use mctc_env, only: error_type, fatal_error, wp
+   use mctc_io_constants, only: pi
+   use mctc_io_math, only: matdet_3x3, matinv_3x3
    implicit none
    private
 
@@ -46,16 +46,26 @@ module multicharge_ewald
       end function get_rec_term_gen
    end interface
 
+
 contains
 
 
-subroutine get_alpha(lattice, alpha)
+subroutine get_alpha(lattice, alpha, error)
+   !> Lattice vectors
    real(wp), intent(in) :: lattice(:, :)
+   !> Ewald splitting parameter
    real(wp), intent(out) :: alpha
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
    real(wp) :: vol, rec_lat(3, 3)
 
    vol = abs(matdet_3x3(lattice))
-   rec_lat = twopi*transpose(matinv_3x3(lattice))
+   if (vol < eps) then
+      call fatal_error(error, "Lattice vectors are singular or degenerate")
+      return
+   end if
+   rec_lat = twopi * transpose(matinv_3x3(lattice))
 
    call search_alpha(lattice, rec_lat, vol, eps, alpha)
 
@@ -134,6 +144,7 @@ subroutine search_alpha(lattice, rec_lat, volume, tolerance, alpha)
 
 end subroutine search_alpha
 
+
 !> Returns the difference in the decrease of the real and reciprocal parts of the
 !> Ewald sum. In order to make the real space part shorter than the reciprocal
 !> space part, the values are taken at different distances for the real and the
@@ -163,6 +174,7 @@ pure function rec_dir_diff(alpha, get_rec_term, rlen, dlen, volume) result(diff)
       & - (get_dir_term(2*dlen, alpha) - get_dir_term(3*dlen, alpha))
 
 end function rec_dir_diff
+
 
 !> Returns the max. value of a term in the real space part of the Ewald summation
 !> for a given vector length.

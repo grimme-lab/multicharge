@@ -23,11 +23,8 @@
 !> General charge model
 module multicharge_model_type
 
-   use mctc_cutoff, only: get_lattice_points
    use mctc_env, only: error_type, fatal_error, wp, ik => IK
    use mctc_io, only: structure_type
-   use mctc_io_constants, only: pi
-   use mctc_io_math, only: matinv_3x3
    use mctc_ncoord, only: ncoord_type
    use multicharge_blas, only: gemv, symv, gemm
    use multicharge_lapack, only: sytrf, sytrs, sytri
@@ -35,7 +32,7 @@ module multicharge_model_type
    implicit none
    private
 
-   public :: mchrg_model_type, get_dir_trans, get_rec_trans
+   public :: mchrg_model_type
 
    !> Abstract multicharge model type
    type, abstract :: mchrg_model_type
@@ -79,10 +76,11 @@ module multicharge_model_type
    end type mchrg_model_type
 
    abstract interface
-      subroutine update(self, mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
-         import :: mchrg_model_type, structure_type, cache_container, wp
+      subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
+         import :: mchrg_model_type, structure_type, cache_container, error_type, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
+         type(error_type), allocatable, intent(out) :: error
          type(cache_container), intent(inout) :: cache
          real(wp), intent(in) :: cn(:)
          real(wp), intent(in), optional :: qloc(:)
@@ -127,41 +125,9 @@ module multicharge_model_type
       end subroutine get_xvec_derivs
    end interface
 
-   real(wp), parameter :: twopi = 2 * pi
 
 contains
 
-!> Generate direct lattice translation vectors for a periodic structure
-subroutine get_dir_trans(mol, trans, cutoff)
-   !> Molecular structure data
-   type(structure_type), intent(in) :: mol
-
-   !> Translation vectors
-   real(wp), allocatable, intent(out) :: trans(:, :)
-
-   !> Optional lattice-vector cutoff
-   real(wp), intent(in), optional :: cutoff
-
-   integer, parameter :: rep(3) = [2, 2, 2]
-
-   if (present(cutoff)) then
-      call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
-   else
-      call get_lattice_points(mol%lattice, rep, .true., trans)
-   end if
-
-end subroutine get_dir_trans
-
-subroutine get_rec_trans(lattice, trans)
-   real(wp), intent(in) :: lattice(:, :)
-   real(wp), allocatable, intent(out) :: trans(:, :)
-   integer, parameter :: rep(3) = [2, 2, 2]
-   real(wp) :: rec_lat(3, 3)
-
-   rec_lat = twopi * transpose(matinv_3x3(lattice))
-   call get_lattice_points(rec_lat, rep, .false., trans)
-
-end subroutine get_rec_trans
 
 subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
    & energy, gradient, sigma, qvec, dqdr, dqdL, response)
@@ -212,7 +178,6 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
    real(wp), allocatable :: dxdr(:, :, :), dxdL(:, :, :)
    type(cache_container), target :: local_cache
    type(cache_container), pointer :: cache
-   real(wp), allocatable :: trans(:, :)
 
    ! Calculate gradient if the respective arrays are present
    dcn = present(dcndr) .and. present(dcndL)
@@ -233,7 +198,8 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
    end if
 
    ! Update cache
-   call self%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
+   call self%update(mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
+   if (allocated(error)) return
 
    ! Setup the Coulomb matrix
    ndim = mol%nat + 1
@@ -297,7 +263,9 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
       allocate(dadr(3, mol%nat, ndim), dadL(3, 3, ndim), atrace(3, mol%nat))
       allocate(dxdr(3, mol%nat, ndim), dxdL(3, 3, ndim))
       call self%get_xvec_derivs(mol, cache, dxdr, dxdL)
+
       call self%get_coulomb_derivs(mol, cache, vrhs, dadr, dadL, atrace)
+
       do iat = 1, mol%nat
          dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
       end do
@@ -408,9 +376,9 @@ subroutine local_charge(self, mol, trans, qloc, dqlocdr, dqlocdL)
    !> Local atomic partial charges
    real(wp), intent(out) :: qloc(:)
    !> Optional derivative of local atomic partial charges w.r.t. atomic positions
-   real(wp), intent(out), optional :: dqlocdr(3, mol%nat, mol%nat)
+   real(wp), intent(out), optional :: dqlocdr(:, :, :)
    !> Optional derivative of local atomic partial charges w.r.t. lattice vectors
-   real(wp), intent(out), optional :: dqlocdL(3, 3, mol%nat)
+   real(wp), intent(out), optional :: dqlocdL(:, :, :)
 
    qloc = 0.0_wp
    if (present(dqlocdr) .and. present(dqlocdL)) then

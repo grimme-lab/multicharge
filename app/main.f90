@@ -111,7 +111,12 @@ program main
       allocate(dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat))
    end if
 
-   call get_lattice_points(mol%periodic, mol%lattice, model%ncoord%cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, model%ncoord%cutoff, trans, error)
+   if (allocated(error)) then
+      write(error_unit, "(a)") error%message
+      error stop
+   end if
+
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
    call model%solve(mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &

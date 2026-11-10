@@ -92,24 +92,30 @@ subroutine run_case(error, bond_capacity, icase)
    integer, intent(in) :: icase
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
+   integer, parameter :: num_tri(3) = [30, 8, 1]
+   integer, parameter :: num_di(2) = [8, 1]
+   real(wp), parameter :: xyz_tri(3, 3) = reshape([ &
+      & 0.0_wp, 0.0_wp, 0.0_wp, 3.0_wp, 0.1_wp, 0.2_wp, &
+      & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3])
+   real(wp), parameter :: xyz_half(3, 2) = reshape([ &
+      & 0.0_wp, 0.0_wp, -0.2_wp, 3.0_wp, 0.2_wp, 0.3_wp], [3, 2])
    real(wp), parameter :: lattice(3, 3) = reshape([ &
       & 5.1_wp, 0.0_wp, 0.0_wp, 0.4_wp, 6.2_wp, 0.0_wp, &
       & 0.2_wp, 0.7_wp, 7.1_wp], [3, 3])
+   real(wp), parameter :: lat_orth(3, 3) = reshape([ &
+      & 6.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 7.0_wp, 0.0_wp, &
+      & 0.0_wp, 0.0_wp, 8.0_wp], [3, 3])
    character(len=30) :: label
 
    select case(icase)
    case(1, 2)
       call get_structure(mol, "MB16-43", "01")
    case(3)
-      call new(mol, [30, 8, 1], reshape([ &
-         & 0.0_wp, 0.0_wp, 0.0_wp, 3.0_wp, 0.1_wp, 0.2_wp, &
-         & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3]), charge=1.0_wp)
+      call new(mol, num_tri, xyz_tri, charge=1.0_wp)
    case(4)
       call new(mol, [8], reshape([0.0_wp, 0.0_wp, 0.0_wp], [3, 1]), charge=-1.0_wp)
    case(5, 6)
-      call new(mol, [30, 8, 1], reshape([ &
-         & 0.0_wp, 0.0_wp, 0.0_wp, 3.0_wp, 0.1_wp, 0.2_wp, &
-         & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3]), charge=1.0_wp, &
+      call new(mol, num_tri, xyz_tri, charge=1.0_wp, &
          & lattice=lattice, periodic=[.true., .true., .true.])
    case(7)
       call get_structure(mol, "X23", "urea")
@@ -118,10 +124,7 @@ subroutine run_case(error, bond_capacity, icase)
          & lattice=lattice, periodic=[.true., .true., .true.])
    case(9)
       ! The half-cell displacement has two equivalent WS images.
-      call new(mol, [8, 1], reshape([0.0_wp, 0.0_wp, 0.0_wp, &
-         & 3.0_wp, 0.2_wp, 0.3_wp], [3, 2]), lattice=reshape([ &
-         & 6.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 7.0_wp, 0.0_wp, &
-         & 0.0_wp, 0.0_wp, 8.0_wp], [3, 3]), periodic=[.true., .true., .true.])
+      call new(mol, num_di, xyz_half, lattice=lat_orth, periodic=[.true., .true., .true.])
    case default
       call test_failed(error, "Unknown charge Hessian test case")
       return

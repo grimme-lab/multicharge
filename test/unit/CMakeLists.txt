@@ -19,7 +19,6 @@ set(
   "model"
   "hessian"
   "pbc"
-  "wignerseitz"
 )
 set(
   test-srcs

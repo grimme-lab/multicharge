@@ -34,6 +34,7 @@ module test_pbc
 
 contains
 
+
 !> Collect all exported unit tests
 subroutine collect_pbc(testsuite)
 
@@ -64,17 +65,27 @@ subroutine collect_pbc(testsuite)
 
 end subroutine collect_pbc
 
+
 !> Compact skew cell probes nonlocal widths and their periodic self images.
 subroutine test_eeqbc_response_znoh(error)
+
+   !> Error handling
    type(error_type), allocatable, intent(out) :: error
+
+   integer, parameter :: num(3) = [30, 8, 1]
+   real(wp), parameter :: xyz(3, 3) = reshape([ &
+      & 0.0_wp, 0.0_wp, 0.0_wp, &
+      & 3.0_wp, 0.1_wp, 0.2_wp, &
+      & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3])
+   real(wp), parameter :: lat(3, 3) = reshape([ &
+      & 5.1_wp, 0.0_wp, 0.0_wp, &
+      & 0.4_wp, 6.2_wp, 0.0_wp, &
+      & 0.2_wp, 0.7_wp, 7.1_wp], [3, 3])
+
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call new(mol, [30, 8, 1], reshape([ &
-      & 0.0_wp, 0.0_wp, 0.0_wp, 3.0_wp, 0.1_wp, 0.2_wp, &
-      & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3]), charge=1.0_wp, &
-      & lattice=reshape([5.1_wp, 0.0_wp, 0.0_wp, 0.4_wp, 6.2_wp, 0.0_wp, &
-      & 0.2_wp, 0.7_wp, 7.1_wp], [3, 3]), periodic=[.true., .true., .true.])
+   call new(mol, num, xyz, charge=1.0_wp, lattice=lat, periodic=[.true., .true., .true.])
    call new_eeqbc2025_model(mol, model, error)
    if (allocated(error)) return
    call test_dadr(error, mol, model)
@@ -82,7 +93,9 @@ subroutine test_eeqbc_response_znoh(error)
    call test_dadL(error, mol, model)
    if (allocated(error)) return
    call test_numdqdr(error, mol, model)
+
 end subroutine test_eeqbc_response_znoh
+
 
 subroutine gen_test(error, mol, model, qref, eref)
 
@@ -106,7 +119,8 @@ subroutine gen_test(error, mol, model, qref, eref)
    real(wp), allocatable :: energy(:)
    real(wp), allocatable :: qvec(:)
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
    allocate(cn(mol%nat), qloc(mol%nat))
 
@@ -151,6 +165,7 @@ subroutine gen_test(error, mol, model, qref, eref)
 
 end subroutine gen_test
 
+
 subroutine test_numgrad(error, mol, model)
 
    !> Molecular structure data
@@ -171,7 +186,8 @@ subroutine test_numgrad(error, mol, model)
    real(wp), allocatable :: numgrad(:, :)
    real(wp) :: er, el
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
    allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
@@ -226,6 +242,7 @@ subroutine test_numgrad(error, mol, model)
 
 end subroutine test_numgrad
 
+
 subroutine test_numsigma(error, mol, model)
 
    !> Molecular structure data
@@ -247,7 +264,8 @@ subroutine test_numsigma(error, mol, model)
    real(wp), allocatable :: lattr(:, :), xyz(:, :)
    real(wp) :: er, el, eps(3, 3), numsigma(3, 3), sigma(3, 3), lattice(3, 3)
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
    allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
@@ -313,6 +331,7 @@ subroutine test_numsigma(error, mol, model)
 
 end subroutine test_numsigma
 
+
 subroutine test_dbdr(error, mol, model)
 
    !> Molecular structure data
@@ -334,7 +353,8 @@ subroutine test_dbdr(error, mol, model)
    type(cache_container), allocatable :: cache
    allocate(cache)
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
    allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
@@ -350,7 +370,8 @@ subroutine test_dbdr(error, mol, model)
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
          call model%ncoord%get_coordination_number(mol, trans, cn)
          call model%local_charge(mol, trans, qloc)
-         call model%update(mol, cache, cn, qloc)
+         call model%update(mol, error, cache, cn, qloc)
+         if (allocated(error)) exit lp
          call model%get_xvec(mol, cache, xvecr)
 
          ! Left-hand side
@@ -358,19 +379,22 @@ subroutine test_dbdr(error, mol, model)
          mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2 * step
          call model%ncoord%get_coordination_number(mol, trans, cn)
          call model%local_charge(mol, trans, qloc)
-         call model%update(mol, cache, cn, qloc)
+         call model%update(mol, error, cache, cn, qloc)
+         if (allocated(error)) exit lp
          call model%get_xvec(mol, cache, xvecl)
 
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
          numgrad(ic, iat, :) = 0.5_wp * (xvecr(:) - xvecl(:)) / step
       end do
    end do lp
+   if (allocated(error)) return
 
    ! Analytical gradient
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
-   call model%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
-   call model%get_xvec(mol, cache, xvecl) ! need to call this for xtmp in cache (eeqbc)
+   call model%update(mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
+   if (allocated(error)) return
+   call model%get_xvec(mol, cache, xvecl)
    call model%get_xvec_derivs(mol, cache, dbdr, dbdL)
 
    if (any(abs(dbdr(:, :, :) - numgrad(:, :, :)) > thr2)) then
@@ -384,6 +408,7 @@ subroutine test_dbdr(error, mol, model)
    end if
 
 end subroutine test_dbdr
+
 
 subroutine test_dbdL(error, mol, model)
 
@@ -399,7 +424,7 @@ subroutine test_dbdL(error, mol, model)
    integer :: iat, ic, jc
    real(wp), parameter :: cutoff = 25.0_wp
    real(wp), parameter :: step = 1.0e-6_wp, unity(3, 3) = reshape(&
-   & [1, 0, 0, 0, 1, 0, 0, 0, 1], [3, 3])
+      & [1, 0, 0, 0, 1, 0, 0, 0, 1], [3, 3])
    real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :)
    real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
    real(wp), allocatable :: dbdr(:, :, :), dbdL(:, :, :)
@@ -415,7 +440,8 @@ subroutine test_dbdL(error, mol, model)
       & xvecr(mol%nat + 1), xvecl(mol%nat + 1), numsigma(3, 3, mol%nat + 1), &
       & dbdr(3, mol%nat, mol%nat + 1), dbdL(3, 3, mol%nat + 1), xyz(3, mol%nat))
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
    numsigma = 0.0_wp
 
@@ -433,7 +459,8 @@ subroutine test_dbdL(error, mol, model)
          lattr(:, :) = matmul(eps, trans)
          call model%ncoord%get_coordination_number(mol, lattr, cn)
          call model%local_charge(mol, lattr, qloc)
-         call model%update(mol, cache, cn, qloc)
+         call model%update(mol, error, cache, cn, qloc)
+         if (allocated(error)) exit lp
          call model%get_xvec(mol, cache, xvecr)
 
          ! Left-hand side
@@ -444,7 +471,8 @@ subroutine test_dbdL(error, mol, model)
          lattr(:, :) = matmul(eps, trans)
          call model%ncoord%get_coordination_number(mol, lattr, cn)
          call model%local_charge(mol, lattr, qloc)
-         call model%update(mol, cache, cn, qloc)
+         call model%update(mol, error, cache, cn, qloc)
+         if (allocated(error)) exit lp
          call model%get_xvec(mol, cache, xvecl)
 
          eps(jc, ic) = eps(jc, ic) + step
@@ -456,12 +484,14 @@ subroutine test_dbdL(error, mol, model)
          end do
       end do
    end do lp
+   if (allocated(error)) return
 
    ! Analytical gradient
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
-   call model%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
-   call model%get_xvec(mol, cache, xvecl) ! need to call this for xtmp in cache (eeqbc)
+   call model%update(mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
+   if (allocated(error)) return
+   call model%get_xvec(mol, cache, xvecl)
    call model%get_xvec_derivs(mol, cache, dbdr, dbdL)
 
    if (any(abs(dbdL(:, :, :) - numsigma(:, :, :)) > thr2)) then
@@ -475,6 +505,7 @@ subroutine test_dbdL(error, mol, model)
    end if
 
 end subroutine test_dbdL
+
 
 subroutine test_dadr(error, mol, model)
 
@@ -513,7 +544,8 @@ subroutine test_dadr(error, mol, model)
       thr2_local = thr2
    end select
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
    ! Obtain the vector of charges
    call model%ncoord%get_coordination_number(mol, trans, cn)
@@ -530,7 +562,8 @@ subroutine test_dadr(error, mol, model)
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
          call model%ncoord%get_coordination_number(mol, trans, cn)
          call model%local_charge(mol, trans, qloc)
-         call model%update(mol, cache, cn, qloc)
+         call model%update(mol, error, cache, cn, qloc)
+         if (allocated(error)) exit lp
          call model%get_coulomb_matrix(mol, cache, amatr)
 
          ! Left-hand side
@@ -538,7 +571,8 @@ subroutine test_dadr(error, mol, model)
          mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2 * step
          call model%ncoord%get_coordination_number(mol, trans, cn)
          call model%local_charge(mol, trans, qloc)
-         call model%update(mol, cache, cn, qloc)
+         call model%update(mol, error, cache, cn, qloc)
+         if (allocated(error)) exit lp
          call model%get_coulomb_matrix(mol, cache, amatl)
 
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
@@ -552,11 +586,13 @@ subroutine test_dadr(error, mol, model)
          end do
       end do
    end do lp
+   if (allocated(error)) return
 
    ! Analytical gradient
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
-   call model%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
+   call model%update(mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
+   if (allocated(error)) return
    call model%get_coulomb_derivs(mol, cache, qvec, dadr, dadL, atrace)
 
    ! Add trace of the A matrix
@@ -577,6 +613,7 @@ subroutine test_dadr(error, mol, model)
 
 end subroutine test_dadr
 
+
 subroutine test_dadL(error, mol, model)
 
    !> Molecular structure data
@@ -591,7 +628,7 @@ subroutine test_dadL(error, mol, model)
    integer :: ic, jc, iat
    real(wp), parameter :: cutoff = 25.0_wp
    real(wp), parameter :: step = 1.0e-6_wp, unity(3, 3) = reshape(&
-   & [1, 0, 0, 0, 1, 0, 0, 0, 1], [3, 3])
+      & [1, 0, 0, 0, 1, 0, 0, 0, 1], [3, 3])
    real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :)
    real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
    real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
@@ -608,7 +645,8 @@ subroutine test_dadL(error, mol, model)
       & dadr(3, mol%nat, mol%nat + 1), dadL(3, 3, mol%nat + 1), atrace(3, mol%nat), &
       & numsigma(3, 3, mol%nat + 1), qvec(mol%nat), xyz(3, mol%nat))
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
    call model%ncoord%get_coordination_number(mol, trans, cn)
    call model%local_charge(mol, trans, qloc)
@@ -630,9 +668,9 @@ subroutine test_dadL(error, mol, model)
          lattr(:, :) = matmul(eps, trans)
          call model%ncoord%get_coordination_number(mol, lattr, cn)
          call model%local_charge(mol, lattr, qloc)
-         call model%update(mol, cache, cn, qloc)
-         call model%get_coulomb_matrix(mol, cache, amatr)
+         call model%update(mol, error, cache, cn, qloc)
          if (allocated(error)) exit lp
+         call model%get_coulomb_matrix(mol, cache, amatr)
 
          amatl(:, :) = 0.0_wp
          eps(jc, ic) = eps(jc, ic) - 2 * step
@@ -641,9 +679,9 @@ subroutine test_dadL(error, mol, model)
          lattr(:, :) = matmul(eps, trans)
          call model%ncoord%get_coordination_number(mol, lattr, cn)
          call model%local_charge(mol, lattr, qloc)
-         call model%update(mol, cache, cn, qloc)
-         call model%get_coulomb_matrix(mol, cache, amatl)
+         call model%update(mol, error, cache, cn, qloc)
          if (allocated(error)) exit lp
+         call model%get_coulomb_matrix(mol, cache, amatl)
 
          eps(jc, ic) = eps(jc, ic) + step
          mol%xyz(:, :) = xyz
@@ -659,10 +697,10 @@ subroutine test_dadL(error, mol, model)
 
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
-   call model%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
+   call model%update(mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
+   if (allocated(error)) return
 
    call model%get_coulomb_derivs(mol, cache, qvec, dadr, dadL, atrace)
-   if (allocated(error)) return
 
    if (any(abs(dadL(:, :, :) - numsigma(:, :, :)) > thr2)) then
       call test_failed(error, "Derivative of the A matrix does not match")
@@ -675,6 +713,7 @@ subroutine test_dadL(error, mol, model)
    end if
 
 end subroutine test_dadL
+
 
 subroutine test_numdqdr(error, mol, model)
 
@@ -695,7 +734,8 @@ subroutine test_numdqdr(error, mol, model)
    real(wp), allocatable :: ql(:), qr(:), dqdr(:, :, :), dqdL(:, :, :)
    real(wp), allocatable :: numdr(:, :, :)
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
    allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
@@ -742,6 +782,7 @@ subroutine test_numdqdr(error, mol, model)
 
 end subroutine test_numdqdr
 
+
 subroutine test_numdqdL(error, mol, model)
 
    !> Molecular structure data
@@ -763,7 +804,8 @@ subroutine test_numdqdL(error, mol, model)
    real(wp), allocatable :: lattr(:, :), xyz(:, :), numdL(:, :, :)
    real(wp) :: eps(3, 3), lattice(3, 3)
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
    allocate(cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
@@ -824,6 +866,7 @@ subroutine test_numdqdL(error, mol, model)
 
 end subroutine test_numdqdL
 
+
 subroutine test_eeq_q_cyanamide(error)
 
    !> Error handling
@@ -854,6 +897,7 @@ subroutine test_eeq_q_cyanamide(error)
 
 end subroutine test_eeq_q_cyanamide
 
+
 subroutine test_eeq_e_formamide(error)
 
    !> Error handling
@@ -863,14 +907,14 @@ subroutine test_eeq_e_formamide(error)
    class(mchrg_model_type), allocatable :: model
    ! Updated for the mctc-lib Wigner-Seitz image tolerance in the finite Ewald sum.
    real(wp), parameter :: ref(24) = [&
-      & 4.01878374787191E-1_wp, 4.01885037899597E-1_wp, 4.01836688390911E-1_wp, &
-      & 4.01859670984182E-1_wp, 4.30132953804280E-1_wp, 4.30105983229582E-1_wp, &
-      & 4.30085942904623E-1_wp, 4.30109219580760E-1_wp, 1.90400205083764E-1_wp, &
-      & 1.90401834703106E-1_wp, 1.90404142905890E-1_wp, 1.90407459232625E-1_wp, &
-      & 3.33868772086876E-1_wp, 3.33849119518316E-1_wp, 3.33876414218980E-1_wp, &
-      & 3.33893467423880E-1_wp, -8.35636285533486E-1_wp, -8.35615627485463E-1_wp, &
-      &-8.35543385304371E-1_wp, -8.35590189215555E-1_wp, -6.31079470991667E-1_wp, &
-      &-6.31060026823144E-1_wp, -6.31085555821538E-1_wp, -6.31082095933280E-1_wp]
+      & 4.01878374362997E-1_wp, 4.01885037903943E-1_wp, 4.01836688394892E-1_wp, &
+      & 4.01859669863049E-1_wp, 4.30132953379425E-1_wp, 4.30105983205457E-1_wp, &
+      & 4.30085942886818E-1_wp, 4.30109219466914E-1_wp, 1.90400205128928E-1_wp, &
+      & 1.90401834745755E-1_wp, 1.90404142926720E-1_wp, 1.90407459238031E-1_wp, &
+      & 3.33868771612188E-1_wp, 3.33849119482075E-1_wp, 3.33876414202270E-1_wp, &
+      & 3.33893467357834E-1_wp, -8.35636283871575E-1_wp, -8.35615627471340E-1_wp, &
+      &-8.35543385331647E-1_wp, -8.35590188319278E-1_wp, -6.31079470990741E-1_wp, &
+      &-6.31060026819872E-1_wp, -6.31085555552299E-1_wp, -6.31082095960253E-1_wp]
 
    call get_structure(mol, "X23", "formamide")
    call new_eeq2019_model(mol, model, error)
@@ -878,6 +922,7 @@ subroutine test_eeq_e_formamide(error)
    call gen_test(error, mol, model, eref=ref)
 
 end subroutine test_eeq_e_formamide
+
 
 subroutine test_eeq_dbdr_co2(error)
 
@@ -894,6 +939,7 @@ subroutine test_eeq_dbdr_co2(error)
 
 end subroutine test_eeq_dbdr_co2
 
+
 subroutine test_eeq_dbdL_co2(error)
 
    !> Error handling
@@ -908,6 +954,7 @@ subroutine test_eeq_dbdL_co2(error)
    call test_dbdL(error, mol, model)
 
 end subroutine test_eeq_dbdL_co2
+
 
 subroutine test_eeq_dadr_ice(error)
 
@@ -924,6 +971,7 @@ subroutine test_eeq_dadr_ice(error)
 
 end subroutine test_eeq_dadr_ice
 
+
 subroutine test_eeq_dadL_ice(error)
 
    !> Error handling
@@ -938,6 +986,7 @@ subroutine test_eeq_dadL_ice(error)
    call test_dadL(error, mol, model)
 
 end subroutine test_eeq_dadL_ice
+
 
 subroutine test_eeq_g_co2(error)
 
@@ -954,6 +1003,7 @@ subroutine test_eeq_g_co2(error)
 
 end subroutine test_eeq_g_co2
 
+
 subroutine test_eeq_s_ice(error)
 
    !> Error handling
@@ -968,6 +1018,7 @@ subroutine test_eeq_s_ice(error)
    call test_numsigma(error, mol, model)
 
 end subroutine test_eeq_s_ice
+
 
 subroutine test_eeq_dqdr_urea(error)
 
@@ -984,6 +1035,7 @@ subroutine test_eeq_dqdr_urea(error)
 
 end subroutine test_eeq_dqdr_urea
 
+
 subroutine test_eeq_dqdL_oxacb(error)
 
    !> Error handling
@@ -998,6 +1050,7 @@ subroutine test_eeq_dqdL_oxacb(error)
    call test_numdqdL(error, mol, model)
 
 end subroutine test_eeq_dqdL_oxacb
+
 
 subroutine test_eeqbc_dbdr_co2(error)
 
@@ -1014,6 +1067,7 @@ subroutine test_eeqbc_dbdr_co2(error)
 
 end subroutine test_eeqbc_dbdr_co2
 
+
 subroutine test_eeqbc_dbdL_co2(error)
 
    !> Error handling
@@ -1028,6 +1082,7 @@ subroutine test_eeqbc_dbdL_co2(error)
    call test_dbdL(error, mol, model)
 
 end subroutine test_eeqbc_dbdL_co2
+
 
 subroutine test_eeqbc_dadr_ice(error)
 
@@ -1044,6 +1099,7 @@ subroutine test_eeqbc_dadr_ice(error)
 
 end subroutine test_eeqbc_dadr_ice
 
+
 subroutine test_eeqbc_dadL_ice(error)
 
    !> Error handling
@@ -1058,6 +1114,7 @@ subroutine test_eeqbc_dadL_ice(error)
    call test_dadL(error, mol, model)
 
 end subroutine test_eeqbc_dadL_ice
+
 
 subroutine test_eeqbc_g_co2(error)
 
@@ -1074,6 +1131,7 @@ subroutine test_eeqbc_g_co2(error)
 
 end subroutine test_eeqbc_g_co2
 
+
 subroutine test_eeqbc_s_ice(error)
 
    !> Error handling
@@ -1088,6 +1146,7 @@ subroutine test_eeqbc_s_ice(error)
    call test_numsigma(error, mol, model)
 
 end subroutine test_eeqbc_s_ice
+
 
 subroutine test_eeqbc_dqdr_urea(error)
 
@@ -1104,6 +1163,7 @@ subroutine test_eeqbc_dqdr_urea(error)
 
 end subroutine test_eeqbc_dqdr_urea
 
+
 subroutine test_eeqbc_dqdL_oxacb(error)
 
    !> Error handling
@@ -1118,5 +1178,6 @@ subroutine test_eeqbc_dqdL_oxacb(error)
    call test_numdqdL(error, mol, model)
 
 end subroutine test_eeqbc_dqdL_oxacb
+
 
 end module test_pbc
