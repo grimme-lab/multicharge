@@ -29,6 +29,7 @@ module multicharge_model_type
    use multicharge_blas, only: gemv, symv, gemm
    use multicharge_model_cache, only : mchrg_cache, ensure_shape
    use multicharge_model_hessian, only : add_symmetric_product
+   use multicharge_solver_trialprod, only : dense_trialprod
    use multicharge_solver_type, only : mchrg_solver_type
    implicit none
    private
@@ -258,7 +259,7 @@ subroutine solve(self, mol, solver, cache, error, &
    !> The solver instance
    class(mchrg_solver_type), intent(in) :: solver
    !> Cache handling
-   type(mchrg_cache), intent(inout) :: cache
+   type(mchrg_cache), intent(inout), target :: cache
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -286,6 +287,7 @@ subroutine solve(self, mol, solver, cache, error, &
    real(wp), allocatable :: unitvec(:)
    real(wp), allocatable :: uvec(:)
    real(wp), allocatable :: vvec(:)
+   real(wp), allocatable :: prec(:)
    real(wp) :: uvecsum
    real(wp) :: vvecsum
    real(wp) :: lambda
@@ -295,6 +297,7 @@ subroutine solve(self, mol, solver, cache, error, &
    logical :: grad, cpq
    logical :: add_lagr
    type(timer_type) :: timer
+   type(dense_trialprod) :: tprod
    integer :: print_unit, verbosity_solve
 
    ! Calculate gradient if the respective arrays are present
@@ -336,6 +339,9 @@ subroutine solve(self, mol, solver, cache, error, &
    call self%get_xvec(mol, ndim, cache)
    call ensure_shape(cache%vrhs, mol%nat + 1)
 
+   ! Trial product operator referencing the dense matrix in the cache
+   tprod%cache => cache
+
    ! pop setup timer
    call timer%pop
 
@@ -346,12 +352,12 @@ subroutine solve(self, mol, solver, cache, error, &
       if (cpq) then
          ! The inverse matrix is needed for the charge derivatives
          call ensure_shape(cache%ainv, ndim, ndim)
-         call solver%solve(amat=cache%amat, xvec=cache%xvec, &
+         call solver%solve(tprod=tprod, xvec=cache%xvec, &
             & vrhs=cache%vrhs, ainv=cache%ainv, new_unit=print_unit, &
             & error=error)
       else
          if (allocated(cache%ainv)) deallocate(cache%ainv)
-         call solver%solve(amat=cache%amat, xvec=cache%xvec, &
+         call solver%solve(tprod=tprod, xvec=cache%xvec, &
             & vrhs=cache%vrhs, new_unit=print_unit, error=error)
       end if
       if (allocated(error)) return
@@ -360,24 +366,29 @@ subroutine solve(self, mol, solver, cache, error, &
       allocate(unitvec(mol%nat))
       allocate(uvec(mol%nat))
       allocate(vvec(mol%nat))
-      ! Initial guess
+      allocate(prec(mol%nat))
+
+      ! Diagonal (Jacobi) preconditioner for the iterative solver
       do iat = 1, mol%nat
-         uvec(iat) = 1.0_wp / (cache%amat(iat, iat) + eps)
-         vvec(iat) = - cache%xvec(iat) / (cache%amat(iat, iat) + eps)
+         prec(iat) = 1.0_wp / (cache%amat(iat, iat) + eps)
       end do
+
+      ! Initial guess
+      uvec(:) = prec
+      vvec(:) = - cache%xvec(:mol%nat) * prec
 
       unitvec = 1.0_wp
 
       call print_constrained_system_message(print_unit, verbosity_solve, "u")
       ! Constrained response: A*uvec = 1
-      call solver%solve(amat=cache%amat, xvec=unitvec, &
-         & vrhs=uvec, new_unit=print_unit, error=error)
+      call solver%solve(tprod=tprod, xvec=unitvec, vrhs=uvec, prec=prec, &
+         & new_unit=print_unit, error=error)
       if (allocated(error)) return
       call print_constrained_system_message(print_unit, verbosity_solve, "v")
 
       ! Unconstrained response: A*vvec = -xvec
-      call solver%solve(amat=cache%amat, xvec=-cache%xvec, &
-         & vrhs=vvec, new_unit=print_unit, error=error)
+      call solver%solve(tprod=tprod, xvec=-cache%xvec, vrhs=vvec, prec=prec, &
+         & new_unit=print_unit, error=error)
       if (allocated(error)) return
       uvecsum = sum(uvec)
       vvecsum = sum(vvec)

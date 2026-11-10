@@ -16,10 +16,12 @@
 module test_solver
    use mctc_env, only : wp
    use mctc_env_testing, only : new_unittest, unittest_type, error_type, test_failed
+   use multicharge_model_cache, only : mchrg_cache
    use multicharge_solver, only : new_mchrg_solver
    use multicharge_solver_cg, only : cg_solver, new_cg_solver, cg_input
    use multicharge_solver_direct, only : direct_solver, new_direct_solver, &
       & direct_input
+   use multicharge_solver_trialprod, only : trialprod, dense_trialprod
    use multicharge_solver_type, only : mchrg_solver_type, mchrg_solver_input
    implicit none
    private
@@ -34,6 +36,18 @@ module test_solver
    !> Solver input unknown to the solver factory
    type, extends(mchrg_solver_input) :: unknown_input
    end type unknown_input
+
+   !> Matrix-free shifted 1D Laplacian, tridiagonal with 2 + shift and -1
+   type, extends(trialprod) :: laplace_trialprod
+
+      !> Diagonal shift keeping the operator positive definite
+      real(wp) :: shift = 0.5_wp
+   contains
+
+      !> Apply the shifted Laplacian to a trial vector
+      procedure :: multiply => laplace_multiply
+
+   end type laplace_trialprod
 
 
 contains
@@ -57,6 +71,8 @@ subroutine collect_solver(testsuite)
       & new_unittest("cg-not-converged", test_cg_not_converged), &
       & new_unittest("cg-breakdown", test_cg_breakdown), &
       & new_unittest("cg-verbosity", test_cg_verbosity), &
+      & new_unittest("cg-matrix-free", test_cg_matrix_free), &
+      & new_unittest("cg-preconditioner", test_cg_preconditioner), &
       & new_unittest("direct-inverse", test_direct_inverse), &
       & new_unittest("direct-singular", test_direct_singular), &
       & new_unittest("direct-verbosity", test_direct_verbosity), &
@@ -65,6 +81,89 @@ subroutine collect_solver(testsuite)
       & ]
 
 end subroutine collect_solver
+
+
+!> Apply the shifted 1D Laplacian to a trial vector without storing a matrix
+subroutine laplace_multiply(self, x, y)
+
+   !> Matrix-free Laplacian operator
+   class(laplace_trialprod), intent(inout) :: self
+
+   !> Trial vector
+   real(wp), intent(in) :: x(:)
+
+   !> Resulting vector
+   real(wp), intent(out) :: y(:)
+
+   integer :: i, n
+
+   n = size(x)
+   do i = 1, n
+      y(i) = (2.0_wp + self%shift) * x(i)
+      if (i > 1) y(i) = y(i) - x(i - 1)
+      if (i < n) y(i) = y(i) - x(i + 1)
+   end do
+
+end subroutine laplace_multiply
+
+
+!> Compute the diagonal (Jacobi) preconditioner of a dense matrix
+subroutine get_jacobi(amat, prec)
+
+   !> Dense coefficient matrix of the linear system
+   real(wp), intent(in) :: amat(:, :)
+
+   !> Inverse diagonal of the coefficient matrix
+   real(wp), allocatable, intent(out) :: prec(:)
+
+   integer :: i
+
+   allocate(prec(size(amat, 1)))
+   do i = 1, size(amat, 1)
+      prec(i) = 1.0_wp / (amat(i, i) + tiny(1.0_wp))
+   end do
+
+end subroutine get_jacobi
+
+
+!> Solve a dense linear system the same way the charge model does: wrap the
+!> matrix in a cache and dense trial product, precompute the Jacobi
+!> preconditioner and call the solver.
+subroutine solve_dense(solver, amat, xvec, vrhs, error, ainv, new_unit)
+
+   !> Solver instance
+   class(mchrg_solver_type), intent(in) :: solver
+
+   !> Dense coefficient matrix of the linear system
+   real(wp), intent(in) :: amat(:, :)
+
+   !> Right-hand side vector
+   real(wp), intent(in) :: xvec(:)
+
+   !> On input: initial guess; on output: solution
+   real(wp), intent(inout), contiguous :: vrhs(:)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   !> Inverse matrix, requested by passing the argument
+   real(wp), intent(out), optional :: ainv(:, :)
+
+   !> Output unit
+   integer, intent(in), optional :: new_unit
+
+   type(mchrg_cache), target :: cache
+   type(dense_trialprod) :: tprod
+   real(wp), allocatable :: prec(:)
+
+   cache%amat = amat
+   tprod%cache => cache
+   call get_jacobi(amat, prec)
+
+   call solver%solve(tprod=tprod, xvec=xvec, vrhs=vrhs, prec=prec, &
+      & ainv=ainv, new_unit=new_unit, error=error)
+
+end subroutine solve_dense
 
 
 !> Check that a solution satisfies the linear system
@@ -136,7 +235,7 @@ subroutine test_cg_identity_2x2(error)
    vrhs = [0.0_wp, 0.0_wp]
 
    ! Solve iteratively
-   call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, error=error)
    if (allocated(error)) return
 
    ! Reference direct solver
@@ -150,7 +249,7 @@ subroutine test_cg_identity_2x2(error)
    call new_mchrg_solver(solver, solver_input, error)
    if (allocated(error)) return
    expected = [0.0_wp, 0.0_wp]
-   call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=expected, error=error)
 
    ! Check solution
    if (any(abs(vrhs - expected) > thr)) then
@@ -206,7 +305,7 @@ subroutine test_cg_diagonal_5x5(error)
    vrhs = [0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp]
 
    ! Solve
-   call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, error=error)
    if (allocated(error)) return
 
    ! Reference direct solver
@@ -220,7 +319,7 @@ subroutine test_cg_diagonal_5x5(error)
    call new_mchrg_solver(solver, solver_input, error)
    if (allocated(error)) return
    expected = [0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp]
-   call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=expected, error=error)
 
    ! Check solution
    if (any(abs(vrhs - expected) > thr)) then
@@ -273,7 +372,7 @@ subroutine test_cg_spd_small(error)
    vrhs = [0.0_wp, 0.0_wp, 0.0_wp]
 
    ! Solve
-   call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, error=error)
    if (allocated(error)) return
 
    ! Reference direct solver
@@ -287,7 +386,7 @@ subroutine test_cg_spd_small(error)
    call new_mchrg_solver(solver, solver_input, error)
    if (allocated(error)) return
    expected = [1.0_wp, 1.0_wp, 1.0_wp]
-   call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=expected, error=error)
 
    ! Check solution
    if (any(abs(vrhs - expected) > thr)) then
@@ -358,7 +457,7 @@ subroutine test_cg_spd_large(error)
    xvec = b
 
    ! Solve
-   call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, error=error)
    if (allocated(error)) return
 
    ! Reference direct solver
@@ -373,7 +472,7 @@ subroutine test_cg_spd_large(error)
    if (allocated(error)) return
 
    ! Reference solution
-   call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=expected, error=error)
 
    ! Check solution
    if (any(abs(vrhs - expected) / max(1.0_wp, abs(expected)) > thr_rel)) then
@@ -435,7 +534,7 @@ subroutine test_cg_ill_conditioned(error)
    xvec = b
 
    ! Solve
-   call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, error=error)
    if (allocated(error)) return
 
    ! Reference direct solver
@@ -450,7 +549,7 @@ subroutine test_cg_ill_conditioned(error)
    if (allocated(error)) return
 
    ! Reference solution
-   call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=expected, error=error)
 
    ! Check solution
    if (any(abs(vrhs - expected) / max(1.0_wp, abs(expected)) > thr_rel)) then
@@ -510,7 +609,7 @@ subroutine test_cg_zero_rhs(error)
    expected = 0.0_wp
 
    ! Solve
-   call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, error=error)
    if (allocated(error)) return
 
    ! Reference direct solver
@@ -525,7 +624,7 @@ subroutine test_cg_zero_rhs(error)
    if (allocated(error)) return
 
    ! Reference solution
-   call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=expected, error=error)
 
    ! Check solution
    if (any(abs(vrhs - expected) / max(1.0_wp, abs(expected)) > thr_rel)) then
@@ -624,7 +723,7 @@ subroutine test_cg_random_spd(error)
    xvec = b
 
    ! Solve
-   call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, error=error)
    if (allocated(error)) return
 
    ! Reference direct solver
@@ -639,7 +738,7 @@ subroutine test_cg_random_spd(error)
    if (allocated(error)) return
 
    ! Reference solution
-   call solver%solve(amat=amat, xvec=xvec, vrhs=expected, error=error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=expected, error=error)
 
    ! Check solution
    if (any(abs(vrhs - expected) / max(1.0_wp, abs(expected)) > thr_rel)) then
@@ -664,6 +763,9 @@ subroutine test_cg_invalid_input(error)
    type(cg_input) :: input
    type(cg_solver) :: solver
    type(error_type), allocatable :: solve_error
+   type(mchrg_cache), target :: cache
+   type(dense_trialprod) :: tprod
+   real(wp), allocatable :: prec(:)
 
    amat = reshape([4.0_wp, 1.0_wp, 1.0_wp, &
       & 1.0_wp, 3.0_wp, 2.0_wp, &
@@ -673,7 +775,7 @@ subroutine test_cg_invalid_input(error)
    input%cgmiter = 0
    call new_cg_solver(solver, input)
    vrhs = 0.0_wp
-   call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=solve_error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, error=solve_error)
    if (.not. allocated(solve_error)) then
       call test_failed(error, "CG accepted a non-positive iteration limit")
       return
@@ -683,7 +785,7 @@ subroutine test_cg_invalid_input(error)
    input%cgtol = 0.0_wp
    call new_cg_solver(solver, input)
    vrhs = 0.0_wp
-   call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=solve_error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, error=solve_error)
    if (.not. allocated(solve_error)) then
       call test_failed(error, "CG accepted a non-positive tolerance")
       return
@@ -692,10 +794,29 @@ subroutine test_cg_invalid_input(error)
    deallocate(input%cgtol)
    call new_cg_solver(solver, input)
    vrhs = 0.0_wp
-   call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, ainv=ainv, &
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, ainv=ainv, &
       & error=solve_error)
    if (.not. allocated(solve_error)) then
       call test_failed(error, "CG returned an inverse matrix")
+      return
+   end if
+
+   ! The preconditioner has to be computed by the caller
+   cache%amat = amat
+   tprod%cache => cache
+   vrhs = 0.0_wp
+   call solver%solve(tprod=tprod, xvec=xvec, vrhs=vrhs, error=solve_error)
+   if (.not. allocated(solve_error)) then
+      call test_failed(error, "CG accepted a missing preconditioner")
+      return
+   end if
+
+   allocate(prec(n - 1), source=1.0_wp)
+   vrhs = 0.0_wp
+   call solver%solve(tprod=tprod, xvec=xvec, vrhs=vrhs, prec=prec, &
+      & error=solve_error)
+   if (.not. allocated(solve_error)) then
+      call test_failed(error, "CG accepted a preconditioner of wrong size")
       return
    end if
 
@@ -722,7 +843,7 @@ subroutine test_cg_not_converged(error)
    input%cgmiter = 1
    call new_cg_solver(solver, input)
    vrhs = 0.0_wp
-   call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=solve_error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, error=solve_error)
    if (.not. allocated(solve_error)) then
       call test_failed(error, "CG did not report a missing convergence")
    end if
@@ -749,7 +870,7 @@ subroutine test_cg_breakdown(error)
       & 1.0_wp, 1.0_wp], [n, n])
    xvec = [1.0_wp, -1.0_wp]
    vrhs = 0.0_wp
-   call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=solve_error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, error=solve_error)
    if (.not. allocated(solve_error)) then
       call test_failed(error, &
          & "CG did not report a breakdown for a singular matrix")
@@ -761,7 +882,7 @@ subroutine test_cg_breakdown(error)
       & 0.0_wp, -1.0_wp], [n, n])
    xvec = [1.0_wp, 1.0_wp]
    vrhs = 0.0_wp
-   call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=solve_error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, error=solve_error)
    if (.not. allocated(solve_error)) then
       call test_failed(error, &
          & "CG did not report a breakdown for an indefinite matrix")
@@ -792,7 +913,7 @@ subroutine test_cg_verbosity(error)
       input%verbosity = verbosity
       call new_cg_solver(solver, input)
       vrhs = 0.0_wp
-      call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, new_unit=unit, &
+      call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, new_unit=unit, &
          & error=error)
       if (allocated(error)) exit
       call check_residual(error, amat, xvec, vrhs, &
@@ -803,6 +924,147 @@ subroutine test_cg_verbosity(error)
    if (allocated(error)) print '("Verbosity: ", i0)', verbosity
 
 end subroutine test_cg_verbosity
+
+
+!> Test: CG solves a matrix-free system given only by its trial product
+subroutine test_cg_matrix_free(error)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   integer, parameter :: n = 50
+   real(wp), parameter :: shift = 0.5_wp
+   real(wp) :: amat(n, n), xvec(n), vrhs(n), vref(n), prec(n)
+   integer :: i
+   type(cg_input) :: input
+   type(cg_solver) :: cg
+   type(direct_solver) :: direct
+   type(laplace_trialprod) :: tprod
+   type(error_type), allocatable :: solve_error
+
+   tprod%shift = shift
+   do i = 1, n
+      xvec(i) = sin(real(i, wp))
+   end do
+
+   ! Diagonal preconditioner computed by the caller
+   prec(:) = 1.0_wp / (2.0_wp + shift)
+
+   call new_cg_solver(cg, input)
+   vrhs = 0.0_wp
+   call cg%solve(tprod=tprod, xvec=xvec, vrhs=vrhs, prec=prec, error=error)
+   if (allocated(error)) return
+
+   ! Reference from the direct solver on the equivalent dense matrix
+   amat = 0.0_wp
+   do i = 1, n
+      amat(i, i) = 2.0_wp + shift
+      if (i > 1) amat(i, i - 1) = -1.0_wp
+      if (i < n) amat(i, i + 1) = -1.0_wp
+   end do
+   call new_direct_solver(direct, direct_input())
+   vref = 0.0_wp
+   call solve_dense(direct, amat=amat, xvec=xvec, vrhs=vref, error=error)
+   if (allocated(error)) return
+
+   call check_residual(error, amat, xvec, vrhs, &
+      & "Matrix-free CG solution does not satisfy the linear system")
+   if (allocated(error)) return
+
+   if (any(abs(vrhs - vref) > thr1)) then
+      call test_failed(error, "Matrix-free CG differs from the direct solution")
+      print"(a)", "Difference:"
+      print"(5es21.14)", vrhs - vref
+      return
+   end if
+
+   ! The direct solver needs an explicitly stored matrix
+   vref = 0.0_wp
+   call direct%solve(tprod=tprod, xvec=xvec, vrhs=vref, error=solve_error)
+   if (.not. allocated(solve_error)) then
+      call test_failed(error, &
+         & "Direct solver accepted an operator without a dense matrix")
+   end if
+
+end subroutine test_cg_matrix_free
+
+
+!> Test: The caller-provided diagonal preconditioner makes a badly scaled
+!> system solvable within an iteration budget where plain CG fails
+subroutine test_cg_preconditioner(error)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   integer, parameter :: n = 100
+   integer, parameter :: maxiter = 80
+   real(wp), parameter :: tol = 1.0e-12_wp
+   real(wp) :: amat(n, n), xvec(n), vrhs(n), vref(n), scale(n)
+   real(wp), allocatable :: prec(:)
+   integer :: i
+   type(cg_input) :: input
+   type(cg_solver) :: cg
+   type(direct_solver) :: direct
+   type(mchrg_cache), target :: cache
+   type(dense_trialprod) :: tprod
+   type(error_type), allocatable :: solve_error
+
+   ! Well-conditioned tridiagonal matrix with diagonal scaling over six
+   ! orders of magnitude, amat = S * B * S
+   do i = 1, n
+      scale(i) = sqrt(10.0_wp**(-3.0_wp + 6.0_wp * real(i - 1, wp) &
+         & / real(n - 1, wp)))
+      xvec(i) = cos(real(i, wp))
+   end do
+   amat = 0.0_wp
+   do i = 1, n
+      amat(i, i) = 2.5_wp * scale(i)**2
+      if (i > 1) amat(i, i - 1) = -scale(i) * scale(i - 1)
+      if (i < n) amat(i, i + 1) = -scale(i) * scale(i + 1)
+   end do
+   cache%amat = amat
+   tprod%cache => cache
+
+   ! Reference from the direct solver
+   call new_direct_solver(direct, direct_input())
+   vref = 0.0_wp
+   call solve_dense(direct, amat=amat, xvec=xvec, vrhs=vref, error=error)
+   if (allocated(error)) return
+
+   input%cgmiter = maxiter
+   input%cgtol = tol
+   call new_cg_solver(cg, input)
+
+   ! Diagonal preconditioner computed before calling the solver
+   call get_jacobi(amat, prec)
+   do i = 1, n
+      if (abs(prec(i) * amat(i, i) - 1.0_wp) > thr) then
+         call test_failed(error, "Jacobi preconditioner is not the inverse diagonal")
+         return
+      end if
+   end do
+
+   vrhs = 0.0_wp
+   call cg%solve(tprod=tprod, xvec=xvec, vrhs=vrhs, prec=prec, error=error)
+   if (allocated(error)) return
+
+   if (norm2(vrhs - vref) > thr_rel * norm2(vref)) then
+      call test_failed(error, "Preconditioned CG differs from the direct solution")
+      print '("Relative error: ", es12.4)', norm2(vrhs - vref) / norm2(vref)
+      return
+   end if
+
+   ! Without preconditioning the same iteration budget is not sufficient
+   prec(:) = 1.0_wp
+   vrhs = 0.0_wp
+   call cg%solve(tprod=tprod, xvec=xvec, vrhs=vrhs, prec=prec, &
+      & error=solve_error)
+   if (.not. allocated(solve_error)) then
+      call test_failed(error, &
+         & "Unpreconditioned CG converged within the reduced iteration budget")
+   end if
+
+end subroutine test_cg_preconditioner
 
 
 !> Test: The direct solver returns the inverse only on request
@@ -826,9 +1088,9 @@ subroutine test_direct_inverse(error)
    xvec = [1.0_wp, -2.0_wp, 0.5_wp, 0.0_wp]
 
    call new_direct_solver(solver, input)
-   call solver%solve(amat=amat, xvec=xvec, vrhs=vref, error=error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vref, error=error)
    if (allocated(error)) return
-   call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, ainv=ainv, error=error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, ainv=ainv, error=error)
    if (allocated(error)) return
 
    unity = matmul(amat, ainv)
@@ -871,14 +1133,14 @@ subroutine test_direct_singular(error)
 
    call new_direct_solver(solver, input)
    vrhs = 0.0_wp
-   call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, error=solve_error)
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, error=solve_error)
    if (.not. allocated(solve_error)) then
       call test_failed(error, "Direct solver accepted a singular matrix")
       return
    end if
 
    vrhs = 0.0_wp
-   call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, ainv=ainv, &
+   call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, ainv=ainv, &
       & error=solve_error)
    if (.not. allocated(solve_error)) then
       call test_failed(error, "Direct solver inverted a singular matrix")
@@ -911,7 +1173,7 @@ subroutine test_direct_verbosity(error)
       input%verbosity = verbosity
       call new_direct_solver(solver, input)
       vrhs = 0.0_wp
-      call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, new_unit=unit, &
+      call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, new_unit=unit, &
          & error=error)
       if (allocated(error)) exit
       call check_residual(error, amat, xvec, vrhs, &
@@ -919,7 +1181,7 @@ subroutine test_direct_verbosity(error)
       if (allocated(error)) exit
 
       vrhs = 0.0_wp
-      call solver%solve(amat=amat, xvec=xvec, vrhs=vrhs, ainv=ainv, &
+      call solve_dense(solver, amat=amat, xvec=xvec, vrhs=vrhs, ainv=ainv, &
          & new_unit=unit, error=error)
       if (allocated(error)) exit
       call check_residual(error, amat, xvec, vrhs, &

@@ -21,9 +21,10 @@
 module multicharge_solver_cg
    use, intrinsic :: iso_fortran_env, only : output_unit
    use mctc_env, only : error_type, fatal_error, timer_type, wp
-   use multicharge_blas, only : axpy, dot, scal, symv
+   use multicharge_blas, only : axpy, dot, scal
    use multicharge_output, only : print_cg_convergence, print_cg_final, &
       & print_cg_header, print_cg_iteration
+   use multicharge_solver_trialprod, only : trialprod
    use multicharge_solver_type, only : mchrg_solver_input, mchrg_solver_type
    implicit none
    private
@@ -110,19 +111,22 @@ end subroutine new_cg_solver
 
 
 !> Solve a linear system with a diagonally preconditioned CG method
-subroutine solve(self, amat, xvec, vrhs, ainv, new_unit, error)
+subroutine solve(self, tprod, xvec, vrhs, prec, ainv, new_unit, error)
 
    !> Conjugate-gradient solver instance
    class(cg_solver), intent(in) :: self
 
-   !> Dense coefficient matrix of the linear system
-   real(wp), intent(in) :: amat(:, :)
+   !> Trial product operator representing the linear system matrix
+   class(trialprod), intent(inout) :: tprod
 
    !> Right-hand side vector
    real(wp), intent(in) :: xvec(:)
 
    !> On input: initial guess; on output: solution
    real(wp), intent(inout), contiguous :: vrhs(:)
+
+   !> Diagonal preconditioner (inverse diagonal), computed by the caller
+   real(wp), intent(in), optional :: prec(:)
 
    !> Inverse matrix, not available for the iterative solver
    real(wp), intent(out), optional :: ainv(:, :)
@@ -133,11 +137,11 @@ subroutine solve(self, amat, xvec, vrhs, ainv, new_unit, error)
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
 
-   integer :: maxit, it, iat, ndim, unit
+   integer :: maxit, it, ndim, unit
    logical :: converged
    real(wp) :: tol, tol_square, xvecnorm, resnorm, rel_resnorm
    real(wp) :: denom, step, updfact, resdot_old, resdot_new
-   real(wp), allocatable :: dir(:), res(:), prec(:), precres(:), adir(:)
+   real(wp), allocatable :: dir(:), res(:), precres(:), adir(:)
    type(timer_type) :: timer
 
    ! CG cannot compute the inverse matrix
@@ -170,8 +174,13 @@ subroutine solve(self, amat, xvec, vrhs, ainv, new_unit, error)
       return
    end if
 
-   if (size(amat, 1) /= ndim .or. size(amat, 2) /= ndim) then
-      call fatal_error(error, "Dimension mismatch of the coefficient matrix.")
+   if (.not. present(prec)) then
+      call fatal_error(error, "CG requires a precomputed preconditioner.")
+      return
+   end if
+
+   if (size(prec) /= ndim) then
+      call fatal_error(error, "Dimension mismatch of the preconditioner.")
       return
    end if
 
@@ -179,18 +188,13 @@ subroutine solve(self, amat, xvec, vrhs, ainv, new_unit, error)
    tol_square = tol**2
    maxit = self%cgmiter
 
-   allocate(res(ndim), dir(ndim), precres(ndim), adir(ndim), prec(ndim))
+   allocate(res(ndim), dir(ndim), precres(ndim), adir(ndim))
 
    if (self%verbosity > 1) call timer%push("total")
    if (self%verbosity > 1) call timer%push("initialization")
 
-   ! Diagonal preconditioner
-   do iat = 1, ndim
-      prec(iat) = 1.0_wp / (amat(iat, iat) + eps)
-   end do
-
    ! Initial residual
-   call symv(amat, vrhs, adir, alpha=1.0_wp, beta=0.0_wp)
+   call tprod%multiply(vrhs, adir)
    res(:) = xvec(:) - adir(:)
 
    ! Initial preconditioned residual precres = M^-1 * res
@@ -217,7 +221,7 @@ subroutine solve(self, amat, xvec, vrhs, ainv, new_unit, error)
       if (self%verbosity > 1) call timer%push("iteration")
 
       ! Matrix-vector product
-      call symv(amat, dir, adir, alpha=1.0_wp, beta=0.0_wp)
+      call tprod%multiply(dir, adir)
 
       ! Non-positive curvature breaks down the iteration, unless the
       ! search direction vanished for an already converged residual

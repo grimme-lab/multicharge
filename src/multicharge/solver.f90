@@ -25,6 +25,7 @@ module multicharge_solver
    use multicharge_solver_cg, only : cg_solver, new_cg_solver, cg_input
    use multicharge_solver_direct, only : direct_solver, new_direct_solver, &
       & direct_input
+   use multicharge_solver_trialprod, only : trialprod, dense_trialprod
    use multicharge_solver_type, only : mchrg_solver_type, mchrg_solver_input
    implicit none
    private
@@ -32,6 +33,7 @@ module multicharge_solver
    public :: mchrg_solver_type, mchrg_solver_input
    public :: direct_solver, new_direct_solver, direct_input
    public :: cg_solver, new_cg_solver, cg_input
+   public :: trialprod, dense_trialprod
    public :: new_mchrg_solver
 
 

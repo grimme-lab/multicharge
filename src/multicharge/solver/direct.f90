@@ -24,6 +24,7 @@ module multicharge_solver_direct
    use multicharge_blas, only : symv
    use multicharge_lapack, only : sytrf, sytri, sytrs
    use multicharge_output, only : print_direct_final, write_direct_solver
+   use multicharge_solver_trialprod, only : trialprod
    use multicharge_solver_type, only : mchrg_solver_input, mchrg_solver_type
    implicit none
    private
@@ -76,19 +77,22 @@ end subroutine new_direct_solver
 
 
 !> Solve a dense symmetric linear system using LAPACK
-subroutine solve(self, amat, xvec, vrhs, ainv, new_unit, error)
+subroutine solve(self, tprod, xvec, vrhs, prec, ainv, new_unit, error)
 
    !> Direct solver instance
    class(direct_solver), intent(in) :: self
 
-   !> Dense coefficient matrix of the linear system
-   real(wp), intent(in) :: amat(:, :)
+   !> Trial product operator, its cache must hold the dense matrix
+   class(trialprod), intent(inout) :: tprod
 
    !> Right-hand side vector
    real(wp), intent(in) :: xvec(:)
 
    !> On input: initial guess; on output: solution
    real(wp), intent(inout), contiguous :: vrhs(:)
+
+   !> Preconditioner, not used by the direct solver
+   real(wp), intent(in), optional :: prec(:)
 
    !> Inverse coefficient matrix, requested by passing the argument
    real(wp), intent(out), optional :: ainv(:, :)
@@ -117,10 +121,21 @@ subroutine solve(self, amat, xvec, vrhs, ainv, new_unit, error)
       call write_direct_solver(unit)
    end if
 
+   ! The direct solver needs the explicitly stored dense matrix
+   if (.not. associated(tprod%cache)) then
+      call fatal_error(error, "solve_direct: dense coefficient matrix required.")
+      return
+   end if
+   if (.not. allocated(tprod%cache%amat)) then
+      call fatal_error(error, "solve_direct: dense coefficient matrix required.")
+      return
+   end if
+
    ! Dimensions match check
    ndim = size(xvec)
 
-   if (size(amat, 1) /= ndim .or. size(amat, 2) /= ndim &
+   if (size(tprod%cache%amat, 1) /= ndim &
+      & .or. size(tprod%cache%amat, 2) /= ndim &
       & .or. size(vrhs) /= ndim) then
       call fatal_error(error, "solve_direct: dimension mismatch.")
       return
@@ -133,7 +148,7 @@ subroutine solve(self, amat, xvec, vrhs, ainv, new_unit, error)
    end if
 
    allocate(invmat(ndim, ndim))
-   invmat = amat
+   invmat = tprod%cache%amat
    vrhs = xvec
 
    ! Factorize the Coulomb matrix

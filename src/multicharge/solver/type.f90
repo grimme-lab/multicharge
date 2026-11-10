@@ -19,6 +19,7 @@
 !> Base types for the linear system solvers
 module multicharge_solver_type
    use mctc_env, only : error_type, wp
+   use multicharge_solver_trialprod, only : trialprod
    implicit none
    private
 
@@ -40,20 +41,23 @@ module multicharge_solver_type
 
    abstract interface
       !> Solve the linear system of equations
-      subroutine solve(self, amat, xvec, vrhs, ainv, new_unit, error)
-         import :: mchrg_solver_type, error_type, wp
+      subroutine solve(self, tprod, xvec, vrhs, prec, ainv, new_unit, error)
+         import :: mchrg_solver_type, trialprod, error_type, wp
 
          !> Solver instance
          class(mchrg_solver_type), intent(in) :: self
 
-         !> Dense coefficient matrix of the linear system
-         real(wp), intent(in) :: amat(:, :)
+         !> Trial product operator representing the linear system matrix
+         class(trialprod), intent(inout) :: tprod
 
          !> Right-hand side vector
          real(wp), intent(in) :: xvec(:)
 
          !> On input: initial guess; on output: solution
          real(wp), intent(inout), contiguous :: vrhs(:)
+
+         !> Precomputed preconditioner, required by iterative solvers
+         real(wp), intent(in), optional :: prec(:)
 
          !> Inverse matrix, requested by passing the argument
          real(wp), intent(out), optional :: ainv(:, :)
