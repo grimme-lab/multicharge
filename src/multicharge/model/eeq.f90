@@ -205,19 +205,19 @@ end subroutine get_xvec_derivs
 
 
 !> Prepare direct and reciprocal Ewald translation vectors and geometry data
-subroutine prepare_ewald_cache(mol, data)
+subroutine prepare_ewald_cache(mol, cache)
    !> Molecular structure data
    type(structure_type), intent(in) :: mol
    !> EEQ model cache
-   type(eeq_cache), intent(inout) :: data
+   type(eeq_cache), intent(inout) :: cache
 
    integer, parameter :: rep(3) = [2, 2, 2]
    real(wp) :: rec_lat(3, 3)
 
-   data%vol = abs(matdet_3x3(mol%lattice))
-   call get_lattice_points(mol%lattice, rep, .true., data%dtrans)
+   cache%vol = abs(matdet_3x3(mol%lattice))
+   call get_lattice_points(mol%lattice, rep, .true., cache%dtrans)
    rec_lat = twopi * transpose(matinv_3x3(mol%lattice))
-   call get_lattice_points(rec_lat, rep, .false., data%rtrans)
+   call get_lattice_points(rec_lat, rep, .false., cache%rtrans)
 
 end subroutine prepare_ewald_cache
 
