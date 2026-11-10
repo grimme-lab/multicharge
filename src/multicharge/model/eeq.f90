@@ -26,7 +26,7 @@ module multicharge_model_eeq
    use mctc_env, only: error_type, fatal_error, wp
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
-   use mctc_io_math, only: matdet_3x3, matinv_3x3
+   use mctc_io_math, only: matdet_3x3, matinv_3x3, outerprod
    use mctc_ncoord, only: new_ncoord, cn_count
    use mctc_wignerseitz, only: new_wignerseitz_cell
    use multicharge_blas, only: gemm
@@ -184,17 +184,40 @@ subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlo
    end if
 
    if (any(mol%periodic)) then
-      ! Create Wigner-Seitz cell, Ewald splitting parameter, and lattice translations
       call new_wignerseitz_cell(ptr%wsc, mol, error)
       if (allocated(error)) return
 
-      call get_alpha(mol%lattice, ptr%alpha, error)
+      call setup_ewald(mol, ptr, error)
       if (allocated(error)) return
-
-      call prepare_ewald_cache(mol, ptr)
    end if
 
 end subroutine update
+
+
+!> Set up Ewald splitting parameter, cell geometry, and lattice translations
+subroutine setup_ewald(mol, cache, error)
+
+   !> Molecular structure data
+   type(structure_type), intent(in) :: mol
+
+   !> EEQ model cache
+   type(eeq_cache), intent(inout) :: cache
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   integer, parameter :: rep(3) = [2, 2, 2]
+   real(wp) :: rec_lat(3, 3)
+
+   call get_alpha(mol%lattice, cache%alpha, error)
+   if (allocated(error)) return
+
+   cache%vol = abs(matdet_3x3(mol%lattice))
+   call get_lattice_points(mol%lattice, rep, .true., cache%dtrans)
+   rec_lat = twopi * transpose(matinv_3x3(mol%lattice))
+   call get_lattice_points(rec_lat, rep, .false., cache%rtrans)
+
+end subroutine setup_ewald
 
 
 !> Evaluate the electronegativity right-hand side vector
@@ -270,26 +293,6 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
    end do
 
 end subroutine get_xvec_derivs
-
-
-!> Prepare direct and reciprocal Ewald translation vectors and geometry data
-subroutine prepare_ewald_cache(mol, cache)
-
-   !> Molecular structure data
-   type(structure_type), intent(in) :: mol
-
-   !> EEQ model cache
-   type(eeq_cache), intent(inout) :: cache
-
-   integer, parameter :: rep(3) = [2, 2, 2]
-   real(wp) :: rec_lat(3, 3)
-
-   cache%vol = abs(matdet_3x3(mol%lattice))
-   call get_lattice_points(mol%lattice, rep, .true., cache%dtrans)
-   rec_lat = twopi * transpose(matinv_3x3(mol%lattice))
-   call get_lattice_points(rec_lat, rep, .false., cache%rtrans)
-
-end subroutine prepare_ewald_cache
 
 
 !> Contract model-specific second-response curvature u^T(x_ab - A_ab q) at fixed u and q
@@ -477,7 +480,7 @@ pure subroutine get_hess_rec_3d(rij, trans, weight, rbox)
    do itr = 1, size(trans, 2)
       vec = trans(:, itr)
       rbox = rbox - weight(itr) * cos(dot_product(rij, vec)) &
-         & * spread(vec, 1, 3) * spread(vec, 2, 3)
+         & * outerprod(vec, vec)
    end do
 
 end subroutine get_hess_rec_3d
@@ -765,7 +768,7 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
       dtmp = 2.0_wp * gam * exp(-arg) / (sqrtpi * r2) &
          & - erf(sqrt(arg)) / (r2 * sqrt(r2))
       dg = dtmp * vec
-      ds = spread(dg, 1, 3) * spread(vec, 2, 3)
+      ds = outerprod(vec, dg)
       atrace(:, iat) = atrace(:, iat) - dg * qvec(jat)
       atrace(:, jat) = atrace(:, jat) + dg * qvec(iat)
       dadr(:, iat, jat) = -dg * qvec(iat)
@@ -900,7 +903,7 @@ subroutine get_damat_dir(rij, gam, alp, trans, dg, ds)
       atmp = -2.0_wp * alp * exp(-r2 * alp2) / (sqrtpi * r2) &
          & + erf(r1 * alp) / (r2 * r1)
       dg(:) = dg + (gtmp + atmp) * vec
-      ds(:, :) = ds + (gtmp + atmp) * spread(vec, 1, 3) * spread(vec, 2, 3)
+      ds(:, :) = ds + (gtmp + atmp) * outerprod(vec, vec)
    end do
 
 end subroutine get_damat_dir
@@ -973,7 +976,7 @@ subroutine get_rec_weights(vol, alpha, trans, weight, strain)
       weight(itr) = fac * exp(-0.25_wp * g2 / alpha**2) / g2
       if (present(strain)) then
          strain(:, :, itr) = weight(itr) * ((2.0_wp / g2 + 0.5_wp / alpha**2) &
-            & * spread(vec, 1, 3) * spread(vec, 2, 3) - unity)
+            & * outerprod(vec, vec) - unity)
       end if
    end do
 

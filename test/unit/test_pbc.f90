@@ -32,6 +32,16 @@ module test_pbc
    real(wp), parameter :: thr = 1000 * epsilon(1.0_wp)
    real(wp), parameter :: thr2 = 10 * sqrt(epsilon(1.0_wp))
 
+   integer, parameter :: znoh_num(3) = [30, 8, 1]
+   real(wp), parameter :: znoh_xyz(3, 3) = reshape([ &
+      & 0.0_wp, 0.0_wp, 0.0_wp, &
+      & 3.0_wp, 0.1_wp, 0.2_wp, &
+      & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3])
+   real(wp), parameter :: znoh_lat(3, 3) = reshape([ &
+      & 5.1_wp, 0.0_wp, 0.0_wp, &
+      & 0.4_wp, 6.2_wp, 0.0_wp, &
+      & 0.2_wp, 0.7_wp, 7.1_wp], [3, 3])
+
 contains
 
 
@@ -46,19 +56,19 @@ subroutine collect_pbc(testsuite)
       & new_unittest("eeq-energy-formamide", test_eeq_e_formamide), &
       & new_unittest("eeq-dbdr-co2", test_eeq_dbdr_co2), &
       & new_unittest("eeq-dbdL-co2", test_eeq_dbdL_co2), &
-      & new_unittest("eeq-dadr-ice", test_eeq_dadr_ice), &
-      & new_unittest("eeq-dadL-ice", test_eeq_dadL_ice), &
+      & new_unittest("eeq-dadr-znoh", test_eeq_dadr_znoh), &
+      & new_unittest("eeq-dadL-znoh", test_eeq_dadL_znoh), &
       & new_unittest("eeq-gradient-co2", test_eeq_g_co2), &
-      & new_unittest("eeq-sigma-ice", test_eeq_s_ice), &
+      & new_unittest("eeq-sigma-co2", test_eeq_s_co2), &
       & new_unittest("eeq-dqdr-urea", test_eeq_dqdr_urea), &
       & new_unittest("eeq-dqdL-oxacb", test_eeq_dqdL_oxacb), &
       & new_unittest("eeqbc-dbdr-co2", test_eeqbc_dbdr_co2), &
       & new_unittest("eeqbc-dbdL-co2", test_eeqbc_dbdL_co2), &
-      & new_unittest("eeqbc-dadr-ice", test_eeqbc_dadr_ice), &
+      & new_unittest("eeqbc-dadr-znoh", test_eeqbc_dadr_znoh), &
       & new_unittest("eeqbc-response-znoh", test_eeqbc_response_znoh), &
-      & new_unittest("eeqbc-dadL-ice", test_eeqbc_dadL_ice), &
+      & new_unittest("eeqbc-dadL-znoh", test_eeqbc_dadL_znoh), &
       & new_unittest("eeqbc-gradient-co2", test_eeqbc_g_co2), &
-      & new_unittest("eeqbc-sigma-ice", test_eeqbc_s_ice), &
+      & new_unittest("eeqbc-sigma-co2", test_eeqbc_s_co2), &
       & new_unittest("eeqbc-dqdr-urea", test_eeqbc_dqdr_urea), &
       & new_unittest("eeqbc-dqdL-oxacb", test_eeqbc_dqdL_oxacb) &
       & ]
@@ -72,20 +82,11 @@ subroutine test_eeqbc_response_znoh(error)
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
 
-   integer, parameter :: num(3) = [30, 8, 1]
-   real(wp), parameter :: xyz(3, 3) = reshape([ &
-      & 0.0_wp, 0.0_wp, 0.0_wp, &
-      & 3.0_wp, 0.1_wp, 0.2_wp, &
-      & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3])
-   real(wp), parameter :: lat(3, 3) = reshape([ &
-      & 5.1_wp, 0.0_wp, 0.0_wp, &
-      & 0.4_wp, 6.2_wp, 0.0_wp, &
-      & 0.2_wp, 0.7_wp, 7.1_wp], [3, 3])
-
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call new(mol, num, xyz, charge=1.0_wp, lattice=lat, periodic=[.true., .true., .true.])
+   call new(mol, znoh_num, znoh_xyz, charge=1.0_wp, lattice=znoh_lat, &
+      & periodic=[.true., .true., .true.])
    call new_eeqbc2025_model(mol, model, error)
    if (allocated(error)) return
    call test_dadr(error, mol, model)
@@ -956,7 +957,7 @@ subroutine test_eeq_dbdL_co2(error)
 end subroutine test_eeq_dbdL_co2
 
 
-subroutine test_eeq_dadr_ice(error)
+subroutine test_eeq_dadr_znoh(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -964,15 +965,15 @@ subroutine test_eeq_dadr_ice(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call get_structure(mol, "ICE10", "vi")
+   call new(mol, znoh_num, znoh_xyz, lattice=znoh_lat, periodic=[.true., .true., .true.])
    call new_eeq2019_model(mol, model, error)
    if (allocated(error)) return
    call test_dadr(error, mol, model)
 
-end subroutine test_eeq_dadr_ice
+end subroutine test_eeq_dadr_znoh
 
 
-subroutine test_eeq_dadL_ice(error)
+subroutine test_eeq_dadL_znoh(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -980,12 +981,12 @@ subroutine test_eeq_dadL_ice(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call get_structure(mol, "ICE10", "vi")
+   call new(mol, znoh_num, znoh_xyz, lattice=znoh_lat, periodic=[.true., .true., .true.])
    call new_eeq2019_model(mol, model, error)
    if (allocated(error)) return
    call test_dadL(error, mol, model)
 
-end subroutine test_eeq_dadL_ice
+end subroutine test_eeq_dadL_znoh
 
 
 subroutine test_eeq_g_co2(error)
@@ -1004,7 +1005,7 @@ subroutine test_eeq_g_co2(error)
 end subroutine test_eeq_g_co2
 
 
-subroutine test_eeq_s_ice(error)
+subroutine test_eeq_s_co2(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -1012,12 +1013,12 @@ subroutine test_eeq_s_ice(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call get_structure(mol, "ICE10", "vi")
+   call get_structure(mol, "X23", "CO2")
    call new_eeq2019_model(mol, model, error)
    if (allocated(error)) return
    call test_numsigma(error, mol, model)
 
-end subroutine test_eeq_s_ice
+end subroutine test_eeq_s_co2
 
 
 subroutine test_eeq_dqdr_urea(error)
@@ -1084,7 +1085,7 @@ subroutine test_eeqbc_dbdL_co2(error)
 end subroutine test_eeqbc_dbdL_co2
 
 
-subroutine test_eeqbc_dadr_ice(error)
+subroutine test_eeqbc_dadr_znoh(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -1092,15 +1093,15 @@ subroutine test_eeqbc_dadr_ice(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call get_structure(mol, "ICE10", "vi")
+   call new(mol, znoh_num, znoh_xyz, lattice=znoh_lat, periodic=[.true., .true., .true.])
    call new_eeqbc2025_model(mol, model, error)
    if (allocated(error)) return
    call test_dadr(error, mol, model)
 
-end subroutine test_eeqbc_dadr_ice
+end subroutine test_eeqbc_dadr_znoh
 
 
-subroutine test_eeqbc_dadL_ice(error)
+subroutine test_eeqbc_dadL_znoh(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -1108,12 +1109,12 @@ subroutine test_eeqbc_dadL_ice(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call get_structure(mol, "ICE10", "vi")
+   call new(mol, znoh_num, znoh_xyz, lattice=znoh_lat, periodic=[.true., .true., .true.])
    call new_eeqbc2025_model(mol, model, error)
    if (allocated(error)) return
    call test_dadL(error, mol, model)
 
-end subroutine test_eeqbc_dadL_ice
+end subroutine test_eeqbc_dadL_znoh
 
 
 subroutine test_eeqbc_g_co2(error)
@@ -1132,7 +1133,7 @@ subroutine test_eeqbc_g_co2(error)
 end subroutine test_eeqbc_g_co2
 
 
-subroutine test_eeqbc_s_ice(error)
+subroutine test_eeqbc_s_co2(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -1140,12 +1141,12 @@ subroutine test_eeqbc_s_ice(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call get_structure(mol, "ICE10", "vi")
+   call get_structure(mol, "X23", "CO2")
    call new_eeqbc2025_model(mol, model, error)
    if (allocated(error)) return
    call test_numsigma(error, mol, model)
 
-end subroutine test_eeqbc_s_ice
+end subroutine test_eeqbc_s_co2
 
 
 subroutine test_eeqbc_dqdr_urea(error)

@@ -17,6 +17,7 @@
 module multicharge_model_hessian
    use mctc_env, only: wp
    use mctc_io_constants, only: pi
+   use mctc_io_math, only: outerprod
    use multicharge_blas, only: gemm
    implicit none
    private
@@ -50,7 +51,7 @@ pure function radial_hessian(vec, dr, drr) result(box)
    integer :: ic
 
    r = norm2(vec)
-   box = (drr-dr/r)*spread(vec/r, 1, 3)*spread(vec/r, 2, 3)
+   box = (drr-dr/r)*outerprod(vec/r, vec/r)
    do ic = 1, 3
       box(ic, ic) = box(ic, ic) + dr/r
    end do
