@@ -503,6 +503,7 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
       izp = mol%id(iat)
       do jat = 1, iat
          if (iat == jat .and. .not. periodic) cycle
+
          jzp = mol%id(jat)
          gam = 1.0_wp/sqrt(width(iat)**2+width(jat)**2)
          gi = -width(iat)*dw(iat)*gam**3
@@ -528,6 +529,7 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
                vec = rij+ptr%trans(:, itr)
                r = norm2(vec)
                if (r < eps) cycle
+
                call coulomb_kernel(r, gam, val, dr, drr, dg, drg, dgg)
                t = -k*(r-self%rvdw(iat, jat))
                cap = wsw*sqrt(self%cap(izp)*self%cap(jzp))
@@ -549,6 +551,7 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
 
                ! Self images contribute through CN and local charge only.
                if (iat == jat) cycle
+
                term = udiff*(v(iat)-v(jat))-piq*hard(iat)-pjq*hard(jat)+cross*val
                call add_pair_hessian(iat, jat, vec, dcap*term+cap*cross*dr, &
                   & ddcap*term+2.0_wp*dcap*cross*dr+cap*cross*drr, hessian)
@@ -723,6 +726,7 @@ subroutine get_amat_dir(rij, gam, trans, kbc, rvdw, capi, capj, amat)
       vec(:) = rij + trans(:, itr)
       r1 = norm2(vec)
       if (r1 < eps) cycle
+
       call get_cpair(kbc, ctmp, r1, rvdw, capi, capj)
       tmp = -ctmp * erf(gam * r1) / r1
       amat = amat + tmp
@@ -1071,6 +1075,7 @@ subroutine get_damat_dir(rij, trans, capi, capj, rvdw, kbc, gam, dG, dS, dgam)
       vec(:) = rij(:) + trans(:, itr)
       r1 = norm2(vec)
       if (r1 < eps) cycle
+
       r2 = r1 * r1
       call get_cpair(kbc, cmat, r1, rvdw, capi, capj)
       gtmp = 2.0_wp * gam * exp(-r2 * gam2) / (sqrtpi * r2) - erf(r1 * gam) / (r2 * r1)
@@ -1099,6 +1104,7 @@ subroutine get_damat_dc_dir(rij, trans, capi, capj, rvdw, kbc, gam, dG, dS)
       vec(:) = rij(:) + trans(:, itr)
       r1 = norm2(vec)
       if (r1 < eps) cycle
+
       call get_dcpair(kbc, vec, rvdw, capi, capj, gtmp, stmp)
       tmp = erf(gam * r1) / r1
       dG(:) = dG(:) + tmp * gtmp
@@ -1246,6 +1252,7 @@ subroutine get_cpair_dir(kbc, rij, trans, rvdw, capi, capj, cpair)
       vec(:) = rij + trans(:, itr)
       r1 = norm2(vec)
       if (r1 < eps) cycle
+
       call get_cpair(kbc, tmp, r1, rvdw, capi, capj)
       cpair = cpair + tmp
    end do
@@ -1411,6 +1418,7 @@ subroutine get_dcpair_dir(kbc, rij, trans, rvdw, capi, capj, dgpair, dspair)
       vec(:) = rij + trans(:, itr)
       r1 = norm2(vec)
       if (r1 < eps) cycle
+
       call get_dcpair(kbc, vec, rvdw, capi, capj, dgtmp, dstmp)
       dgpair(:) = dgpair + dgtmp
       dspair(:, :) = dspair + dstmp

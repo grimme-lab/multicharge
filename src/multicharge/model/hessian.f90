@@ -150,25 +150,19 @@ subroutine add_pair_block(iat, jat, box, hessian, diagonal)
    !> block must have a unique owner; only this O(N) array then needs reduction.
    real(wp), intent(inout), optional :: diagonal(:, :, :)
 
-   integer :: ic, jc, ii, jj, ik, jk
+   integer :: ii, jj
 
-   do jc = 1, 3
-      jj = 3 * (iat - 1) + jc
-      jk = 3 * (jat - 1) + jc
-      do ic = 1, 3
-         ii = 3 * (iat - 1) + ic
-         ik = 3 * (jat - 1) + ic
-         if (present(diagonal)) then
-            diagonal(ic, jc, iat) = diagonal(ic, jc, iat) + box(ic, jc)
-            diagonal(ic, jc, jat) = diagonal(ic, jc, jat) + box(ic, jc)
-         else
-            hessian(ii, jj) = hessian(ii, jj) + box(ic, jc)
-            hessian(ik, jk) = hessian(ik, jk) + box(ic, jc)
-         end if
-         hessian(ii, jk) = hessian(ii, jk) - box(ic, jc)
-         hessian(ik, jj) = hessian(ik, jj) - box(ic, jc)
-      end do
-   end do
+   ii = 3 * (iat - 1) + 1
+   jj = 3 * (jat - 1) + 1
+   if (present(diagonal)) then
+      diagonal(:, :, iat) = diagonal(:, :, iat) + box
+      diagonal(:, :, jat) = diagonal(:, :, jat) + box
+   else
+      hessian(ii:ii + 2, ii:ii + 2) = hessian(ii:ii + 2, ii:ii + 2) + box
+      hessian(jj:jj + 2, jj:jj + 2) = hessian(jj:jj + 2, jj:jj + 2) + box
+   end if
+   hessian(ii:ii + 2, jj:jj + 2) = hessian(ii:ii + 2, jj:jj + 2) - box
+   hessian(jj:jj + 2, ii:ii + 2) = hessian(jj:jj + 2, ii:ii + 2) - box
 
 end subroutine add_pair_block
 

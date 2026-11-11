@@ -364,6 +364,7 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
          if (iat * (iat + 1) / 2 < ipair) iat = iat + 1
          jat = ipair - iat * (iat - 1) / 2
          if (iat == jat) cycle
+
          izp = mol%id(iat)
          jzp = mol%id(jat)
          vec = mol%xyz(:, iat) - mol%xyz(:, jat)
@@ -434,6 +435,7 @@ subroutine add_periodic_hessian(self, mol, ptr, qvec, adj, hessian, diagonal)
       if (iat * (iat + 1) / 2 < ipair) iat = iat + 1
       jat = ipair - iat * (iat - 1) / 2
       if (iat == jat) cycle
+
       izp = mol%id(iat)
       jzp = mol%id(jat)
       gam = 1.0_wp / sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
@@ -648,6 +650,7 @@ subroutine get_amat_dir(rij, gam, alp, trans, amat)
       vec(:) = rij + trans(:, itr)
       r1 = norm2(vec)
       if (r1 < eps) cycle
+
       tmp = erf(gam * r1) / r1 - erf(alp * r1) / r1
       amat = amat + tmp
    end do
@@ -761,6 +764,7 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
       if (iat * (iat + 1) / 2 < ipair) iat = iat + 1
       jat = ipair - iat * (iat - 1) / 2
       if (iat == jat) cycle
+
       izp = mol%id(iat)
       jzp = mol%id(jat)
       vec = mol%xyz(:, jat) - mol%xyz(:, iat)
@@ -899,6 +903,7 @@ subroutine get_damat_dir(rij, gam, alp, trans, dg, ds)
       vec(:) = rij + trans(:, itr)
       r1 = norm2(vec)
       if (r1 < eps) cycle
+
       r2 = r1 * r1
       gtmp = +2.0_wp * gam * exp(-r2 * gam2) / (sqrtpi * r2) &
          & - erf(r1 * gam) / (r2 * r1)
@@ -966,18 +971,24 @@ subroutine get_rec_weights(vol, alpha, trans, weight, strain)
    real(wp), allocatable, intent(out), optional :: strain(:, :, :)
 
    integer :: itr
-   real(wp) :: g2, fac, vec(3)
+   real(wp) :: g2, inv_g2, alp2, fac, vec(3)
 
    fac = 4.0_wp * pi / vol
+   alp2 = alpha**2
    allocate(weight(size(trans, 2)), source=0.0_wp)
-   if (present(strain)) allocate(strain(3, 3, size(trans, 2)), source=0.0_wp)
+   if (present(strain)) then
+      allocate(strain(3, 3, size(trans, 2)), source=0.0_wp)
+   end if
+
    do itr = 1, size(trans, 2)
       vec = trans(:, itr)
       g2 = dot_product(vec, vec)
       if (g2 < eps) cycle
-      weight(itr) = fac * exp(-0.25_wp * g2 / alpha**2) / g2
+
+      inv_g2 = 1.0_wp / g2
+      weight(itr) = fac * exp(-0.25_wp * g2 / alp2) * inv_g2
       if (present(strain)) then
-         strain(:, :, itr) = weight(itr) * ((2.0_wp / g2 + 0.5_wp / alpha**2) &
+         strain(:, :, itr) = weight(itr) * ((2.0_wp * inv_g2 + 0.5_wp / alp2) &
             & * outerprod(vec, vec) - unity)
       end if
    end do
