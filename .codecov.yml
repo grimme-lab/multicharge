@@ -1,2 +1,12 @@
 fixes:
   - "/home/runner/work/multicharge/multicharge::"
+
+# Only cover core library and CLI (`app` and `src` directories)
+ignore:
+  - "build/"
+  - "config/"
+  - "doc/"
+  - "include/"
+  - "man/"
+  - "subprojects/"
+  - "test/"
