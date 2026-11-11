@@ -181,8 +181,8 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
 
    ! Calculate gradient if the respective arrays are present
    dcn = present(dcndr) .and. present(dcndL)
-   grad = present(gradient) .and. present(sigma) .and. dcn
-   cpq = ((present(dqdr) .and. present(dqdL)) .or. present(response)) .and. dcn
+   grad = (present(gradient) .or. present(sigma)) .and. dcn
+   cpq = (present(dqdr) .or. present(dqdL) .or. present(response)) .and. dcn
 
    cache => local_cache
    if (present(response)) then
@@ -272,11 +272,15 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
    end if
 
    if (grad) then
-      gradient = 0.0_wp
-      call gemv(dadr(:, :, :mol%nat), vrhs(:mol%nat), gradient, beta=1.0_wp, alpha=0.5_wp)
-      call gemv(dxdr(:, :, :mol%nat), vrhs(:mol%nat), gradient, beta=1.0_wp, alpha=-1.0_wp)
-      call gemv(dadL, vrhs, sigma, beta=1.0_wp, alpha=0.5_wp)
-      call gemv(dxdL, vrhs, sigma, beta=1.0_wp, alpha=-1.0_wp)
+      if (present(gradient)) then
+         gradient = 0.0_wp
+         call gemv(dadr(:, :, :mol%nat), vrhs(:mol%nat), gradient, beta=1.0_wp, alpha=0.5_wp)
+         call gemv(dxdr(:, :, :mol%nat), vrhs(:mol%nat), gradient, beta=1.0_wp, alpha=-1.0_wp)
+      end if
+      if (present(sigma)) then
+         call gemv(dadL, vrhs, sigma, beta=1.0_wp, alpha=0.5_wp)
+         call gemv(dxdL, vrhs, sigma, beta=1.0_wp, alpha=-1.0_wp)
+      end if
    end if
 
    if (cpq) then
@@ -292,7 +296,7 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
          if (present(dqdr)) dqdr(:, :, :) = cache%dqdr
          call move_alloc(vrhs, cache%qvec)
          call move_alloc(ainv, cache%ainv)
-      else
+      else if (present(dqdr)) then
          call gemm(dadr, ainv(:, :mol%nat), dqdr, alpha=-1.0_wp)
       end if
    end if

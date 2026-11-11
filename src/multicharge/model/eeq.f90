@@ -26,7 +26,7 @@ module multicharge_model_eeq
    use mctc_env, only: error_type, fatal_error, wp
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
-   use mctc_io_math, only: matdet_3x3, matinv_3x3, outerprod
+   use mctc_io_math, only: outerprod
    use mctc_ncoord, only: new_ncoord, cn_count
    use mctc_wignerseitz, only: new_wignerseitz_cell
    use multicharge_blas, only: gemm
@@ -51,6 +51,12 @@ module multicharge_model_eeq
 
       !> Nonzero reciprocal-space Ewald vectors
       real(wp), allocatable :: rtrans(:, :)
+
+      !> Reciprocal-space Ewald weights
+      real(wp), allocatable :: rec_weight(:)
+
+      !> Reciprocal-space Ewald strain tensors
+      real(wp), allocatable :: rec_strain(:, :, :)
 
    end type eeq_cache
 
@@ -78,7 +84,6 @@ module multicharge_model_eeq
 
    end type eeq_model
 
-   real(wp), parameter :: twopi = 2.0_wp * pi
    real(wp), parameter :: sqrtpi = sqrt(pi)
    real(wp), parameter :: sqrt2pi = sqrt(2.0_wp / pi)
    real(wp), parameter :: eps = sqrt(epsilon(0.0_wp))
@@ -174,6 +179,12 @@ subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlo
 
    type(eeq_cache), pointer :: ptr
 
+   if (present(dcndr) .neqv. present(dcndL)) then
+      call fatal_error(error, &
+         & "Both CN position and strain derivatives are required for EEQ gradients")
+      return
+   end if
+
    call taint(cache, ptr)
 
    ! Refer CN arrays in cache
@@ -209,15 +220,17 @@ subroutine setup_ewald(mol, cache, error)
    integer, parameter :: rep(3) = [2, 2, 2]
    real(wp) :: rec_lat(3, 3)
 
-   call get_alpha(mol%lattice, cache%alpha, error)
+   call get_alpha(mol%lattice, cache%alpha, error, vol=cache%vol, rec_lat=rec_lat)
    if (allocated(error)) return
 
-   cache%vol = abs(matdet_3x3(mol%lattice))
    call get_lattice_points(mol%lattice, rep, .true., cache%dtrans, error)
    if (allocated(error)) return
 
-   rec_lat = twopi * transpose(matinv_3x3(mol%lattice))
    call get_lattice_points(rec_lat, rep, .false., cache%rtrans, error)
+   if (allocated(error)) return
+
+   call get_rec_weights(cache%vol, cache%alpha, cache%rtrans, cache%rec_weight, &
+      & cache%rec_strain)
 
 end subroutine setup_ewald
 
@@ -418,15 +431,12 @@ subroutine add_periodic_hessian(self, mol, ptr, qvec, adj, hessian, diagonal)
    integer :: iat, jat, izp, jzp, img, itr, ipair, npair
    real(wp) :: rij(3), vec(3), box(3, 3), rbox(3, 3), gam, r, weight, wsw
    real(wp) :: val, dr, drr, ar, arr
-   real(wp), allocatable :: rec_weight(:)
-
-   call get_rec_weights(ptr%vol, ptr%alpha, ptr%rtrans, rec_weight)
 
    ! Each pair owns its off-diagonal blocks. Only the diagonal blocks are
    ! reduced, avoiding a full (3N, 3N) Hessian copy for every OpenMP thread.
    npair = mol%nat * (mol%nat + 1) / 2
    !$omp parallel do default(none) schedule(runtime) &
-   !$omp& shared(self, mol, ptr, qvec, adj, hessian, rec_weight, npair) &
+   !$omp& shared(self, mol, ptr, qvec, adj, hessian, npair) &
    !$omp& private(iat, jat, izp, jzp, img, itr, rij, vec, box, rbox, gam, r, &
    !$omp& weight, wsw, val, dr, drr, ar, arr) &
    !$omp& reduction(+:diagonal)
@@ -448,11 +458,13 @@ subroutine add_periodic_hessian(self, mol, ptr, qvec, adj, hessian, diagonal)
          do itr = 1, size(ptr%dtrans, 2)
             vec = rij + ptr%dtrans(:, itr)
             r = norm2(vec)
+            if (r < eps) cycle
+
             call coulomb_kernel(r, gam, val, dr, drr)
             call coulomb_kernel(r, ptr%alpha, val, ar, arr)
             box = box + wsw * radial_hessian(vec, r, dr - ar, drr - arr)
          end do
-         call get_hess_rec_3d(rij, ptr%rtrans, rec_weight, rbox)
+         call get_hess_rec_3d(rij, ptr%rtrans, ptr%rec_weight, rbox)
          box = box + wsw * rbox
       end do
       call add_pair_block(iat, jat, weight * box, hessian, diagonal)
@@ -581,14 +593,12 @@ subroutine get_amat_pbc(self, mol, ptr, amat)
 
    integer :: iat, jat, izp, jzp, img, ipair, npair
    real(wp) :: vec(3), gam, wsw, dtmp, rtmp, tmp
-   real(wp), allocatable :: rec_weight(:)
 
    amat = 0.0_wp
-   call get_rec_weights(ptr%vol, ptr%alpha, ptr%rtrans, rec_weight)
 
    npair = mol%nat * (mol%nat + 1) / 2
    !$omp parallel do default(none) schedule(runtime) &
-   !$omp& shared(amat, mol, self, ptr, rec_weight, npair) &
+   !$omp& shared(amat, mol, self, ptr, npair) &
    !$omp& private(iat, jat, izp, jzp, img, gam, wsw, vec, dtmp, rtmp, tmp)
    do ipair = 1, npair
       iat = int(0.5_wp * (sqrt(8.0_wp * real(ipair, wp) + 1.0_wp) - 1.0_wp))
@@ -603,7 +613,7 @@ subroutine get_amat_pbc(self, mol, ptr, amat)
          vec = mol%xyz(:, jat) - mol%xyz(:, iat) &
             & + ptr%wsc%trans(:, ptr%wsc%tridx(img, jat, iat))
          call get_amat_dir(vec, gam, ptr%alpha, ptr%dtrans, dtmp)
-         call get_amat_rec_3d(vec, ptr%rtrans, rec_weight, rtmp)
+         call get_amat_rec_3d(vec, ptr%rtrans, ptr%rec_weight, rtmp)
          tmp = tmp + (dtmp + rtmp) * wsw
       end do
       if (iat == jat) then
@@ -818,15 +828,13 @@ subroutine get_damat_pbc(self, mol, ptr, qvec, dadr, dadL, atrace)
    integer :: iat, jat, izp, jzp, img, ipair, npair
    real(wp) :: gam, wsw, vec(3), dG(3), dS(3, 3)
    real(wp) :: dGd(3), dSd(3, 3), dGr(3), dSr(3, 3)
-   real(wp), allocatable :: rec_weight(:), rec_strain(:, :, :)
 
    atrace(:, :) = 0.0_wp
    dadL(:, :, :) = 0.0_wp
-   call get_rec_weights(ptr%vol, ptr%alpha, ptr%rtrans, rec_weight, rec_strain)
 
    npair = mol%nat * (mol%nat + 1) / 2
    !$omp parallel default(none) &
-   !$omp& shared(mol, self, ptr, rec_weight, rec_strain, qvec, dadr, npair) &
+   !$omp& shared(mol, self, ptr, qvec, dadr, npair) &
    !$omp& private(iat, jat, izp, jzp, img, ipair, gam, wsw, vec, dG, dS, &
    !$omp& dGr, dSr, dGd, dSd) &
    !$omp& reduction(+:atrace, dadL)
@@ -850,7 +858,8 @@ subroutine get_damat_pbc(self, mol, ptr, qvec, dadr, dadL, atrace)
          vec = mol%xyz(:, jat) - mol%xyz(:, iat) &
             & + ptr%wsc%trans(:, ptr%wsc%tridx(img, jat, iat))
          call get_damat_dir(vec, gam, ptr%alpha, ptr%dtrans, dGd, dSd)
-         call get_damat_rec_3d(vec, ptr%rtrans, rec_weight, rec_strain, dGr, dSr)
+         call get_damat_rec_3d(vec, ptr%rtrans, ptr%rec_weight, ptr%rec_strain, &
+            & dGr, dSr)
          dG = dG + (dGd + dGr) * wsw
          dS = dS + (dSd + dSr) * wsw
       end do

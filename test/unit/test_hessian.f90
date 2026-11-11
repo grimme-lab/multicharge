@@ -27,6 +27,7 @@ subroutine collect_hessian(testsuite)
       & new_unittest("eeqbc-periodic", test_eeqbc_periodic), &
       & new_unittest("isolated-atom", test_atom), &
       & new_unittest("response-cache", test_cache), &
+      & new_unittest("periodic-lattice-coincident", test_periodic_coincident), &
       & new_unittest("invalid-response", test_invalid) &
       & ]
 end subroutine collect_hessian
@@ -266,6 +267,58 @@ subroutine test_cache(error)
      call test_failed(error, "Refreshing the response cache changed second response")
    end if
 end subroutine test_cache
+
+
+subroutine test_periodic_coincident(error)
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   type(structure_type) :: mol
+   type(cache_container) :: cache
+   class(mchrg_model_type), allocatable :: model
+   real(wp), parameter :: lat(3, 3) = reshape([ &
+      & 6.0_wp, 0.0_wp, 0.0_wp, &
+      & 0.0_wp, 7.0_wp, 0.0_wp, &
+      & 0.0_wp, 0.0_wp, 8.0_wp], [3, 3])
+   real(wp), parameter :: xyz(3, 2) = reshape([ &
+      & 0.0_wp, 0.0_wp, 0.0_wp, &
+      & 6.0_wp, 0.0_wp, 0.0_wp], [3, 2])
+   real(wp) :: q(2), weights(2), hess(6, 6), scale
+   integer :: a
+
+   call new(mol, [8, 1], xyz, lattice=lat, periodic=[.true., .true., .true.])
+   call new_eeq2019_model(mol, model, error)
+   if (allocated(error)) return
+
+   call get_charges(model, mol, error, q, cache=cache)
+   if (allocated(error)) return
+
+   weights = [0.4_wp, -0.9_wp]
+   hess = 0.0_wp
+   call add_charge_hessian(model, mol, error, weights, hess, cache)
+   if (allocated(error)) return
+
+   if (any(ieee_is_nan(hess))) then
+      call test_failed(error, "Lattice-equivalent pair produced NaN in periodic Hessian")
+      return
+   end if
+
+   scale = max(1.0_wp, maxval(abs(hess)))
+   if (maxval(abs(hess - transpose(hess))) > 1.0e-11_wp * scale) then
+      call test_failed(error, "Periodic coincident-image Hessian is not symmetric")
+      return
+   end if
+   do a = 1, 3
+      if (maxval(abs(sum(hess(:, a:6:3), dim=2))) > 1.0e-10_wp * scale) then
+         call test_failed(error, "Periodic coincident-image Hessian violates translation invariance")
+         return
+      end if
+   end do
+
+end subroutine test_periodic_coincident
+
 
 subroutine test_invalid(error)
    type(error_type), allocatable, intent(out) :: error

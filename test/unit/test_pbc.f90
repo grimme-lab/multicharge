@@ -395,7 +395,6 @@ subroutine test_dbdr(error, mol, model)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
    call model%update(mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
    if (allocated(error)) return
-   call model%get_xvec(mol, cache, xvecl)
    call model%get_xvec_derivs(mol, cache, dbdr, dbdL)
 
    if (any(abs(dbdr(:, :, :) - numgrad(:, :, :)) > thr2)) then
@@ -492,7 +491,6 @@ subroutine test_dbdL(error, mol, model)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
    call model%update(mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
    if (allocated(error)) return
-   call model%get_xvec(mol, cache, xvecl)
    call model%get_xvec_derivs(mol, cache, dbdr, dbdL)
 
    if (any(abs(dbdL(:, :, :) - numsigma(:, :, :)) > thr2)) then

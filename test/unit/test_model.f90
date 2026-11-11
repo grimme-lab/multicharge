@@ -82,7 +82,9 @@ subroutine collect_model(testsuite)
       & new_unittest("eeqbc-dqdr-mb09", test_eeqbc_dqdr_mb09), &
       & new_unittest("eeqbc-dqdr-mb10", test_eeqbc_dqdr_mb10), &
       & new_unittest("eeqbc-dqdL-mb11", test_eeqbc_dqdL_mb11), &
-      & new_unittest("eeqbc-dqdL-mb12", test_eeqbc_dqdL_mb12) &
+      & new_unittest("eeqbc-dqdL-mb12", test_eeqbc_dqdL_mb12), &
+      & new_unittest("single-derivative-args", test_single_deriv_args), &
+      & new_unittest("update-invalid-args", test_update_errors) &
       & ]
 
 end subroutine collect_model
@@ -377,7 +379,6 @@ subroutine test_dbdr(error, mol, model)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
    call model%update(mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
    if (allocated(error)) return
-   call model%get_xvec(mol, cache, xvecl) ! need to call this for xtmp in cache (eeqbc)
    call model%get_xvec_derivs(mol, cache, dbdr, dbdL)
 
    if (any(abs(dbdr(:, :, :) - numgrad(:, :, :)) > thr2)) then
@@ -461,7 +462,6 @@ subroutine test_dbdL(error, mol, model)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
    call model%update(mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
    if (allocated(error)) return
-   call model%get_xvec(mol, cache, xvecl) ! need to call this for xtmp in cache (eeqbc)
    call model%get_xvec_derivs(mol, cache, dbdr, dbdL)
 
    if (any(abs(dbdL(:, :, :) - numsigma(:, :, :)) > thr2)) then
@@ -1700,5 +1700,183 @@ subroutine test_eeqbc_dqdL_mb12(error)
    call test_numdqdL(error, mol, model)
 
 end subroutine test_eeqbc_dqdL_mb12
+
+
+subroutine test_single_deriv_args(error)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   type(structure_type) :: mol
+   class(mchrg_model_type), allocatable :: eeq, eeqbc
+   type(cache_container) :: cache
+   real(wp), parameter :: trans(3, 1) = 0.0_wp
+   real(wp), allocatable :: qref(:), q(:), dqdr_ref(:, :, :), dqdL_ref(:, :, :)
+   real(wp), allocatable :: dqdr(:, :, :), dqdL(:, :, :)
+   real(wp), allocatable :: cn(:), qloc(:), dcndr(:, :, :), dcndL(:, :, :)
+   real(wp), allocatable :: dqlocdr(:, :, :), dqlocdL(:, :, :)
+   real(wp), allocatable :: gref(:, :), g(:, :), dxdr_full(:, :, :), dxdL_full(:, :, :)
+   real(wp), allocatable :: dxdr_nat(:, :, :), dxdL_nat(:, :, :)
+   real(wp) :: sref(3, 3), s(3, 3)
+   integer :: n
+
+   call get_structure(mol, "MB16-43", "01")
+   n = mol%nat
+   allocate(qref(n), q(n), dqdr_ref(3, n, n), dqdL_ref(3, 3, n))
+   allocate(dqdr(3, n, n), dqdL(3, 3, n))
+   allocate(cn(n), qloc(n), dcndr(3, n, n), dcndL(3, 3, n))
+   allocate(dqlocdr(3, n, n), dqlocdL(3, 3, n))
+   allocate(gref(3, n), g(3, n))
+   allocate(dxdr_full(3, n, n + 1), dxdL_full(3, 3, n + 1))
+   allocate(dxdr_nat(3, n, n), dxdL_nat(3, 3, n))
+
+   ! EEQ: dqdr-only and dqdL-only via wrapper
+   call get_eeq_charges(mol, error, qref, dqdr_ref, dqdL_ref)
+   if (allocated(error)) return
+
+   dqdr = -99.0_wp
+   call get_eeq_charges(mol, error, q, dqdr=dqdr)
+   if (allocated(error)) return
+
+   if (maxval(abs(q - qref)) > thr .or. maxval(abs(dqdr - dqdr_ref)) > thr) then
+      call test_failed(error, "EEQ dqdr-only call does not match full call")
+      return
+   end if
+
+   dqdL = -99.0_wp
+   call get_eeq_charges(mol, error, q, dqdL=dqdL)
+   if (allocated(error)) return
+
+   if (maxval(abs(q - qref)) > thr .or. maxval(abs(dqdL - dqdL_ref)) > thr) then
+      call test_failed(error, "EEQ dqdL-only call does not match full call")
+      return
+   end if
+
+   ! EEQ-BC: dqdr-only, dqdL-only, gradient-only, sigma-only, and nat-sized xvec_derivs
+   call new_eeqbc2025_model(mol, eeqbc, error)
+   if (allocated(error)) return
+
+   call get_charges(eeqbc, mol, error, qref, dqdr_ref, dqdL_ref)
+   if (allocated(error)) return
+
+   dqdr = -99.0_wp
+   call get_eeqbc_charges(mol, error, q, dqdr=dqdr)
+   if (allocated(error)) return
+
+   if (maxval(abs(q - qref)) > thr .or. maxval(abs(dqdr - dqdr_ref)) > thr) then
+      call test_failed(error, "EEQ-BC dqdr-only call does not match full call")
+      return
+   end if
+
+   dqdL = -99.0_wp
+   call get_charges(eeqbc, mol, error, q, dqdL=dqdL)
+   if (allocated(error)) return
+
+   if (maxval(abs(q - qref)) > thr .or. maxval(abs(dqdL - dqdL_ref)) > thr) then
+      call test_failed(error, "EEQ-BC dqdL-only call does not match full call")
+      return
+   end if
+
+   call eeqbc%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
+   call eeqbc%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
+
+   gref = 0.0_wp
+   sref = 0.0_wp
+   call eeqbc%solve(mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
+      & gradient=gref, sigma=sref)
+   if (allocated(error)) return
+
+   g = -99.0_wp
+   call eeqbc%solve(mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
+      & gradient=g)
+   if (allocated(error)) return
+
+   if (maxval(abs(g - gref)) > thr) then
+      call test_failed(error, "gradient-only solve does not match full solve")
+      return
+   end if
+
+   s = 0.0_wp
+   call eeqbc%solve(mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
+      & sigma=s)
+   if (allocated(error)) return
+
+   if (maxval(abs(s - sref)) > thr) then
+      call test_failed(error, "sigma-only solve does not match full solve")
+      return
+   end if
+
+   call eeqbc%update(mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
+   if (allocated(error)) return
+
+   call eeqbc%get_xvec_derivs(mol, cache, dxdr_full, dxdL_full)
+   call eeqbc%get_xvec_derivs(mol, cache, dxdr_nat, dxdL_nat)
+   if (maxval(abs(dxdr_nat - dxdr_full(:, :, :n))) > thr &
+      & .or. maxval(abs(dxdL_nat - dxdL_full(:, :, :n))) > thr) then
+      call test_failed(error, "nat-sized get_xvec_derivs does not match (nat+1) slices")
+      return
+   end if
+
+   call new_eeq2019_model(mol, eeq, error)
+   if (allocated(error)) return
+
+   call eeq%update(mol, error, cache, cn, qloc, dcndr, dcndL)
+   if (allocated(error)) return
+
+   call eeq%get_xvec_derivs(mol, cache, dxdr_full, dxdL_full)
+   call eeq%get_xvec_derivs(mol, cache, dxdr_nat, dxdL_nat)
+   if (maxval(abs(dxdr_nat - dxdr_full(:, :, :n))) > thr &
+      & .or. maxval(abs(dxdL_nat - dxdL_full(:, :, :n))) > thr) then
+      call test_failed(error, "EEQ nat-sized get_xvec_derivs does not match (nat+1) slices")
+   end if
+
+end subroutine test_single_deriv_args
+
+
+subroutine test_update_errors(error)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   type(error_type), allocatable :: expected
+   type(structure_type) :: mol
+   class(mchrg_model_type), allocatable :: eeq, eeqbc
+   type(cache_container) :: cache
+   real(wp), allocatable :: cn(:), qloc(:), dcndr(:, :, :), dcndL(:, :, :), g(:, :)
+   integer :: n
+
+   call get_structure(mol, "MB16-43", "01")
+   n = mol%nat
+   allocate(cn(n), qloc(n), dcndr(3, n, n), dcndL(3, 3, n), g(3, n), source=0.0_wp)
+
+   call new_eeqbc2025_model(mol, eeqbc, error)
+   if (allocated(error)) return
+
+   ! Missing qloc in EEQ-BC update must populate error instead of error stop
+   call eeqbc%update(mol, expected, cache, cn)
+   if (.not. allocated(expected)) then
+      call test_failed(error, "EEQ-BC update without qloc must fail cleanly")
+      return
+   end if
+   deallocate(expected)
+
+   ! Partial derivative inputs in EEQ-BC solve/update must fail cleanly
+   call eeqbc%solve(mol, expected, cn, qloc, dcndr=dcndr, dcndL=dcndL, gradient=g)
+   if (.not. allocated(expected)) then
+      call test_failed(error, "EEQ-BC solve without dqloc derivatives must fail cleanly")
+      return
+   end if
+   deallocate(expected)
+
+   call new_eeq2019_model(mol, eeq, error)
+   if (allocated(error)) return
+
+   ! Partial CN derivative inputs in EEQ update must fail cleanly
+   call eeq%update(mol, expected, cache, cn, dcndr=dcndr)
+   if (.not. allocated(expected)) then
+      call test_failed(error, "EEQ update with dcndr alone must fail cleanly")
+   end if
+
+end subroutine test_update_errors
 
 end module test_model

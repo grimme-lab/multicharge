@@ -64,7 +64,7 @@ subroutine get_charges(mchrg_model, mol, error, qvec, dqdr, dqdL, cache)
    real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
    real(wp), allocatable :: trans(:, :)
 
-   grad = (present(dqdr) .and. present(dqdL)) .or. present(cache)
+   grad = present(dqdr) .or. present(dqdL) .or. present(cache)
 
    allocate(cn(mol%nat), qloc(mol%nat))
    if (grad) then

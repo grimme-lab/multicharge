@@ -34,6 +34,7 @@ if(NOT DEFINED "${PROJECT_NAME}-dependency-method")
     "subproject" "cmake" "pkgconf" "fetch"
   )
 endif()
+set("${PROJECT_NAME}-dependency-method" "${${PROJECT_NAME}-dependency-method}" PARENT_SCOPE)
 
 set(
   "${PROJECT_NAME}-module-dir"

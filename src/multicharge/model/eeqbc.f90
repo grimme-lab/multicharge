@@ -196,21 +196,30 @@ subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlo
    real(wp), intent(in), optional :: dqlocdr(:, :, :)
    real(wp), intent(in), optional :: dqlocdL(:, :, :)
 
-   integer :: ndim
-   logical :: grad
+   integer :: iat, izp, ndim
+   logical :: any_grad, grad
    type(eeqbc_cache), pointer :: ptr
+
+   if (.not. present(qloc)) then
+      call fatal_error(error, "Local charges are required for EEQ-BC model")
+      return
+   end if
+
+   any_grad = present(dcndr) .or. present(dcndL) &
+      & .or. present(dqlocdr) .or. present(dqlocdL)
+   grad = present(dcndr) .and. present(dcndL) &
+      & .and. present(dqlocdr) .and. present(dqlocdL)
+   if (any_grad .and. .not. grad) then
+      call fatal_error(error, &
+         & "All CN and local-charge derivatives are required for EEQ-BC gradients")
+      return
+   end if
 
    call taint(cache, ptr)
 
-   grad = present(dcndr) .and. present(dcndL) .and. present(dqlocdr) .and. present(dqlocdL)
-
    ! Refer CN and local charge arrays in cache
    ptr%cn = cn
-   if (present(qloc)) then
-      ptr%qloc = qloc
-   else
-      error stop "qloc required for eeqbc"
-   end if
+   ptr%qloc = qloc
 
    if (grad) then
       ptr%dcndr = dcndr
@@ -221,11 +230,21 @@ subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlo
 
    ndim = mol%nat + 1
 
-   ! Allocate (for get_xvec and xvec_derivs)
+   ! Allocate and populate xtmp (for get_xvec, get_xvec_derivs, and add_model_hessian)
    if (allocated(ptr%xtmp)) then
       if (size(ptr%xtmp) /= ndim) deallocate(ptr%xtmp)
    end if
    if (.not. allocated(ptr%xtmp)) allocate(ptr%xtmp(ndim))
+
+   !$omp parallel do default(none) schedule(runtime) &
+   !$omp& shared(mol, self, ptr) private(iat, izp)
+   do iat = 1, mol%nat
+      izp = mol%id(iat)
+      ptr%xtmp(iat) = -self%chi(izp) + self%kcnchi(izp) * ptr%cn(iat) &
+         & + self%kqchi(izp) * ptr%qloc(iat)
+   end do
+   !$omp end parallel do
+   ptr%xtmp(ndim) = mol%charge
 
    ! Allocate cmat
    if (allocated(ptr%cmat)) then
@@ -285,22 +304,12 @@ subroutine get_xvec(self, mol, cache, xvec)
    call view(cache, ptr)
 
    xvec(:) = 0.0_wp
-   !$omp parallel do default(none) schedule(runtime) &
-   !$omp shared(mol, self, ptr, xvec) &
-   !$omp private(iat, izp)
-   do iat = 1, mol%nat
-      izp = mol%id(iat)
-      ptr%xtmp(iat) = -self%chi(izp) + self%kcnchi(izp) * ptr%cn(iat) &
-         & + self%kqchi(izp) * ptr%qloc(iat)
-   end do
-   ptr%xtmp(mol%nat + 1) = mol%charge
-
    call gemv(ptr%cmat, ptr%xtmp, xvec)
 
    if (any(mol%periodic)) then
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp shared(mol, self, ptr, xvec) &
-      !$omp private(iat, izp, img, wsw, capi, vec, rvdw, ctmp)
+      !$omp& shared(mol, self, ptr, xvec) &
+      !$omp& private(iat, izp, img, wsw, capi, vec, rvdw, ctmp)
       do iat = 1, mol%nat
          izp = mol%id(iat)
          capi = self%cap(izp)
@@ -328,11 +337,10 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
    type(eeqbc_cache), pointer :: ptr
 
    integer :: iat, izp, jat, jzp, img
-   real(wp) :: capi, capj, wsw, vec(3), ctmp, rvdw, dG(3), dS(3, 3)
+   real(wp) :: capi, capj, wsw, vec(3), ctmp, csum, rvdw, xij
+   real(wp) :: dG(3), dS(3, 3), dS_sum(3, 3)
    real(wp), allocatable :: dtmpdr(:, :, :), dtmpdL(:, :, :)
-
-   ! Thread-private arrays for reduction
-   real(wp), allocatable :: dxdr_local(:, :, :), dxdL_local(:, :, :)
+   real(wp), allocatable :: dxdiag(:, :), dxdL_red(:, :, :)
 
    call view(cache, ptr)
 
@@ -358,107 +366,106 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
    end do
    !$omp end parallel do
 
-   ! Zero the (N + 1)-th charge-constraint slice not covered by the atom loop
-   ! before multiplying all N + 1 columns of ptr%cmat.
-   dxdr(:, :, mol%nat + 1) = 0.0_wp
-   dxdL(:, :, mol%nat + 1) = 0.0_wp
+   if (size(dxdr, 3) > mol%nat) dxdr(:, :, mol%nat + 1:) = 0.0_wp
+   if (size(dxdL, 3) > mol%nat) dxdL(:, :, mol%nat + 1:) = 0.0_wp
    dtmpdr(:, :, mol%nat + 1) = 0.0_wp
    dtmpdL(:, :, mol%nat + 1) = 0.0_wp
 
-   call gemm(dtmpdr, ptr%cmat, dxdr)
-   call gemm(dtmpdL, ptr%cmat, dxdL)
+   call gemm(dtmpdr, ptr%cmat, dxdr(:, :, :mol%nat))
+   call gemm(dtmpdL, ptr%cmat, dxdL(:, :, :mol%nat))
+
+   allocate(dxdiag(3, mol%nat), dxdL_red(3, 3, mol%nat), source=0.0_wp)
 
    if (any(mol%periodic)) then
-      !$omp parallel default(none) &
-      !$omp shared(mol, self, ptr, dxdr, dxdL) &
-      !$omp private(iat, izp, jat, jzp, img, wsw) &
-      !$omp private(capi, capj, vec, rvdw, ctmp, dG, dS) &
-      !$omp private(dxdr_local, dxdL_local)
-      allocate(dxdr_local, mold=dxdr)
-      allocate(dxdL_local, mold=dxdL)
-      dxdr_local(:, :, :) = 0.0_wp
-      dxdL_local(:, :, :) = 0.0_wp
-      !$omp do schedule(runtime)
+      ! Capacitance terms for i = j, T /= 0
+      !$omp parallel do default(none) schedule(runtime) &
+      !$omp& shared(mol, self, ptr, dtmpdr, dtmpdL, dxdr, dxdL) &
+      !$omp& private(iat, izp, img, capi, rvdw, wsw, vec, ctmp, csum)
       do iat = 1, mol%nat
          izp = mol%id(iat)
          capi = self%cap(izp)
-         do jat = 1, mol%nat
-            rvdw = self%rvdw(iat, jat)
-            jzp = mol%id(jat)
-            capj = self%cap(jzp)
-
-            ! Diagonal elements
-            dxdr_local(:, iat, iat) = dxdr_local(:, iat, iat) + ptr%xtmp(jat) * ptr%dcdr(:, iat, jat)
-
-            ! Derivative of capacitance matrix
-            dxdr_local(:, iat, jat) = dxdr_local(:, iat, jat)  &
-                  & + (ptr%xtmp(iat) - ptr%xtmp(jat)) * ptr%dcdr(:, iat, jat)
-
-            wsw = 1.0_wp / real(ptr%wsc%nimg(iat, jat), wp)
-            do img = 1, ptr%wsc%nimg(iat, jat)
-               vec = mol%xyz(:, jat) - mol%xyz(:, iat) + ptr%wsc%trans(:, ptr%wsc%tridx(img, jat, iat))
-               call get_dcpair_dir(self%kbc, vec, ptr%trans, rvdw, capi, capj, dG, dS)
-               dxdL_local(:, :, iat) = dxdL_local(:, :, iat) - wsw * dS * ptr%xtmp(jat)
-            end do
-         end do
-         dxdL_local(:, :, iat) = dxdL_local(:, :, iat) + ptr%xtmp(iat) * ptr%dcdL(:, :, iat)
-
-         ! Capacitance terms for i = j, T != 0
          rvdw = self%rvdw(iat, iat)
          wsw = 1.0_wp / real(ptr%wsc%nimg(iat, iat), wp)
+         csum = 0.0_wp
          do img = 1, ptr%wsc%nimg(iat, iat)
             vec = ptr%wsc%trans(:, ptr%wsc%tridx(img, iat, iat))
-
             call get_cpair_dir(self%kbc, vec, ptr%trans, rvdw, capi, capi, ctmp)
-            ctmp = ctmp * wsw
-            ! EN derivative
-            dxdr_local(:, :, iat) = dxdr_local(:, :, iat) - ctmp * self%kcnchi(izp) * ptr%dcndr(:, :, iat)
-            dxdL_local(:, :, iat) = dxdL_local(:, :, iat) - ctmp * self%kcnchi(izp) * ptr%dcndL(:, :, iat)
-            dxdr_local(:, :, iat) = dxdr_local(:, :, iat) - ctmp * self%kqchi(izp) * ptr%dqlocdr(:, :, iat)
-            dxdL_local(:, :, iat) = dxdL_local(:, :, iat) - ctmp * self%kqchi(izp) * ptr%dqlocdL(:, :, iat)
+            csum = csum + wsw * ctmp
          end do
+         dxdr(:, :, iat) = dxdr(:, :, iat) - csum * dtmpdr(:, :, iat)
+         dxdL(:, :, iat) = dxdL(:, :, iat) - csum * dtmpdL(:, :, iat)
       end do
-      !$omp end do
-      !$omp critical (get_xvec_derivs_update)
-      dxdr(:, :, :) = dxdr + dxdr_local
-      dxdL(:, :, :) = dxdL + dxdL_local
-      !$omp end critical (get_xvec_derivs_update)
-      deallocate(dxdL_local, dxdr_local)
-      !$omp end parallel
+      !$omp end parallel do
+
+      ! Off-diagonal pairs (jat < iat) have unique owners; reduce only O(N) terms
+      !$omp parallel do default(none) schedule(runtime) &
+      !$omp& shared(mol, self, ptr, dxdr) &
+      !$omp& private(iat, izp, jat, jzp, img, capi, capj, rvdw, wsw, vec, &
+      !$omp& dG, dS, dS_sum, xij) &
+      !$omp& reduction(+:dxdiag, dxdL_red)
+      do iat = 1, mol%nat
+         izp = mol%id(iat)
+         capi = self%cap(izp)
+         do jat = 1, iat - 1
+            jzp = mol%id(jat)
+            capj = self%cap(jzp)
+            rvdw = self%rvdw(iat, jat)
+            xij = ptr%xtmp(iat) - ptr%xtmp(jat)
+
+            dxdiag(:, iat) = dxdiag(:, iat) + ptr%xtmp(jat) * ptr%dcdr(:, iat, jat)
+            dxdiag(:, jat) = dxdiag(:, jat) + ptr%xtmp(iat) * ptr%dcdr(:, jat, iat)
+
+            dxdr(:, iat, jat) = dxdr(:, iat, jat) + xij * ptr%dcdr(:, iat, jat)
+            dxdr(:, jat, iat) = dxdr(:, jat, iat) - xij * ptr%dcdr(:, jat, iat)
+
+            wsw = 1.0_wp / real(ptr%wsc%nimg(jat, iat), wp)
+            dS_sum(:, :) = 0.0_wp
+            do img = 1, ptr%wsc%nimg(jat, iat)
+               vec = mol%xyz(:, jat) - mol%xyz(:, iat) &
+                  & + ptr%wsc%trans(:, ptr%wsc%tridx(img, jat, iat))
+               call get_dcpair_dir(self%kbc, vec, ptr%trans, rvdw, capi, capj, &
+                  & dG, dS)
+               dS_sum = dS_sum + wsw * dS
+            end do
+            dxdL_red(:, :, iat) = dxdL_red(:, :, iat) + xij * dS_sum
+            dxdL_red(:, :, jat) = dxdL_red(:, :, jat) - xij * dS_sum
+         end do
+         dxdiag(:, iat) = dxdiag(:, iat) + ptr%xtmp(iat) * ptr%dcdr(:, iat, iat)
+      end do
+      !$omp end parallel do
    else
-      !$omp parallel default(none) &
-      !$omp shared(mol, self, ptr, dxdr, dxdL) &
-      !$omp private(iat, jat, vec, dxdr_local, dxdL_local)
-      allocate(dxdr_local, mold=dxdr)
-      allocate(dxdL_local, mold=dxdL)
-      dxdr_local(:, :, :) = 0.0_wp
-      dxdL_local(:, :, :) = 0.0_wp
-      !$omp do schedule(runtime)
+      ! Off-diagonal pairs (jat < iat) have unique owners; reduce only O(N) terms
+      !$omp parallel do default(none) schedule(runtime) &
+      !$omp& shared(mol, ptr, dxdr) &
+      !$omp& private(iat, jat, vec, xij) &
+      !$omp& reduction(+:dxdiag, dxdL_red)
       do iat = 1, mol%nat
          do jat = 1, iat - 1
-            ! Diagonal elements
-            dxdr_local(:, iat, iat) = dxdr_local(:, iat, iat) + ptr%xtmp(jat) * ptr%dcdr(:, iat, jat)
-            dxdr_local(:, jat, jat) = dxdr_local(:, jat, jat) + ptr%xtmp(iat) * ptr%dcdr(:, jat, iat)
+            xij = ptr%xtmp(iat) - ptr%xtmp(jat)
 
-            ! Derivative of capacitance matrix
-            dxdr_local(:, iat, jat) = (ptr%xtmp(iat) - ptr%xtmp(jat)) * ptr%dcdr(:, iat, jat) + dxdr_local(:, iat, jat)
-            dxdr_local(:, jat, iat) = (ptr%xtmp(jat) - ptr%xtmp(iat)) * ptr%dcdr(:, jat, iat) + dxdr_local(:, jat, iat)
+            dxdiag(:, iat) = dxdiag(:, iat) + ptr%xtmp(jat) * ptr%dcdr(:, iat, jat)
+            dxdiag(:, jat) = dxdiag(:, jat) + ptr%xtmp(iat) * ptr%dcdr(:, jat, iat)
+
+            dxdr(:, iat, jat) = dxdr(:, iat, jat) + xij * ptr%dcdr(:, iat, jat)
+            dxdr(:, jat, iat) = dxdr(:, jat, iat) - xij * ptr%dcdr(:, jat, iat)
 
             vec = mol%xyz(:, iat) - mol%xyz(:, jat)
-            dxdL_local(:, :, iat) = dxdL_local(:, :, iat) + ptr%xtmp(jat) * outerprod(vec, ptr%dcdr(:, iat, jat))
-            dxdL_local(:, :, jat) = dxdL_local(:, :, jat) + ptr%xtmp(iat) * outerprod(-vec, ptr%dcdr(:, jat, iat))
+            dxdL_red(:, :, iat) = dxdL_red(:, :, iat) &
+               & + ptr%xtmp(jat) * outerprod(vec, ptr%dcdr(:, iat, jat))
+            dxdL_red(:, :, jat) = dxdL_red(:, :, jat) &
+               & + ptr%xtmp(iat) * outerprod(-vec, ptr%dcdr(:, jat, iat))
          end do
-         dxdr_local(:, iat, iat) = dxdr_local(:, iat, iat) + ptr%xtmp(iat) * ptr%dcdr(:, iat, iat)
-         dxdL_local(:, :, iat) = dxdL_local(:, :, iat) + ptr%xtmp(iat) * ptr%dcdL(:, :, iat)
+         dxdiag(:, iat) = dxdiag(:, iat) + ptr%xtmp(iat) * ptr%dcdr(:, iat, iat)
+         dxdL_red(:, :, iat) = dxdL_red(:, :, iat) &
+            & + ptr%xtmp(iat) * ptr%dcdL(:, :, iat)
       end do
-      !$omp end do
-      !$omp critical (get_xvec_derivs_)
-      dxdr(:, :, :) = dxdr + dxdr_local
-      dxdL(:, :, :) = dxdL + dxdL_local
-      !$omp end critical (get_xvec_derivs_)
-      deallocate(dxdL_local, dxdr_local)
-      !$omp end parallel
+      !$omp end parallel do
    end if
+
+   do iat = 1, mol%nat
+      dxdr(:, iat, iat) = dxdr(:, iat, iat) + dxdiag(:, iat)
+      dxdL(:, :, iat) = dxdL(:, :, iat) + dxdL_red(:, :, iat)
+   end do
 
 end subroutine get_xvec_derivs
 
@@ -1310,21 +1317,17 @@ subroutine get_dcmat_0d(self, mol, dcdr, dcdL)
 
    integer :: iat, jat, izp, jzp
    real(wp) :: vec(3), r1, rvdw, dG(3), dS(3, 3), capi, capj
+   real(wp), allocatable :: dcdiag(:, :)
 
-   ! Thread-private arrays for reduction
-   real(wp), allocatable :: dcdr_local(:, :, :), dcdL_local(:, :, :)
-
+   allocate(dcdiag(3, mol%nat), source=0.0_wp)
    dcdr(:, :, :) = 0.0_wp
    dcdL(:, :, :) = 0.0_wp
 
-   !$omp parallel default(none) &
-   !$omp shared(dcdr, dcdL, mol, self) &
-   !$omp private(iat, izp, jat, jzp, vec, r1, rvdw) &
-   !$omp private(dG, dS, capi, capj) &
-   !$omp private(dcdr_local, dcdL_local)
-   allocate(dcdr_local, source=dcdr)
-   allocate(dcdL_local, source=dcdL)
-   !$omp do schedule(runtime)
+   ! Off-diagonal pairs (jat < iat) have a unique owner; reduce only O(N) terms
+   !$omp parallel do default(none) schedule(runtime) &
+   !$omp& shared(dcdr, mol, self) &
+   !$omp& private(iat, izp, jat, jzp, vec, r1, rvdw, dG, dS, capi, capj) &
+   !$omp& reduction(+:dcdiag, dcdL)
    do iat = 1, mol%nat
       izp = mol%id(iat)
       capi = self%cap(izp)
@@ -1338,22 +1341,20 @@ subroutine get_dcmat_0d(self, mol, dcdr, dcdL)
          call get_dcpair(self%kbc, vec, r1, rvdw, capi, capj, dG, dS)
 
          ! Off-diagonal elements
-         dcdr_local(:, iat, jat) = +dG
-         dcdr_local(:, jat, iat) = -dG
+         dcdr(:, iat, jat) = +dG
+         dcdr(:, jat, iat) = -dG
          ! Diagonal elements
-         dcdr_local(:, iat, iat) = -dG + dcdr_local(:, iat, iat)
-         dcdr_local(:, jat, jat) = +dG + dcdr_local(:, jat, jat)
-         dcdL_local(:, :, iat) = +dS + dcdL_local(:, :, iat)
-         dcdL_local(:, :, jat) = +dS + dcdL_local(:, :, jat)
+         dcdiag(:, iat) = dcdiag(:, iat) - dG
+         dcdiag(:, jat) = dcdiag(:, jat) + dG
+         dcdL(:, :, iat) = dcdL(:, :, iat) + dS
+         dcdL(:, :, jat) = dcdL(:, :, jat) + dS
       end do
    end do
-   !$omp end do
-   !$omp critical (get_dcmat_0d_)
-   dcdr(:, :, :) = dcdr + dcdr_local
-   dcdL(:, :, :) = dcdL + dcdL_local
-   !$omp end critical (get_dcmat_0d_)
-   deallocate(dcdL_local, dcdr_local)
-   !$omp end parallel
+   !$omp end parallel do
+
+   do iat = 1, mol%nat
+      dcdr(:, iat, iat) = dcdiag(:, iat)
+   end do
 
 end subroutine get_dcmat_0d
 
@@ -1366,22 +1367,20 @@ subroutine get_dcmat_pbc(self, mol, wsc, trans, dcdr, dcdL)
    real(wp), intent(out) :: dcdL(:, :, :)
 
    integer :: iat, jat, izp, jzp, img
-   real(wp) :: vec(3), rvdw, dG(3), dS(3, 3), capi, capj, wsw
+   real(wp) :: vec(3), rvdw, dG(3), dS(3, 3), dG_sum(3), dS_sum(3, 3)
+   real(wp) :: capi, capj, wsw
+   real(wp), allocatable :: dcdiag(:, :)
 
-   ! Thread-private arrays for reduction
-   real(wp), allocatable :: dcdr_local(:, :, :), dcdL_local(:, :, :)
-
+   allocate(dcdiag(3, mol%nat), source=0.0_wp)
    dcdr(:, :, :) = 0.0_wp
    dcdL(:, :, :) = 0.0_wp
 
-   !$omp parallel default(none) &
-   !$omp shared(dcdr, dcdL, mol, self, trans, wsc) &
-   !$omp private(iat, izp, jat, jzp, vec, rvdw) &
-   !$omp private(dG, dS, capi, capj, wsw) &
-   !$omp private(dcdr_local, dcdL_local)
-   allocate(dcdr_local, source=dcdr)
-   allocate(dcdL_local, source=dcdL)
-   !$omp do schedule(runtime)
+   ! Off-diagonal pairs (jat < iat) have a unique owner; reduce only O(N) terms
+   !$omp parallel do default(none) schedule(runtime) &
+   !$omp& shared(dcdr, mol, self, trans, wsc) &
+   !$omp& private(iat, izp, jat, jzp, img, vec, rvdw, dG, dS, dG_sum, dS_sum, &
+   !$omp& capi, capj, wsw) &
+   !$omp& reduction(+:dcdiag, dcdL)
    do iat = 1, mol%nat
       izp = mol%id(iat)
       capi = self%cap(izp)
@@ -1390,20 +1389,25 @@ subroutine get_dcmat_pbc(self, mol, wsc, trans, dcdr, dcdL)
          capj = self%cap(jzp)
          rvdw = self%rvdw(iat, jat)
          wsw = 1.0_wp / real(wsc%nimg(jat, iat), wp)
+         dG_sum(:) = 0.0_wp
+         dS_sum(:, :) = 0.0_wp
          do img = 1, wsc%nimg(jat, iat)
-            vec = mol%xyz(:, jat) - mol%xyz(:, iat) + wsc%trans(:, wsc%tridx(img, jat, iat))
+            vec = mol%xyz(:, jat) - mol%xyz(:, iat) &
+               & + wsc%trans(:, wsc%tridx(img, jat, iat))
 
             call get_dcpair_dir(self%kbc, vec, trans, rvdw, capi, capj, dG, dS)
-
-            ! Off-diagonal elements
-            dcdr_local(:, iat, jat) = +dG * wsw + dcdr_local(:, iat, jat)
-            dcdr_local(:, jat, iat) = -dG * wsw + dcdr_local(:, jat, iat)
-            ! Diagonal elements
-            dcdr_local(:, iat, iat) = -dG * wsw + dcdr_local(:, iat, iat)
-            dcdr_local(:, jat, jat) = +dG * wsw + dcdr_local(:, jat, jat)
-            dcdL_local(:, :, jat) = +dS * wsw + dcdL_local(:, :, jat)
-            dcdL_local(:, :, iat) = +dS * wsw + dcdL_local(:, :, iat)
+            dG_sum = dG_sum + dG * wsw
+            dS_sum = dS_sum + dS * wsw
          end do
+
+         ! Off-diagonal elements
+         dcdr(:, iat, jat) = +dG_sum
+         dcdr(:, jat, iat) = -dG_sum
+         ! Diagonal elements
+         dcdiag(:, iat) = dcdiag(:, iat) - dG_sum
+         dcdiag(:, jat) = dcdiag(:, jat) + dG_sum
+         dcdL(:, :, jat) = dcdL(:, :, jat) + dS_sum
+         dcdL(:, :, iat) = dcdL(:, :, iat) + dS_sum
       end do
 
       rvdw = self%rvdw(iat, iat)
@@ -1414,16 +1418,14 @@ subroutine get_dcmat_pbc(self, mol, wsc, trans, dcdr, dcdL)
          call get_dcpair_dir(self%kbc, vec, trans, rvdw, capi, capi, dG, dS)
 
          ! Positive diagonal elements
-         dcdL_local(:, :, iat) = +dS * wsw + dcdL_local(:, :, iat)
+         dcdL(:, :, iat) = dcdL(:, :, iat) + dS * wsw
       end do
    end do
-   !$omp end do
-   !$omp critical (get_dcmat_pbc_)
-   dcdr(:, :, :) = dcdr + dcdr_local
-   dcdL(:, :, :) = dcdL + dcdL_local
-   !$omp end critical (get_dcmat_pbc_)
-   deallocate(dcdL_local, dcdr_local)
-   !$omp end parallel
+   !$omp end parallel do
+
+   do iat = 1, mol%nat
+      dcdr(:, iat, iat) = dcdiag(:, iat)
+   end do
 
 end subroutine get_dcmat_pbc
 
