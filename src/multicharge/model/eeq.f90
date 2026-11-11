@@ -213,9 +213,11 @@ subroutine setup_ewald(mol, cache, error)
    if (allocated(error)) return
 
    cache%vol = abs(matdet_3x3(mol%lattice))
-   call get_lattice_points(mol%lattice, rep, .true., cache%dtrans)
+   call get_lattice_points(mol%lattice, rep, .true., cache%dtrans, error)
+   if (allocated(error)) return
+
    rec_lat = twopi * transpose(matinv_3x3(mol%lattice))
-   call get_lattice_points(rec_lat, rep, .false., cache%rtrans)
+   call get_lattice_points(rec_lat, rep, .false., cache%rtrans, error)
 
 end subroutine setup_ewald
 
