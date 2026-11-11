@@ -323,18 +323,21 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
    real(wp), allocatable :: dxdr_local(:, :, :), dxdL_local(:, :, :)
 
    call view(cache, ptr)
+
+   ! Leave uninitialized to preserve first-touch page locality;
+   ! slices 1:mol%nat are fully assigned in the parallel loop.
    allocate(dtmpdr(3, mol%nat, mol%nat + 1), dtmpdL(3, 3, mol%nat + 1))
 
-   dxdr(:, :, :) = 0.0_wp
-   dxdL(:, :, :) = 0.0_wp
-   dtmpdr(:, :, :) = 0.0_wp
-   dtmpdL(:, :, :) = 0.0_wp
-
    !$omp parallel do default(none) schedule(runtime) &
-   !$omp shared(mol, self, ptr, dtmpdr, dtmpdL) &
-   !$omp private(iat, izp)
+   !$omp& shared(mol, self, ptr, dxdr, dxdL, dtmpdr, dtmpdL) &
+   !$omp& private(iat, izp)
    do iat = 1, mol%nat
       izp = mol%id(iat)
+
+      ! Zero intent(out) arrays for first-touch locality and intent(inout) gemm
+      dxdr(:, :, iat) = 0.0_wp
+      dxdL(:, :, iat) = 0.0_wp
+
       ! CN and effective charge derivative
       dtmpdr(:, :, iat) = self%kcnchi(izp) * ptr%dcndr(:, :, iat) &
          & + self%kqchi(izp) * ptr%dqlocdr(:, :, iat)
@@ -342,6 +345,13 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
          & + self%kqchi(izp) * ptr%dqlocdL(:, :, iat)
    end do
    !$omp end parallel do
+
+   ! Zero the (N + 1)-th charge-constraint slice not covered by the atom loop
+   ! before multiplying all N + 1 columns of ptr%cmat.
+   dxdr(:, :, mol%nat + 1) = 0.0_wp
+   dxdL(:, :, mol%nat + 1) = 0.0_wp
+   dtmpdr(:, :, mol%nat + 1) = 0.0_wp
+   dtmpdL(:, :, mol%nat + 1) = 0.0_wp
 
    call gemm(dtmpdr, ptr%cmat, dxdr)
    call gemm(dtmpdL, ptr%cmat, dxdL)
