@@ -50,8 +50,8 @@ module multicharge_ewald
 contains
 
 
-!> Determine optimal Ewald splitting parameter and cell geometry
-subroutine get_alpha(lattice, alpha, error, vol, rec_lat)
+!> Determine optimal Ewald splitting parameter
+subroutine get_alpha(lattice, alpha, error)
 
    !> Lattice vectors
    real(wp), intent(in) :: lattice(:, :)
@@ -62,25 +62,16 @@ subroutine get_alpha(lattice, alpha, error, vol, rec_lat)
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
 
-   !> Unit cell volume
-   real(wp), intent(out), optional :: vol
+   real(wp) :: vol, rec_lat(3, 3)
 
-   !> Reciprocal lattice vectors
-   real(wp), intent(out), optional :: rec_lat(3, 3)
-
-   real(wp) :: volume, rlat(3, 3)
-
-   volume = abs(matdet_3x3(lattice))
-   if (volume < eps) then
+   vol = abs(matdet_3x3(lattice))
+   if (vol < eps) then
       call fatal_error(error, "Lattice vectors are singular or degenerate")
       return
    end if
-   rlat = twopi * transpose(matinv_3x3(lattice))
+   rec_lat = twopi * transpose(matinv_3x3(lattice))
 
-   call search_alpha(lattice, rlat, volume, eps, alpha)
-
-   if (present(vol)) vol = volume
-   if (present(rec_lat)) rec_lat = rlat
+   call search_alpha(lattice, rec_lat, vol, eps, alpha)
 
 end subroutine get_alpha
 

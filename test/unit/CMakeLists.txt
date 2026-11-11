@@ -16,8 +16,8 @@
 # Unit testing
 set(
   tests
-  "model"
   "hessian"
+  "model"
   "pbc"
 )
 set(
