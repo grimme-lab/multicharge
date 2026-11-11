@@ -466,7 +466,7 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
    type(eeqbc_cache), pointer :: ptr
    integer :: nat, iat, jat, izp, jzp, img, itr, nimg
    logical :: periodic
-   real(wp) :: rij(3), vec(3), unit(3), r, gam, gi, gj, gii, gjj, gij, wsw
+   real(wp) :: rij(3), vec(3), unit(3), r, inv_w, gam, gi, gj, gii, gjj, gij, wsw
    real(wp) :: val, dr, drr, dg, drg, dgg, cap, dcap, ddcap, k, t
    real(wp) :: udiff, piq, pjq, cross, term, ti, tj, li, lj, ri, rj, cij
    real(wp), allocatable :: width(:), dw(:), v(:), hard(:), dh(:), ddh(:)
@@ -492,11 +492,12 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
       izp = mol%id(iat)
       dw(iat) = -self%rad(izp)*self%kcnrad/self%avg_cn(izp)**self%norm_exp
       width(iat) = self%rad(izp)+dw(iat)*ptr%cn(iat)
+      inv_w = 1.0_wp/width(iat)
       v(iat) = -self%chi(izp)+self%kcnchi(izp)*ptr%cn(iat) &
          & + self%kqchi(izp)*ptr%qloc(iat)
-      hard(iat) = self%eta(izp)+self%kqeta(izp)*ptr%qloc(iat)+sqrt2pi/width(iat)
-      dh(iat) = -sqrt2pi*dw(iat)/width(iat)**2
-      ddh(iat) = 2.0_wp*sqrt2pi*dw(iat)**2/width(iat)**3
+      hard(iat) = self%eta(izp)+self%kqeta(izp)*ptr%qloc(iat)+sqrt2pi*inv_w
+      dh(iat) = -sqrt2pi*dw(iat)*inv_w**2
+      ddh(iat) = 2.0_wp*sqrt2pi*dw(iat)**2*inv_w**3
    end do
 
    do iat = 1, nat
@@ -533,7 +534,7 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
                call coulomb_kernel(r, gam, val, dr, drr, dg, drg, dgg)
                t = -k*(r-self%rvdw(iat, jat))
                cap = wsw*sqrt(self%cap(izp)*self%cap(jzp))
-               dcap = -cap*k/sqrtpi*exp(-t*t)
+               dcap = -(1.0_wp/sqrtpi)*cap*k*exp(-t*t)
                ddcap = 2.0_wp*k*t*dcap
                cap = 0.5_wp*cap*(1.0_wp+erf(t))
 
@@ -553,9 +554,9 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
                if (iat == jat) cycle
 
                term = udiff*(v(iat)-v(jat))-piq*hard(iat)-pjq*hard(jat)+cross*val
-               call add_pair_hessian(iat, jat, vec, dcap*term+cap*cross*dr, &
+               call add_pair_hessian(iat, jat, vec, r, dcap*term+cap*cross*dr, &
                   & ddcap*term+2.0_wp*dcap*cross*dr+cap*cross*drr, hessian)
-               unit = vec/r
+               unit = (1.0_wp/r)*vec
                ri = dcap*ti+cap*cross*drg*gi
                rj = dcap*tj+cap*cross*drg*gj
                mixed(:, iat, iat) = mixed(:, iat, iat)+unit*ri
@@ -774,8 +775,8 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
    real(wp), intent(out) :: atrace(:, :)
 
    integer :: iat, jat, izp, jzp
-   real(wp) :: vec(3), r2, gam, arg, dtmp, norm_cn
-   real(wp) :: radi, radj, dradi, dradj, dG(3), dS(3, 3), dgamdL(3, 3)
+   real(wp) :: vec(3), r1, r2, inv_r, inv_r2, gam, arg, exp_arg, erf_r, dtmp, norm_cn
+   real(wp) :: radi, radj, inv_radi, dradi, dradj, hardi, dG(3), dS(3, 3), dgamdL(3, 3)
    real(wp), allocatable :: dgamdr(:, :)
 
    ! Thread-private arrays for reduction
@@ -791,9 +792,9 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
    !$omp parallel default(none) &
    !$omp shared(atrace, dadr, dadL, mol, self, cn, qloc, qvec) &
    !$omp shared(cmat, dcdr, dcdL, dcndr, dcndL, dqlocdr, dqlocdL) &
-   !$omp private(iat, izp, jat, jzp, gam, vec, r2, dtmp, norm_cn, arg) &
-   !$omp private(radi, radj, dradi, dradj, dgamdr, dgamdL, dG, dS) &
-   !$omp private(atrace_local, dadr_local, dadL_local)
+   !$omp private(iat, izp, jat, jzp, gam, vec, r1, r2, inv_r, inv_r2, dtmp, norm_cn) &
+   !$omp private(arg, exp_arg, erf_r, radi, radj, inv_radi, dradi, dradj, hardi) &
+   !$omp private(dgamdr, dgamdL, dG, dS, atrace_local, dadr_local, dadL_local)
    allocate(atrace_local, source=atrace)
    allocate(dadr_local, source=dadr)
    allocate(dadL_local, source=dadL)
@@ -803,11 +804,17 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
       ! Effective charge width of i
       norm_cn = 1.0_wp / self%avg_cn(izp)**self%norm_exp
       radi = self%rad(izp) * (1.0_wp - self%kcnrad * cn(iat) * norm_cn)
+      inv_radi = 1.0_wp / radi
       dradi = -self%rad(izp) * self%kcnrad * norm_cn
+      hardi = (self%eta(izp) + self%kqeta(izp) * qloc(iat) &
+         & + sqrt2pi * inv_radi) * qvec(iat)
       do jat = 1, iat - 1
          jzp = mol%id(jat)
          vec = mol%xyz(:, jat) - mol%xyz(:, iat)
-         r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
+         r2 = dot_product(vec, vec)
+         r1 = sqrt(r2)
+         inv_r = 1.0_wp / r1
+         inv_r2 = inv_r * inv_r
          ! Effective charge width of j
          norm_cn = 1.0_wp / self%avg_cn(jzp)**self%norm_exp
          radj = self%rad(jzp) * (1.0_wp - self%kcnrad * cn(jat) * norm_cn)
@@ -816,14 +823,15 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
          ! Coulomb interaction of Gaussian charges
          gam = 1.0_wp / sqrt(radi**2 + radj**2)
          dgamdr(:, :) = -(radi * dradi * dcndr(:, :, iat) + radj * dradj * dcndr(:, :, jat)) &
-                        & * gam**3.0_wp
+                        & * gam**3
          dgamdL(:, :) = -(radi * dradi * dcndL(:, :, iat) + radj * dradj * dcndL(:, :, jat)) &
-                        & * gam**3.0_wp
+                        & * gam**3
 
          ! Explicit derivative
-         arg = gam * gam * r2
-         dtmp = 2.0_wp * gam * exp(-arg) / (sqrtpi * r2) &
-            & - erf(sqrt(arg)) / (r2 * sqrt(r2))
+         arg = gam * r1
+         exp_arg = (2.0_wp / sqrtpi) * exp(-arg**2)
+         erf_r = erf(arg) * inv_r
+         dtmp = (gam * exp_arg - erf_r) * inv_r2
          dG(:) = dtmp * vec
          dS(:, :) = outerprod(vec, dG)
          atrace_local(:, iat) = -dG * qvec(jat) * cmat(jat, iat) + atrace_local(:, iat)
@@ -834,7 +842,7 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
          dadL_local(:, :, jat) = +dS * qvec(iat) * cmat(iat, jat) + dadL_local(:, :, jat)
 
          ! Effective charge width derivative
-         dtmp = 2.0_wp * exp(-arg) / (sqrtpi)
+         dtmp = exp_arg
          ! The widths depend on CN, so every atom can contribute to this pair.
          dadr_local(:, :, iat) = dadr_local(:, :, iat) + dtmp * qvec(jat) * cmat(jat, iat) * dgamdr
          dadr_local(:, :, jat) = dadr_local(:, :, jat) + dtmp * qvec(iat) * cmat(iat, jat) * dgamdr
@@ -842,7 +850,7 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
          dadL_local(:, :, jat) = +dtmp * qvec(iat) * dgamdL(:, :) * cmat(iat, jat) + dadL_local(:, :, jat)
 
          ! Capacitance derivative off-diagonal
-         dtmp = erf(sqrt(r2) * gam) / (sqrt(r2))
+         dtmp = erf_r
          atrace_local(:, iat) = -dtmp * qvec(jat) * dcdr(:, jat, iat) + atrace_local(:, iat)
          atrace_local(:, jat) = -dtmp * qvec(iat) * dcdr(:, iat, jat) + atrace_local(:, jat)
          dadr_local(:, iat, jat) = +dtmp * qvec(iat) * dcdr(:, iat, jat) + dadr_local(:, iat, jat)
@@ -853,8 +861,7 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
                & + dadL_local(:, :, jat)
 
          ! Capacitance derivative diagonal
-         dtmp = (self%eta(izp) + self%kqeta(izp) * qloc(iat) + sqrt2pi / radi) * qvec(iat)
-         dadr_local(:, jat, iat) = -dtmp * dcdr(:, jat, iat) + dadr_local(:, jat, iat)
+         dadr_local(:, jat, iat) = -hardi * dcdr(:, jat, iat) + dadr_local(:, jat, iat)
 
          dtmp = (self%eta(jzp) + self%kqeta(jzp) * qloc(jat) + sqrt2pi / radj) * qvec(jat)
          dadr_local(:, iat, jat) = -dtmp * dcdr(:, iat, jat) + dadr_local(:, iat, jat)
@@ -866,14 +873,13 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
       dadL_local(:, :, iat) = +dtmp * dqlocdL(:, :, iat) + dadL_local(:, :, iat)
 
       ! Effective charge width derivative
-      dtmp = -sqrt2pi * dradi / (radi**2) * qvec(iat) * cmat(iat, iat)
+      dtmp = -sqrt2pi * dradi * inv_radi**2 * qvec(iat) * cmat(iat, iat)
       dadr_local(:, :, iat) = +dtmp * dcndr(:, :, iat) + dadr_local(:, :, iat)
       dadL_local(:, :, iat) = +dtmp * dcndL(:, :, iat) + dadL_local(:, :, iat)
 
       ! Capacitance derivative
-      dtmp = (self%eta(izp) + self%kqeta(izp) * qloc(iat) + sqrt2pi / radi) * qvec(iat)
-      dadr_local(:, iat, iat) = +dtmp * dcdr(:, iat, iat) + dadr_local(:, iat, iat)
-      dadL_local(:, :, iat) = +dtmp * dcdL(:, :, iat) + dadL_local(:, :, iat)
+      dadr_local(:, iat, iat) = +hardi * dcdr(:, iat, iat) + dadr_local(:, iat, iat)
+      dadL_local(:, :, iat) = +hardi * dcdL(:, :, iat) + dadL_local(:, :, iat)
 
    end do
    !$omp end do
@@ -909,7 +915,7 @@ subroutine get_damat_pbc(self, mol, wsc, trans, cn, qloc, qvec, dcndr, dcndL, dq
 
    integer :: iat, jat, izp, jzp, img
    real(wp) :: vec(3), gam, dtmp, norm_cn, rvdw, wsw, dgam
-   real(wp) :: radi, radj, dradi, dradj, dG(3), dS(3, 3)
+   real(wp) :: radi, radj, inv_radi, dradi, dradj, hardi, hardj, dG(3), dS(3, 3)
    real(wp) :: dgamdL(3, 3), capi, capj
    real(wp), allocatable :: dgamdr(:, :)
 
@@ -927,8 +933,9 @@ subroutine get_damat_pbc(self, mol, wsc, trans, cn, qloc, qvec, dcndr, dcndL, dq
    !$omp shared(self, mol, cn, qloc, qvec, wsc, dadr, dadL, atrace) &
    !$omp shared(cmat, dcdr, dcdL, dcndr, dcndL, dqlocdr, dqlocdL, trans) &
    !$omp private(iat, izp, jat, jzp, img, gam, vec, dtmp, norm_cn, rvdw) &
-   !$omp private(radi, radj, dradi, dradj, capi, capj, dgamdr, dgamdL, dG, dS, wsw) &
-   !$omp private(dgam, dadr_local, dadL_local, atrace_local)
+   !$omp private(radi, radj, inv_radi, dradi, dradj, hardi, hardj, capi, capj) &
+   !$omp private(dgamdr, dgamdL, dG, dS, wsw, dgam) &
+   !$omp private(dadr_local, dadL_local, atrace_local)
    allocate(atrace_local, source=atrace)
    allocate(dadr_local, source=dadr)
    allocate(dadL_local, source=dadL)
@@ -938,7 +945,10 @@ subroutine get_damat_pbc(self, mol, wsc, trans, cn, qloc, qvec, dcndr, dcndL, dq
       ! Effective charge width of i
       norm_cn = 1.0_wp / self%avg_cn(izp)**self%norm_exp
       radi = self%rad(izp) * (1.0_wp - self%kcnrad * cn(iat) * norm_cn)
+      inv_radi = 1.0_wp / radi
       dradi = -self%rad(izp) * self%kcnrad * norm_cn
+      hardi = (self%eta(izp) + self%kqeta(izp) * qloc(iat) &
+         & + sqrt2pi * inv_radi) * qvec(iat)
       capi = self%cap(izp)
       do jat = 1, iat - 1
          jzp = mol%id(jat)
@@ -949,13 +959,15 @@ subroutine get_damat_pbc(self, mol, wsc, trans, cn, qloc, qvec, dcndr, dcndL, dq
          norm_cn = 1.0_wp / self%avg_cn(jzp)**self%norm_exp
          radj = self%rad(jzp) * (1.0_wp - self%kcnrad * cn(jat) * norm_cn)
          dradj = -self%rad(jzp) * self%kcnrad * norm_cn
+         hardj = (self%eta(jzp) + self%kqeta(jzp) * qloc(jat) &
+            & + sqrt2pi / radj) * qvec(jat)
 
          ! Coulomb interaction of Gaussian charges
          gam = 1.0_wp / sqrt(radi**2 + radj**2)
          dgamdr(:, :) = -(radi * dradi * dcndr(:, :, iat) + radj * dradj * dcndr(:, :, jat)) &
-                        & * gam**3.0_wp
+                        & * gam**3
          dgamdL(:, :) = -(radi * dradi * dcndL(:, :, iat) + radj * dradj * dcndL(:, :, jat)) &
-                        & * gam**3.0_wp
+                        & * gam**3
 
          wsw = 1.0_wp / real(wsc%nimg(jat, iat), wp)
          do img = 1, wsc%nimg(jat, iat)
@@ -996,10 +1008,8 @@ subroutine get_damat_pbc(self, mol, wsc, trans, cn, qloc, qvec, dcndr, dcndL, dq
             dG = dG * wsw
 
             ! Capacitance derivative diagonal
-            dtmp = (self%eta(izp) + self%kqeta(izp) * qloc(iat) + sqrt2pi / radi) * qvec(iat)
-            dadr_local(:, jat, iat) = +dtmp * dG(:) + dadr_local(:, jat, iat)
-            dtmp = (self%eta(jzp) + self%kqeta(jzp) * qloc(jat) + sqrt2pi / radj) * qvec(jat)
-            dadr_local(:, iat, jat) = -dtmp * dG(:) + dadr_local(:, iat, jat)
+            dadr_local(:, jat, iat) = +hardi * dG(:) + dadr_local(:, jat, iat)
+            dadr_local(:, iat, jat) = -hardj * dG(:) + dadr_local(:, iat, jat)
          end do
       end do
 
@@ -1033,13 +1043,12 @@ subroutine get_damat_pbc(self, mol, wsc, trans, cn, qloc, qvec, dcndr, dcndL, dq
       dadL_local(:, :, iat) = +dtmp * dqlocdL(:, :, iat) + dadL_local(:, :, iat)
 
       ! Effective charge width derivative
-      dtmp = -sqrt2pi * dradi / (radi**2) * qvec(iat) * cmat(iat, iat)
+      dtmp = -sqrt2pi * dradi * inv_radi**2 * qvec(iat) * cmat(iat, iat)
       dadr_local(:, :, iat) = +dtmp * dcndr(:, :, iat) + dadr_local(:, :, iat)
       dadL_local(:, :, iat) = +dtmp * dcndL(:, :, iat) + dadL_local(:, :, iat)
 
-      dtmp = (self%eta(izp) + self%kqeta(izp) * qloc(iat) + sqrt2pi / radi) * qvec(iat)
-      dadr_local(:, iat, iat) = +dtmp * dcdr(:, iat, iat) + dadr_local(:, iat, iat)
-      dadL_local(:, :, iat) = +dtmp * dcdL(:, :, iat) + dadL_local(:, :, iat)
+      dadr_local(:, iat, iat) = +hardi * dcdr(:, iat, iat) + dadr_local(:, iat, iat)
+      dadL_local(:, :, iat) = +hardi * dcdL(:, :, iat) + dadL_local(:, :, iat)
 
    end do
    !$omp end do
@@ -1063,7 +1072,7 @@ subroutine get_damat_dir(rij, trans, capi, capj, rvdw, kbc, gam, dG, dS, dgam)
    real(wp), intent(out) :: dgam
 
    integer :: itr
-   real(wp) :: vec(3), r1, r2, gtmp, gam2, cmat
+   real(wp) :: vec(3), r1, r2, inv_r, inv_r2, exp_term, gtmp, gam2, cmat
 
    dG(:) = 0.0_wp
    dS(:, :) = 0.0_wp
@@ -1077,11 +1086,14 @@ subroutine get_damat_dir(rij, trans, capi, capj, rvdw, kbc, gam, dG, dS, dgam)
       if (r1 < eps) cycle
 
       r2 = r1 * r1
+      inv_r = 1.0_wp / r1
+      inv_r2 = inv_r * inv_r
       call get_cpair(kbc, cmat, r1, rvdw, capi, capj)
-      gtmp = 2.0_wp * gam * exp(-r2 * gam2) / (sqrtpi * r2) - erf(r1 * gam) / (r2 * r1)
+      exp_term = (2.0_wp / sqrtpi) * exp(-r2 * gam2)
+      gtmp = (gam * exp_term - erf(r1 * gam) * inv_r) * inv_r2
       dG(:) = dG - cmat * gtmp * vec
       dS(:, :) = dS - cmat * gtmp * outerprod(vec, vec)
-      dgam = dgam + cmat * 2.0_wp * exp(-gam2 * r2) / sqrtpi
+      dgam = dgam + cmat * exp_term
    end do
 
 end subroutine get_damat_dir
@@ -1105,7 +1117,7 @@ subroutine get_damat_dc_dir(rij, trans, capi, capj, rvdw, kbc, gam, dG, dS)
       r1 = norm2(vec)
       if (r1 < eps) cycle
 
-      call get_dcpair(kbc, vec, rvdw, capi, capj, gtmp, stmp)
+      call get_dcpair(kbc, vec, r1, rvdw, capi, capj, gtmp, stmp)
       tmp = erf(gam * r1) / r1
       dG(:) = dG(:) + tmp * gtmp
       dS(:, :) = dS(:, :) + tmp * stmp
@@ -1258,25 +1270,23 @@ subroutine get_cpair_dir(kbc, rij, trans, rvdw, capi, capj, cpair)
    end do
 end subroutine get_cpair_dir
 
-subroutine get_dcpair(kbc, vec, rvdw, capi, capj, dgpair, dspair)
+subroutine get_dcpair(kbc, vec, r1, rvdw, capi, capj, dgpair, dspair)
    real(wp), intent(in) :: kbc
    real(wp), intent(in) :: vec(3)
+   real(wp), intent(in) :: r1
    real(wp), intent(in) :: rvdw
    real(wp), intent(in) :: capi
    real(wp), intent(in) :: capj
    real(wp), intent(out) :: dgpair(3)
    real(wp), intent(out) :: dspair(3, 3)
 
-   real(wp) :: r1, arg, dtmp
+   real(wp) :: inv_rvdw, arg, dtmp
 
-   dgpair(:) = 0.0_wp
-   dspair(:, :) = 0.0_wp
-
-   r1 = norm2(vec)
    ! Capacitance of bond between atom i and j
-   arg = -(kbc * (r1 - rvdw) / rvdw)**2
-   dtmp = -sqrt(capi * capj) * kbc * exp(arg) / (sqrtpi * rvdw)
-   dgpair = dtmp * vec / r1
+   inv_rvdw = 1.0_wp / rvdw
+   arg = -(kbc * (r1 - rvdw) * inv_rvdw)**2
+   dtmp = -(1.0_wp / sqrtpi) * sqrt(capi * capj) * kbc * exp(arg) * inv_rvdw
+   dgpair = (dtmp / r1) * vec
    dspair = outerprod(vec, dgpair)
 end subroutine get_dcpair
 
@@ -1287,7 +1297,7 @@ subroutine get_dcmat_0d(self, mol, dcdr, dcdL)
    real(wp), intent(out) :: dcdL(:, :, :)
 
    integer :: iat, jat, izp, jzp
-   real(wp) :: vec(3), rvdw, dG(3), dS(3, 3), capi, capj
+   real(wp) :: vec(3), r1, rvdw, dG(3), dS(3, 3), capi, capj
 
    ! Thread-private arrays for reduction
    real(wp), allocatable :: dcdr_local(:, :, :), dcdL_local(:, :, :)
@@ -1297,7 +1307,7 @@ subroutine get_dcmat_0d(self, mol, dcdr, dcdL)
 
    !$omp parallel default(none) &
    !$omp shared(dcdr, dcdL, mol, self) &
-   !$omp private(iat, izp, jat, jzp, vec, rvdw) &
+   !$omp private(iat, izp, jat, jzp, vec, r1, rvdw) &
    !$omp private(dG, dS, capi, capj) &
    !$omp private(dcdr_local, dcdL_local)
    allocate(dcdr_local, source=dcdr)
@@ -1311,8 +1321,9 @@ subroutine get_dcmat_0d(self, mol, dcdr, dcdL)
          capj = self%cap(jzp)
          rvdw = self%rvdw(iat, jat)
          vec = mol%xyz(:, jat) - mol%xyz(:, iat)
+         r1 = norm2(vec)
 
-         call get_dcpair(self%kbc, vec, rvdw, capi, capj, dG, dS)
+         call get_dcpair(self%kbc, vec, r1, rvdw, capi, capj, dG, dS)
 
          ! Off-diagonal elements
          dcdr_local(:, iat, jat) = +dG
@@ -1419,7 +1430,7 @@ subroutine get_dcpair_dir(kbc, rij, trans, rvdw, capi, capj, dgpair, dspair)
       r1 = norm2(vec)
       if (r1 < eps) cycle
 
-      call get_dcpair(kbc, vec, rvdw, capi, capj, dgtmp, dstmp)
+      call get_dcpair(kbc, vec, r1, rvdw, capi, capj, dgtmp, dstmp)
       dgpair(:) = dgpair + dgtmp
       dspair(:, :) = dspair + dstmp
    end do

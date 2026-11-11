@@ -372,7 +372,7 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
          gam = 1.0_wp / sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
          call coulomb_kernel(r, gam, val, dr, drr)
          weight = -(adj(iat) * cache%qvec(jat) + adj(jat) * cache%qvec(iat))
-         call add_pair_hessian(iat, jat, vec, weight * dr, weight * drr, &
+         call add_pair_hessian(iat, jat, vec, r, weight * dr, weight * drr, &
             & hessian, diagonal)
       end do
       !$omp end parallel do
@@ -450,7 +450,7 @@ subroutine add_periodic_hessian(self, mol, ptr, qvec, adj, hessian, diagonal)
             r = norm2(vec)
             call coulomb_kernel(r, gam, val, dr, drr)
             call coulomb_kernel(r, ptr%alpha, val, ar, arr)
-            box = box + wsw * radial_hessian(vec, dr - ar, drr - arr)
+            box = box + wsw * radial_hessian(vec, r, dr - ar, drr - arr)
          end do
          call get_hess_rec_3d(rij, ptr%rtrans, rec_weight, rbox)
          box = box + wsw * rbox
@@ -651,7 +651,7 @@ subroutine get_amat_dir(rij, gam, alp, trans, amat)
       r1 = norm2(vec)
       if (r1 < eps) cycle
 
-      tmp = erf(gam * r1) / r1 - erf(alp * r1) / r1
+      tmp = (erf(gam * r1) - erf(alp * r1)) / r1
       amat = amat + tmp
    end do
 
@@ -742,7 +742,7 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
    real(wp), intent(out) :: atrace(:, :)
 
    integer :: iat, jat, izp, jzp, ipair, npair
-   real(wp) :: vec(3), r2, gam, arg, dtmp, dg(3), ds(3, 3)
+   real(wp) :: vec(3), r1, r2, inv_r, inv_r2, gam, arg, dtmp, dg(3), ds(3, 3)
 
    atrace(:, :) = 0.0_wp
    dadL(:, :, :) = 0.0_wp
@@ -751,7 +751,8 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
    ! Pair derivatives have unique owners. Only atom-wise traces and strain
    ! derivatives need reduction, with O(N) storage per thread.
    !$omp parallel default(none) shared(dadr, mol, self, qvec, npair) &
-   !$omp& private(iat, jat, izp, jzp, ipair, gam, r2, vec, dg, ds, dtmp, arg) &
+   !$omp& private(iat, jat, izp, jzp, ipair, gam, r1, r2, inv_r, inv_r2, &
+   !$omp& vec, dg, ds, dtmp, arg) &
    !$omp& reduction(+:atrace, dadL)
    !$omp do schedule(static)
    do iat = 1, size(dadr, 3)
@@ -768,11 +769,13 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
       izp = mol%id(iat)
       jzp = mol%id(jat)
       vec = mol%xyz(:, jat) - mol%xyz(:, iat)
-      r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
+      r2 = dot_product(vec, vec)
+      r1 = sqrt(r2)
+      inv_r = 1.0_wp / r1
+      inv_r2 = inv_r * inv_r
       gam = 1.0_wp / sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
-      arg = gam * gam * r2
-      dtmp = 2.0_wp * gam * exp(-arg) / (sqrtpi * r2) &
-         & - erf(sqrt(arg)) / (r2 * sqrt(r2))
+      arg = gam * r1
+      dtmp = ((2.0_wp / sqrtpi) * gam * exp(-arg**2) - erf(arg) * inv_r) * inv_r2
       dg = dtmp * vec
       ds = outerprod(vec, dg)
       atrace(:, iat) = atrace(:, iat) - dg * qvec(jat)
@@ -891,13 +894,16 @@ subroutine get_damat_dir(rij, gam, alp, trans, dg, ds)
    real(wp), intent(out) :: ds(3, 3)
 
    integer :: itr
-   real(wp) :: vec(3), r1, r2, gtmp, atmp, gam2, alp2
+   real(wp) :: vec(3), r1, r2, inv_r, inv_r2, gtmp, atmp, dtmp
+   real(wp) :: gam2, alp2, fac_g, fac_a
 
    dg(:) = 0.0_wp
    ds(:, :) = 0.0_wp
 
    gam2 = gam * gam
    alp2 = alp * alp
+   fac_g = (2.0_wp / sqrtpi) * gam
+   fac_a = (2.0_wp / sqrtpi) * alp
 
    do itr = 1, size(trans, 2)
       vec(:) = rij + trans(:, itr)
@@ -905,12 +911,13 @@ subroutine get_damat_dir(rij, gam, alp, trans, dg, ds)
       if (r1 < eps) cycle
 
       r2 = r1 * r1
-      gtmp = +2.0_wp * gam * exp(-r2 * gam2) / (sqrtpi * r2) &
-         & - erf(r1 * gam) / (r2 * r1)
-      atmp = -2.0_wp * alp * exp(-r2 * alp2) / (sqrtpi * r2) &
-         & + erf(r1 * alp) / (r2 * r1)
-      dg(:) = dg + (gtmp + atmp) * vec
-      ds(:, :) = ds + (gtmp + atmp) * outerprod(vec, vec)
+      inv_r = 1.0_wp / r1
+      inv_r2 = inv_r * inv_r
+      gtmp = fac_g * exp(-r2 * gam2) - erf(r1 * gam) * inv_r
+      atmp = erf(r1 * alp) * inv_r - fac_a * exp(-r2 * alp2)
+      dtmp = (gtmp + atmp) * inv_r2
+      dg(:) = dg + dtmp * vec
+      ds(:, :) = ds + dtmp * outerprod(vec, vec)
    end do
 
 end subroutine get_damat_dir
@@ -971,10 +978,10 @@ subroutine get_rec_weights(vol, alpha, trans, weight, strain)
    real(wp), allocatable, intent(out), optional :: strain(:, :, :)
 
    integer :: itr
-   real(wp) :: g2, inv_g2, alp2, fac, vec(3)
+   real(wp) :: g2, inv_g2, inv_alp2, fac, vec(3)
 
    fac = 4.0_wp * pi / vol
-   alp2 = alpha**2
+   inv_alp2 = 1.0_wp / alpha**2
    allocate(weight(size(trans, 2)), source=0.0_wp)
    if (present(strain)) then
       allocate(strain(3, 3, size(trans, 2)), source=0.0_wp)
@@ -986,9 +993,9 @@ subroutine get_rec_weights(vol, alpha, trans, weight, strain)
       if (g2 < eps) cycle
 
       inv_g2 = 1.0_wp / g2
-      weight(itr) = fac * exp(-0.25_wp * g2 / alp2) * inv_g2
+      weight(itr) = fac * exp(-0.25_wp * g2 * inv_alp2) * inv_g2
       if (present(strain)) then
-         strain(:, :, itr) = weight(itr) * ((2.0_wp * inv_g2 + 0.5_wp / alp2) &
+         strain(:, :, itr) = weight(itr) * ((2.0_wp * inv_g2 + 0.5_wp * inv_alp2) &
             & * outerprod(vec, vec) - unity)
       end if
    end do
