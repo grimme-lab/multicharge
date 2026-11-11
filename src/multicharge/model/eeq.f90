@@ -322,7 +322,7 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
    integer :: iat, jat, izp, jzp, nat, ipair, npair, ii
    real(wp), parameter :: reg = 1.0e-14_wp
    real(wp) :: c, vec(3), r, gam, val, dr, drr, weight
-   real(wp), allocatable :: dedcn(:), dcndr(:, :), work(:, :), trans(:, :)
+   real(wp), allocatable :: dEdcn(:), dcndr(:, :), work(:, :), trans(:, :)
    real(wp), allocatable :: diagonal(:, :, :)
 
    call view(cache, ptr)
@@ -332,12 +332,12 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
    end if
 
    nat = mol%nat
-   allocate(dedcn(nat), work(3 * nat, nat))
+   allocate(dEdcn(nat), work(3 * nat, nat))
    dcndr = reshape(ptr%dcndr, [3 * nat, nat])
    do iat = 1, nat
       izp = mol%id(iat)
       c = ptr%cn(iat)
-      dedcn(iat) = adj(iat) * self%kcnchi(izp) * (0.5_wp * c + reg) &
+      dEdcn(iat) = adj(iat) * self%kcnchi(izp) * (0.5_wp * c + reg) &
          & / (c + reg)**1.5_wp
       weight = -adj(iat) * self%kcnchi(izp) * (0.25_wp * c + reg) &
          & / (c + reg)**2.5_wp
@@ -347,7 +347,7 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
       & trans, error)
    if (allocated(error)) return
 
-   call self%ncoord%add_coordination_number_hessian(mol, trans, dedcn, hessian)
+   call self%ncoord%add_coordination_number_hessian(mol, trans, dEdcn, hessian)
    call gemm(work, dcndr, hessian, transb="t", beta=1.0_wp)
 
    allocate(diagonal(3, 3, nat), source=0.0_wp)
@@ -742,7 +742,7 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
    real(wp), intent(out) :: atrace(:, :)
 
    integer :: iat, jat, izp, jzp, ipair, npair
-   real(wp) :: vec(3), r1, r2, inv_r, inv_r2, gam, arg, dtmp, dg(3), ds(3, 3)
+   real(wp) :: vec(3), r1, r2, inv_r, inv_r2, gam, arg, dtmp, dG(3), dS(3, 3)
 
    atrace(:, :) = 0.0_wp
    dadL(:, :, :) = 0.0_wp
@@ -752,7 +752,7 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
    ! derivatives need reduction, with O(N) storage per thread.
    !$omp parallel default(none) shared(dadr, mol, self, qvec, npair) &
    !$omp& private(iat, jat, izp, jzp, ipair, gam, r1, r2, inv_r, inv_r2, &
-   !$omp& vec, dg, ds, dtmp, arg) &
+   !$omp& vec, dG, dS, dtmp, arg) &
    !$omp& reduction(+:atrace, dadL)
    !$omp do schedule(static)
    do iat = 1, size(dadr, 3)
@@ -776,14 +776,14 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
       gam = 1.0_wp / sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
       arg = gam * r1
       dtmp = ((2.0_wp / sqrtpi) * gam * exp(-arg**2) - erf(arg) * inv_r) * inv_r2
-      dg = dtmp * vec
-      ds = outerprod(vec, dg)
-      atrace(:, iat) = atrace(:, iat) - dg * qvec(jat)
-      atrace(:, jat) = atrace(:, jat) + dg * qvec(iat)
-      dadr(:, iat, jat) = -dg * qvec(iat)
-      dadr(:, jat, iat) = +dg * qvec(jat)
-      dadL(:, :, jat) = dadL(:, :, jat) + ds * qvec(iat)
-      dadL(:, :, iat) = dadL(:, :, iat) + ds * qvec(jat)
+      dG = dtmp * vec
+      dS = outerprod(vec, dG)
+      atrace(:, iat) = atrace(:, iat) - dG * qvec(jat)
+      atrace(:, jat) = atrace(:, jat) + dG * qvec(iat)
+      dadr(:, iat, jat) = -dG * qvec(iat)
+      dadr(:, jat, iat) = +dG * qvec(jat)
+      dadL(:, :, jat) = dadL(:, :, jat) + dS * qvec(iat)
+      dadL(:, :, iat) = dadL(:, :, iat) + dS * qvec(jat)
    end do
    !$omp end do
    !$omp end parallel
@@ -816,8 +816,8 @@ subroutine get_damat_pbc(self, mol, ptr, qvec, dadr, dadL, atrace)
    real(wp), intent(out) :: atrace(:, :)
 
    integer :: iat, jat, izp, jzp, img, ipair, npair
-   real(wp) :: gam, wsw, vec(3), dg(3), ds(3, 3)
-   real(wp) :: dgd(3), dsd(3, 3), dgr(3), dsr(3, 3)
+   real(wp) :: gam, wsw, vec(3), dG(3), dS(3, 3)
+   real(wp) :: dGd(3), dSd(3, 3), dGr(3), dSr(3, 3)
    real(wp), allocatable :: rec_weight(:), rec_strain(:, :, :)
 
    atrace(:, :) = 0.0_wp
@@ -827,8 +827,8 @@ subroutine get_damat_pbc(self, mol, ptr, qvec, dadr, dadL, atrace)
    npair = mol%nat * (mol%nat + 1) / 2
    !$omp parallel default(none) &
    !$omp& shared(mol, self, ptr, rec_weight, rec_strain, qvec, dadr, npair) &
-   !$omp& private(iat, jat, izp, jzp, img, ipair, gam, wsw, vec, dg, ds, &
-   !$omp& dgr, dsr, dgd, dsd) &
+   !$omp& private(iat, jat, izp, jzp, img, ipair, gam, wsw, vec, dG, dS, &
+   !$omp& dGr, dSr, dGd, dSd) &
    !$omp& reduction(+:atrace, dadL)
    !$omp do schedule(static)
    do iat = 1, size(dadr, 3)
@@ -842,27 +842,27 @@ subroutine get_damat_pbc(self, mol, ptr, qvec, dadr, dadL, atrace)
       jat = ipair - iat * (iat - 1) / 2
       izp = mol%id(iat)
       jzp = mol%id(jat)
-      dg(:) = 0.0_wp
-      ds(:, :) = 0.0_wp
+      dG(:) = 0.0_wp
+      dS(:, :) = 0.0_wp
       gam = 1.0_wp / sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
       wsw = 1.0_wp / real(ptr%wsc%nimg(jat, iat), wp)
       do img = 1, ptr%wsc%nimg(jat, iat)
          vec = mol%xyz(:, jat) - mol%xyz(:, iat) &
             & + ptr%wsc%trans(:, ptr%wsc%tridx(img, jat, iat))
-         call get_damat_dir(vec, gam, ptr%alpha, ptr%dtrans, dgd, dsd)
-         call get_damat_rec_3d(vec, ptr%rtrans, rec_weight, rec_strain, dgr, dsr)
-         dg = dg + (dgd + dgr) * wsw
-         ds = ds + (dsd + dsr) * wsw
+         call get_damat_dir(vec, gam, ptr%alpha, ptr%dtrans, dGd, dSd)
+         call get_damat_rec_3d(vec, ptr%rtrans, rec_weight, rec_strain, dGr, dSr)
+         dG = dG + (dGd + dGr) * wsw
+         dS = dS + (dSd + dSr) * wsw
       end do
       if (iat == jat) then
-         dadL(:, :, iat) = dadL(:, :, iat) + ds * qvec(iat)
+         dadL(:, :, iat) = dadL(:, :, iat) + dS * qvec(iat)
       else
-         atrace(:, iat) = atrace(:, iat) - dg * qvec(jat)
-         atrace(:, jat) = atrace(:, jat) + dg * qvec(iat)
-         dadr(:, iat, jat) = -dg * qvec(iat)
-         dadr(:, jat, iat) = +dg * qvec(jat)
-         dadL(:, :, jat) = dadL(:, :, jat) + ds * qvec(iat)
-         dadL(:, :, iat) = dadL(:, :, iat) + ds * qvec(jat)
+         atrace(:, iat) = atrace(:, iat) - dG * qvec(jat)
+         atrace(:, jat) = atrace(:, jat) + dG * qvec(iat)
+         dadr(:, iat, jat) = -dG * qvec(iat)
+         dadr(:, jat, iat) = +dG * qvec(jat)
+         dadL(:, :, jat) = dadL(:, :, jat) + dS * qvec(iat)
+         dadL(:, :, iat) = dadL(:, :, iat) + dS * qvec(jat)
       end if
    end do
    !$omp end do
