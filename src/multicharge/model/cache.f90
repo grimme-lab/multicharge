@@ -38,9 +38,6 @@ module multicharge_model_cache
       !> Wigner-Seitz cell
       type(wignerseitz_cell) :: wsc
 
-      !> Translation matrix
-      real(wp), allocatable :: trans(:, :)
-
       !> Local charges
       real(wp), allocatable :: qloc(:)
 
@@ -49,9 +46,6 @@ module multicharge_model_cache
 
       !> Store tmp array from xvec calculation for reuse
       real(wp), allocatable :: xtmp(:)
-
-      !> Electronegativity vector
-      real(wp), allocatable :: xvec(:)
 
       !> Coulomb matrix
       real(wp), allocatable :: amat(:, :)
@@ -77,29 +71,14 @@ module multicharge_model_cache
       !> Derivative of Maxwell capacitance matrix w.r.t positions
       real(wp), allocatable :: dcdr(:, :, :)
 
-      !> Derivative of Maxwell capacitance matrix w.r.t positions, compressed
-      real(wp), allocatable :: dcdrdiag(:, :)
-
       !> Derivative of Maxwell capacitance matrix w.r.t lattice vectors
       real(wp), allocatable :: dcdL(:, :, :)
-
-      !> Coulomb matrix derivatives w.r.t positions
-      real(wp), allocatable :: dadr(:, :, :)
-
-      !> Coulomb matrix derivatives w.r.t lattice vectors
-      real(wp), allocatable :: dadL(:, :, :)
-
-      !> Electronegativity derivatives w.r.t positions
-      real(wp), allocatable :: dxdr(:, :, :)
-
-      !> Electronegativity derivatives w.r.t lattice vectors
-      real(wp), allocatable :: dxdL(:, :, :)
 
       !> Charge derivatives w.r.t positions retained for the charge Hessian
       real(wp), allocatable :: dqdr(:, :, :)
 
       !> Logical flag for gradient calculation
-      logical :: grad
+      logical :: grad = .false.
 
    end type mchrg_cache
 

@@ -118,7 +118,7 @@ subroutine update(self, mol, cache, trans, grad)
 
    call ensure_shape(cache%cn, mol%nat)
 
-   cache%trans = trans
+   cache%grad = grad
 
    ! Refer CN arrays in cache
    if (grad) then
@@ -155,53 +155,51 @@ subroutine get_capacitance_matrix(self, mol, ndim, cache)
    type(mchrg_cache), intent(inout) :: cache
 end subroutine get_capacitance_matrix
 
-subroutine get_xvec(self, mol, ndim, cache)
+subroutine get_xvec(self, mol, ndim, cache, xvec)
    class(eeq_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
    integer, intent(in) :: ndim
    type(mchrg_cache), intent(inout) :: cache
+   real(wp), intent(out) :: xvec(:)
    real(wp), parameter :: reg = 1.0e-14_wp
 
    integer :: iat, izp
    real(wp) :: tmp
 
-   call ensure_shape(cache%xvec, ndim)
-
    !$omp parallel do default(none) schedule(runtime) &
-   !$omp shared(mol, self, cache) private(iat, izp, tmp)
+   !$omp shared(mol, self, cache, xvec) private(iat, izp, tmp)
    do iat = 1, mol%nat
       izp = mol%id(iat)
       tmp = self%kcnchi(izp) / sqrt(cache%cn(iat) + reg)
-      cache%xvec(iat) = -self%chi(izp) + tmp * cache%cn(iat)
+      xvec(iat) = -self%chi(izp) + tmp * cache%cn(iat)
    end do
-   if (ndim == mol%nat + 1) cache%xvec(mol%nat + 1) = mol%charge
+   if (ndim == mol%nat + 1) xvec(mol%nat + 1) = mol%charge
 
 end subroutine get_xvec
 
-subroutine get_xvec_derivs(self, mol, ndim, cache)
+subroutine get_xvec_derivs(self, mol, ndim, cache, dxdr, dxdL)
    class(eeq_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
    integer, intent(in) :: ndim
    type(mchrg_cache), intent(inout) :: cache
+   real(wp), intent(out), contiguous :: dxdr(:, :, :)
+   real(wp), intent(out), contiguous :: dxdL(:, :, :)
    real(wp), parameter :: reg = 1.0e-14_wp
 
    integer :: iat, izp
    real(wp) :: tmp
 
-   call ensure_shape(cache%dxdr, 3, mol%nat, ndim)
-   call ensure_shape(cache%dxdL, 3, 3, ndim)
-
-   cache%dxdr(:, :, :) = 0.0_wp
-   cache%dxdL(:, :, :) = 0.0_wp
+   dxdr(:, :, :) = 0.0_wp
+   dxdL(:, :, :) = 0.0_wp
 
    !$omp parallel do default(none) schedule(runtime) &
-   !$omp shared(mol, self, cache) &
+   !$omp shared(mol, self, cache, dxdr, dxdL) &
    !$omp private(iat, izp, tmp)
    do iat = 1, mol%nat
       izp = mol%id(iat)
       tmp = self%kcnchi(izp) * (0.5_wp*cache%cn(iat) + reg) / (cache%cn(iat) + reg)**1.5_wp
-      cache%dxdr(:, :, iat) = tmp * cache%dcndr(:, :, iat)
-      cache%dxdL(:, :, iat) = tmp * cache%dcndL(:, :, iat)
+      dxdr(:, :, iat) = tmp * cache%dcndr(:, :, iat)
+      dxdL(:, :, iat) = tmp * cache%dcndL(:, :, iat)
    end do
 
 end subroutine get_xvec_derivs
@@ -465,26 +463,27 @@ subroutine get_amat_rec_3d(rij, trans, weight, amat)
    end do
 end subroutine get_amat_rec_3d
 
-subroutine get_coulomb_derivs(self, mol, ndim, cache)
+subroutine get_coulomb_derivs(self, mol, ndim, cache, qvec, dadr, dadL)
    class(eeq_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
    integer, intent(in) :: ndim
    type(mchrg_cache), intent(inout) :: cache
+   real(wp), intent(in) :: qvec(:)
+   real(wp), intent(out), contiguous :: dadr(:, :, :)
+   real(wp), intent(out), contiguous :: dadL(:, :, :)
 
    integer :: iat
    real(wp), allocatable :: atrace(:, :)
 
    allocate(atrace(3, mol%nat))
-   call ensure_shape(cache%dadr, 3, mol%nat, ndim)
-   call ensure_shape(cache%dadL, 3, 3, ndim)
 
    if (any(mol%periodic)) then
-      call get_damat_3d(self, mol, cache%wsc, cache%alpha, cache%vrhs, cache%dadr, cache%dadL, atrace)
+      call get_damat_3d(self, mol, cache%wsc, cache%alpha, qvec, dadr, dadL, atrace)
    else
-      call get_damat_0d(self, mol, cache%vrhs, cache%dadr, cache%dadL, atrace)
+      call get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
    end if
    do iat = 1, mol%nat
-      cache%dadr(:, iat, iat) = atrace(:, iat) + cache%dadr(:, iat, iat)
+      dadr(:, iat, iat) = atrace(:, iat) + dadr(:, iat, iat)
    end do
 end subroutine get_coulomb_derivs
 

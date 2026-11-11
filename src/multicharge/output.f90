@@ -101,8 +101,8 @@ subroutine write_ascii_properties(unit, mol, model, cn, qvec)
    do iat = 1, mol%nat
       isp = mol%id(iat)
       write(unit, "(i10,1x,i4,1x,a4,*(1x,f10.4))") &
-      & iat, mol%num(isp), mol%sym(isp), cn(iat), qvec(iat), &
-      & model%chi(isp) - model%kcnchi(isp) * sqrt(cn(iat))
+         & iat, mol%num(isp), mol%sym(isp), cn(iat), qvec(iat), &
+         & model%chi(isp) - model%kcnchi(isp) * sqrt(cn(iat))
    end do
    write(unit, '(54("-"))')
    write(unit, "(a7,26x,f10.4)") "Σ", sum(qvec)
@@ -142,20 +142,20 @@ subroutine write_ascii_results(unit, mol, energy, gradient, sigma, dqdr, dqdL)
    write(unit, "(a)")
    if (grad) then
       write(unit, '(a,":", t25, es20.13, 1x, a)') &
-      & "Energy gradient norm", norm2(gradient), "Eh/a0"
+         & "Energy gradient norm", norm2(gradient), "Eh/a0"
       write(unit, '(54("-"))')
       write(unit, "(a10,1x,a4,5x,*(1x,a10))") "#", "Z", "dE/dx", "dE/dy", "dE/dz"
       write(unit, '(54("-"))')
       do iat = 1, mol%nat
          isp = mol%id(iat)
          write(unit, "(i10,1x,i4,1x,a4,*(es11.3))") &
-         & iat, mol%num(isp), mol%sym(isp), gradient(:, iat)
+            & iat, mol%num(isp), mol%sym(isp), gradient(:, iat)
       end do
       write(unit, '(54("-"))')
       write(unit, "(a)")
 
       write(unit, '(a,":")') &
-      & "Energy virial"
+         & "Energy virial"
       write(unit, '(50("-"))')
       write(unit, "(a15,1x,*(1x,a10))") "component", "x", "y", "z"
       write(unit, '(50("-"))')
@@ -169,7 +169,7 @@ subroutine write_ascii_results(unit, mol, energy, gradient, sigma, dqdr, dqdL)
 
    if (qgrad) then
       write(unit, '(a,":", t25, es20.13, 1x, a)') &
-      & "Charge gradient norm", norm2(dqdr), "a.u./a0"
+         & "Charge gradient norm", norm2(dqdr), "a.u./a0"
       write(unit, '(72("-"))')
       write(unit, "(a10,1x,a4,3x,a6,1x,a4,3x,*(1x,a12))") &
          & "#", "Z", "#", "A", "dQ(Z)/dx(A)", "dQ(Z)/dy(A)", "dQ(Z)/dz(A)"
@@ -179,15 +179,15 @@ subroutine write_ascii_results(unit, mol, energy, gradient, sigma, dqdr, dqdL)
          do jat = 1, mol%nat
             jsp = mol%id(jat)
             write(unit, "(i10,1x,i3,1x,a2,1x,i6,1x,i3,1x,a2,*(2x ,es11.3))") &
-            & iat, mol%num(isp), mol%sym(isp), jat, mol%num(jsp), mol%sym(jsp), &
-            & dqdr(:, jat, iat)
+               & iat, mol%num(isp), mol%sym(isp), jat, mol%num(jsp), mol%sym(jsp), &
+               & dqdr(:, jat, iat)
          end do
       end do
       write(unit, '(72("-"))')
       write(unit, "(a)")
 
       write(unit, '(a,":")') &
-      & "Charge virial"
+         & "Charge virial"
       write(unit, '(62("-"))')
       write(unit, "(a10,1x,a4,3x,a9,1x,*(1x, a10))") &
          & "#", "Z", "component", "x", "y", "z"
@@ -196,7 +196,7 @@ subroutine write_ascii_results(unit, mol, energy, gradient, sigma, dqdr, dqdL)
          isp = mol%id(iat)
          do jat = 1, 3
             write(unit, "(i10,1x,i3,1x,a2, 2x, a4, 5x,*(es11.3))") &
-            & iat, mol%num(isp), mol%sym(isp), comp(jat), dqdL(:, jat, iat)
+               & iat, mol%num(isp), mol%sym(isp), comp(jat), dqdL(:, jat, iat)
          end do
       end do
       write(unit, '(62("-"))')
@@ -358,7 +358,7 @@ end subroutine print_cg_convergence
 
 !> Print the CG iteration progress
 subroutine print_cg_iteration(unit, iter, res_norm, step, rel_resnorm, &
-      & verbosity, timer)
+   & verbosity, timer)
 
    !> Output unit
    integer, intent(in) :: unit

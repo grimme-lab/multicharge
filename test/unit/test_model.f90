@@ -122,6 +122,7 @@ subroutine test_dadr(error, mol, model)
    real(wp), allocatable :: qvec(:), numgrad(:, :, :), numtrace(:, :)
    real(wp), allocatable :: amatr1(:, :), amatr2(:, :), amatl1(:, :), amatl2(:, :)
    type(mchrg_cache), allocatable :: cache
+   real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :)
    logical, parameter :: grad = .true.
 
    allocate(cg_input :: solver_input)
@@ -212,16 +213,17 @@ subroutine test_dadr(error, mol, model)
    ! Analytical gradient
    call model%update(mol, cache, trans, grad)
    call model%get_capacitance_matrix(mol, ndim, cache)
-   call model%get_coulomb_derivs(mol, ndim, cache)
+   allocate(dadr(3, mol%nat, ndim), dadL(3, 3, ndim))
+   call model%get_coulomb_derivs(mol, ndim, cache, qvec, dadr, dadL)
 
-   if (any(abs(cache%dadr(:, :, :) - numgrad(:, :, :)) > thr2_local)) then
+   if (any(abs(dadr(:, :, :) - numgrad(:, :, :)) > thr2_local)) then
       call test_failed(error, "Derivative of the A matrix does not match")
       print"(a)", "dadr:"
-      print"(3es21.12)", cache%dadr
+      print"(3es21.12)", dadr
       print"(a)", "numgrad:"
       print"(3es21.12)", numgrad
       print"(a)", "diff:"
-      print"(3es21.12)", cache%dadr - numgrad
+      print"(3es21.12)", dadr - numgrad
    end if
 
 end subroutine test_dadr
@@ -252,6 +254,7 @@ subroutine test_dadL(error, mol, model)
    real(wp), allocatable :: qvec(:), numsigma(:, :, :), amatr(:, :), amatl(:, :)
    real(wp) :: eps(3, 3)
    type(mchrg_cache), allocatable :: cache
+   real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :)
    logical, parameter :: grad = .true.
 
    allocate(cg_input :: solver_input)
@@ -268,7 +271,7 @@ subroutine test_dadL(error, mol, model)
    allocate (cache)
 
    allocate (amatr(ndim, ndim), amatl(ndim, ndim), xyz(3, mol%nat), &
-   & numsigma(3, 3, ndim), qvec(mol%nat))
+      & numsigma(3, 3, ndim), qvec(mol%nat))
 
    call model%update(mol, cache, trans, grad=.false.)
    call model%solve(mol, solver, cache, error, qvec=qvec, unit=output_unit)
@@ -311,17 +314,18 @@ subroutine test_dadL(error, mol, model)
 
    call model%update(mol, cache, trans, grad)
    call model%get_capacitance_matrix(mol, ndim, cache)
-   call model%get_coulomb_derivs(mol, ndim, cache)
+   allocate(dadr(3, mol%nat, ndim), dadL(3, 3, ndim))
+   call model%get_coulomb_derivs(mol, ndim, cache, qvec, dadr, dadL)
    if (allocated(error)) return
 
-   if (any(abs(cache%dadL(:, :, :) - numsigma(:, :, :)) > thr2)) then
+   if (any(abs(dadL(:, :, :) - numsigma(:, :, :)) > thr2)) then
       call test_failed(error, "Derivative of the A matrix does not match")
       print"(a)", "dadL:"
-      print"(3es21.12)", cache%dadL
+      print"(3es21.12)", dadL
       print"(a)", "numsigma:"
       print"(3es21.12)", numsigma
       print"(a)", "diff:"
-      print"(3es21.12)", cache%dadL - numsigma
+      print"(3es21.12)", dadL - numsigma
    end if
 
 end subroutine test_dadL
@@ -366,7 +370,7 @@ subroutine test_dbdr(error, mol, model)
    allocate (cache)
 
    allocate (xvecr(mol%nat), xvecl(mol%nat), numgrad(3, mol%nat, mol%nat), &
-   & dbdr(3, mol%nat, mol%nat), dbdL(3, 3, mol%nat))
+      & dbdr(3, mol%nat, mol%nat), dbdL(3, 3, mol%nat))
 
    lp: do iat = 1, mol%nat
       do ic = 1, 3
@@ -375,16 +379,14 @@ subroutine test_dbdr(error, mol, model)
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
          call model%update(mol, cache, trans, grad=.false.)
          call model%get_capacitance_matrix(mol, ndim, cache)
-         call model%get_xvec(mol, ndim, cache)
-         xvecr = cache%xvec
+         call model%get_xvec(mol, ndim, cache, xvecr)
 
          ! Left-hand side
          xvecl(:) = 0.0_wp
          mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2*step
          call model%update(mol, cache, trans, grad=.false.)
          call model%get_capacitance_matrix(mol, ndim, cache)
-         call model%get_xvec(mol, ndim, cache)
-         xvecl = cache%xvec
+         call model%get_xvec(mol, ndim, cache, xvecl)
 
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
          numgrad(ic, iat, :) = 0.5_wp*(xvecr(:) - xvecl(:))/step
@@ -394,10 +396,8 @@ subroutine test_dbdr(error, mol, model)
    ! Analytical gradient
    call model%update(mol, cache, trans, grad)
    call model%get_capacitance_matrix(mol, ndim, cache)
-   call model%get_xvec(mol, ndim, cache) ! need to call this for xtmp in cache (eeqbc)
-   call model%get_xvec_derivs(mol, ndim, cache)
-
-   dbdr = cache%dxdr
+   call model%get_xvec(mol, ndim, cache, xvecl) ! need to call this for xtmp in cache (eeqbc)
+   call model%get_xvec_derivs(mol, ndim, cache, dbdr, dbdL)
 
    if (any(abs(dbdr(:, :, :) - numgrad(:, :, :)) > thr2)) then
       call test_failed(error, "Derivative of the b vector does not match")
@@ -454,7 +454,7 @@ subroutine test_dbdL(error, mol, model)
    allocate (cache)
 
    allocate (xvecr(mol%nat), xvecl(mol%nat), numsigma(3, 3, mol%nat), &
-   & dbdr(3, mol%nat, mol%nat), dbdL(3, 3, mol%nat), xyz(3, mol%nat))
+      & dbdr(3, mol%nat, mol%nat), dbdL(3, 3, mol%nat), xyz(3, mol%nat))
 
    numsigma = 0.0_wp
 
@@ -468,8 +468,7 @@ subroutine test_dbdL(error, mol, model)
          mol%xyz(:, :) = matmul(eps, xyz)
          call model%update(mol, cache, trans, grad=.false.)
          call model%get_capacitance_matrix(mol, ndim, cache)
-         call model%get_xvec(mol, ndim, cache)
-         xvecr = cache%xvec
+         call model%get_xvec(mol, ndim, cache, xvecr)
 
          ! Left-hand side
          xvecl(:) = 0.0_wp
@@ -477,8 +476,7 @@ subroutine test_dbdL(error, mol, model)
          mol%xyz(:, :) = matmul(eps, xyz)
          call model%update(mol, cache, trans, grad=.false.)
          call model%get_capacitance_matrix(mol, ndim, cache)
-         call model%get_xvec(mol, ndim, cache)
-         xvecl = cache%xvec
+         call model%get_xvec(mol, ndim, cache, xvecl)
 
          eps(jc, ic) = eps(jc, ic) + step
          mol%xyz(:, :) = xyz
@@ -491,10 +489,8 @@ subroutine test_dbdL(error, mol, model)
    ! Analytical gradient
    call model%update(mol, cache, trans, grad)
    call model%get_capacitance_matrix(mol, ndim, cache)
-   call model%get_xvec(mol, ndim, cache) ! need to call this for xtmp in cache (eeqbc)
-   call model%get_xvec_derivs(mol, ndim, cache)
-
-   dbdL = cache%dxdL
+   call model%get_xvec(mol, ndim, cache, xvecl) ! need to call this for xtmp in cache (eeqbc)
+   call model%get_xvec_derivs(mol, ndim, cache, dbdr, dbdL)
 
    if (any(abs(dbdL(:, :, :) - numsigma(:, :, :)) > thr2)) then
       call test_failed(error, "Derivative of the b vector does not match")
@@ -661,7 +657,7 @@ subroutine test_numgrad(error, mol, model)
 
    call model%update(mol, cache, trans, grad)
    call model%solve(mol, solver, cache, error, &
-   & gradient=gradient, sigma=sigma, unit=output_unit)
+      & gradient=gradient, sigma=sigma, unit=output_unit)
    if (allocated(error)) return
 
    if (any(abs(gradient(:, :) - numgrad(:, :)) > thr2)) then
@@ -753,7 +749,7 @@ subroutine test_numsigma(error, mol, model)
    energy(:) = 0.0_wp
    call model%update(mol, cache, trans, grad)
    call model%solve(mol, solver, cache, error, &
-   & gradient=gradient, sigma=sigma, unit=output_unit)
+      & gradient=gradient, sigma=sigma, unit=output_unit)
    if (allocated(error)) return
 
    if (any(abs(sigma(:, :) - numsigma(:, :)) > thr2)) then
@@ -803,7 +799,7 @@ subroutine test_numdqdr(error, mol, model)
    if (allocated(error)) return
 
    allocate (ql(mol%nat), qr(mol%nat), dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat), &
-   & numdr(3, mol%nat, mol%nat))
+      & numdr(3, mol%nat, mol%nat))
 
    allocate(cache)
 
@@ -827,7 +823,7 @@ subroutine test_numdqdr(error, mol, model)
 
    call model%update(mol, cache, trans, grad)
    call model%solve(mol, solver, cache, error, &
-   & dqdr=dqdr, dqdL=dqdL, unit=output_unit)
+      & dqdr=dqdr, dqdL=dqdL, unit=output_unit)
    if (allocated(error)) return
 
    if (any(abs(dqdr(:, :, :) - numdr(:, :, :)) > thr2)) then
@@ -879,7 +875,7 @@ subroutine test_numdqdL(error, mol, model)
    if (allocated(error)) return
 
    allocate (qr(mol%nat), ql(mol%nat), dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat), &
-   & xyz(3, mol%nat), numdL(3, 3, mol%nat))
+      & xyz(3, mol%nat), numdL(3, 3, mol%nat))
 
    allocate(cache)
 
@@ -912,7 +908,7 @@ subroutine test_numdqdL(error, mol, model)
 
    call model%update(mol, cache, trans, grad)
    call model%solve(mol, solver, cache, error, &
-   &  dqdr=dqdr, dqdL=dqdL, unit=output_unit)
+      &  dqdr=dqdr, dqdL=dqdL, unit=output_unit)
    if (allocated(error)) return
 
    if (any(abs(dqdL(:, :, :) - numdL(:, :, :)) > thr2)) then

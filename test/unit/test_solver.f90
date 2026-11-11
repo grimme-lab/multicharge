@@ -362,8 +362,8 @@ subroutine test_cg_spd_small(error)
 
    ! SPD matrix
    amat = reshape([4.0_wp, 1.0_wp, 1.0_wp, &
-   &1.0_wp, 3.0_wp, 2.0_wp, &
-   &1.0_wp, 2.0_wp, 4.0_wp], [n, n])
+      & 1.0_wp, 3.0_wp, 2.0_wp, &
+      & 1.0_wp, 2.0_wp, 4.0_wp], [n, n])
 
    ! RHS vector
    xvec = [6.0_wp, 6.0_wp, 7.0_wp]

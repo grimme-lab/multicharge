@@ -16,12 +16,16 @@
 !> @file multicharge/model/type.f90
 !> Provides a general base class for the charge models
 
+#ifndef IK
+#define IK i4
+#endif
+
 !> General charge model
 module multicharge_model_type
 
    use, intrinsic :: iso_fortran_env, only : output_unit
    use mctc_cutoff, only: get_lattice_points
-   use mctc_env, only : timer_type, format_time, error_type, fatal_error, wp
+   use mctc_env, only : timer_type, format_time, error_type, fatal_error, wp, ik => IK
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
    use mctc_io_math, only: matinv_3x3
@@ -138,7 +142,7 @@ module multicharge_model_type
       end subroutine get_coulomb_matrix
 
       !> Coulomb matrix derivatives contracted with charges
-      subroutine get_coulomb_derivs(self, mol, ndim, cache)
+      subroutine get_coulomb_derivs(self, mol, ndim, cache, qvec, dadr, dadL)
          import :: mchrg_model_type, structure_type, mchrg_cache, wp
 
          !> Multicharge model type
@@ -150,13 +154,22 @@ module multicharge_model_type
          !> System size
          integer, intent(in) :: ndim
 
-         !> Multicharge cache holding Coulomb-matrix derivatives
+         !> Multicharge cache with CN, local charges, and capacitance data
          type(mchrg_cache), intent(inout) :: cache
+
+         !> Charges contracted with the Coulomb-matrix derivatives
+         real(wp), intent(in) :: qvec(:)
+
+         !> Coulomb matrix derivatives w.r.t positions
+         real(wp), intent(out), contiguous :: dadr(:, :, :)
+
+         !> Coulomb matrix derivatives w.r.t lattice vectors
+         real(wp), intent(out), contiguous :: dadL(:, :, :)
       end subroutine get_coulomb_derivs
 
       !> Electronegativity vector construction
-      subroutine get_xvec(self, mol, ndim, cache)
-         import :: mchrg_model_type, mchrg_cache, structure_type
+      subroutine get_xvec(self, mol, ndim, cache, xvec)
+         import :: mchrg_model_type, mchrg_cache, structure_type, wp
 
          !> Multicharge model type
          class(mchrg_model_type), intent(in) :: self
@@ -167,12 +180,15 @@ module multicharge_model_type
          !> System size
          integer, intent(in) :: ndim
 
-         !> Multicharge cache holding the electronegativity vector
+         !> Multicharge cache with CN, local charges, and capacitance data
          type(mchrg_cache), intent(inout) :: cache
+
+         !> Electronegativity vector
+         real(wp), intent(out) :: xvec(:)
       end subroutine get_xvec
 
       !> Derivatives of electronegativity vector
-      subroutine get_xvec_derivs(self, mol, ndim, cache)
+      subroutine get_xvec_derivs(self, mol, ndim, cache, dxdr, dxdL)
          import :: mchrg_model_type, structure_type, mchrg_cache, wp
 
          !> Multicharge model type
@@ -184,8 +200,14 @@ module multicharge_model_type
          !> System size
          integer, intent(in) :: ndim
 
-         !> Multicharge cache holding electronegativity-vector derivatives
+         !> Multicharge cache with CN, local charges, and capacitance data
          type(mchrg_cache), intent(inout) :: cache
+
+         !> Electronegativity derivatives w.r.t positions
+         real(wp), intent(out), contiguous :: dxdr(:, :, :)
+
+         !> Electronegativity derivatives w.r.t lattice vectors
+         real(wp), intent(out), contiguous :: dxdL(:, :, :)
       end subroutine get_xvec_derivs
 
    end interface
@@ -293,6 +315,9 @@ subroutine solve(self, mol, solver, cache, error, &
    real(wp) :: lambda
    real(wp), allocatable :: daqxdr(:, :, :)
    real(wp), allocatable :: daqxdL(:, :, :)
+   real(wp), allocatable :: xvec(:)
+   real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :)
+   real(wp), allocatable :: dxdr(:, :, :), dxdL(:, :, :)
 
    logical :: grad, cpq
    logical :: add_lagr
@@ -303,6 +328,13 @@ subroutine solve(self, mol, solver, cache, error, &
    ! Calculate gradient if the respective arrays are present
    grad = present(gradient) .and. present(sigma)
    cpq = present(dqdr) .and. present(dqdL)
+
+   ! Derivatives need a cache updated with CN and local charge derivatives
+   if ((grad .or. cpq) .and. .not. cache%grad) then
+      call fatal_error(error, "Gradients and charge derivatives require "//&
+         & "a cache updated with derivatives (grad=.true.)")
+      return
+   end if
 
    if (.not. present(verbosity)) then
       verbosity_solve = 0
@@ -336,7 +368,8 @@ subroutine solve(self, mol, solver, cache, error, &
    ! Setup the system matrices and vectors
    call self%get_capacitance_matrix(mol, ndim, cache)
    call self%get_coulomb_matrix(mol, ndim, cache)
-   call self%get_xvec(mol, ndim, cache)
+   allocate(xvec(ndim))
+   call self%get_xvec(mol, ndim, cache, xvec)
    call ensure_shape(cache%vrhs, mol%nat + 1)
 
    ! Trial product operator referencing the dense matrix in the cache
@@ -352,12 +385,12 @@ subroutine solve(self, mol, solver, cache, error, &
       if (cpq) then
          ! The inverse matrix is needed for the charge derivatives
          call ensure_shape(cache%ainv, ndim, ndim)
-         call solver%solve(tprod=tprod, xvec=cache%xvec, &
+         call solver%solve(tprod=tprod, xvec=xvec, &
             & vrhs=cache%vrhs, ainv=cache%ainv, new_unit=print_unit, &
             & error=error)
       else
          if (allocated(cache%ainv)) deallocate(cache%ainv)
-         call solver%solve(tprod=tprod, xvec=cache%xvec, &
+         call solver%solve(tprod=tprod, xvec=xvec, &
             & vrhs=cache%vrhs, new_unit=print_unit, error=error)
       end if
       if (allocated(error)) return
@@ -375,7 +408,7 @@ subroutine solve(self, mol, solver, cache, error, &
 
       ! Initial guess
       uvec(:) = prec
-      vvec(:) = - cache%xvec(:mol%nat) * prec
+      vvec(:) = - xvec(:mol%nat) * prec
 
       unitvec = 1.0_wp
 
@@ -387,7 +420,7 @@ subroutine solve(self, mol, solver, cache, error, &
       call print_constrained_system_message(print_unit, verbosity_solve, "v")
 
       ! Unconstrained response: A*vvec = -xvec
-      call solver%solve(tprod=tprod, xvec=-cache%xvec, vrhs=vvec, prec=prec, &
+      call solver%solve(tprod=tprod, xvec=-xvec, vrhs=vvec, prec=prec, &
          & new_unit=print_unit, error=error)
       if (allocated(error)) return
       uvecsum = sum(uvec)
@@ -409,14 +442,13 @@ subroutine solve(self, mol, solver, cache, error, &
    ! Electrostatic energy if present
    if (present(energy)) then
       call timer%push("energy")
-      call symv(cache%amat, cache%vrhs(:ndim), cache%xvec(:ndim), &
+      call symv(cache%amat, cache%vrhs(:ndim), xvec, &
          & alpha=0.5_wp, beta=-1.0_wp, uplo="l")
       if (ndim > mol%nat) then
          ! Correct xvec to exclude constraint term
-         cache%xvec(:mol%nat) = cache%xvec(:mol%nat) &
-            & - 0.5_wp * cache%vrhs(mol%nat + 1)
+         xvec(:mol%nat) = xvec(:mol%nat) - 0.5_wp * cache%vrhs(mol%nat + 1)
       end if
-      energy(:) = energy(:) + cache%vrhs(:mol%nat) * cache%xvec(:mol%nat)
+      energy(:) = energy(:) + cache%vrhs(:mol%nat) * xvec(:mol%nat)
       call timer%pop
       call print_energy_time(print_unit, verbosity_solve, timer%get("energy"))
    end if
@@ -425,7 +457,8 @@ subroutine solve(self, mol, solver, cache, error, &
    if (grad .or. cpq) then
       call timer%push("setup_gradient")
       call timer%push("dxdr_setup")
-      call self%get_xvec_derivs(mol, ndim, cache)
+      allocate(dxdr(3, mol%nat, ndim), dxdL(3, 3, ndim))
+      call self%get_xvec_derivs(mol, ndim, cache, dxdr, dxdL)
       call timer%pop
       if (verbosity_solve > 1) then
          write(print_unit, "(a, 1x, a)") &
@@ -434,7 +467,8 @@ subroutine solve(self, mol, solver, cache, error, &
          write(print_unit, "(a)") ""
       end if
       call timer%push("dadr_setup")
-      call self%get_coulomb_derivs(mol, ndim, cache)
+      allocate(dadr(3, mol%nat, ndim), dadL(3, 3, ndim))
+      call self%get_coulomb_derivs(mol, ndim, cache, cache%vrhs(:ndim), dadr, dadL)
       call timer%pop
       if (verbosity_solve > 1) then
          write(print_unit, "(a, 1x, a)") &
@@ -452,13 +486,14 @@ subroutine solve(self, mol, solver, cache, error, &
    ! Calculate gradients if requested
    if (grad) then
       call timer%push("gradient")
-      call gemv(cache%dadr(:, :, :mol%nat), cache%vrhs(:mol%nat), gradient, &
+      gradient = 0.0_wp
+      call gemv(dadr(:, :, :mol%nat), cache%vrhs(:mol%nat), gradient, &
          & beta=1.0_wp, alpha=0.5_wp)
-      call gemv(cache%dxdr(:, :, :mol%nat), cache%vrhs(:mol%nat), gradient, &
+      call gemv(dxdr(:, :, :mol%nat), cache%vrhs(:mol%nat), gradient, &
          & beta=1.0_wp, alpha=-1.0_wp)
-      call gemv(cache%dadL(:, :, :mol%nat), cache%vrhs(:mol%nat), sigma, &
+      call gemv(dadL(:, :, :mol%nat), cache%vrhs(:mol%nat), sigma, &
          & beta=1.0_wp, alpha=0.5_wp)
-      call gemv(cache%dxdL(:, :, :mol%nat), cache%vrhs(:mol%nat), sigma, &
+      call gemv(dxdL(:, :, :mol%nat), cache%vrhs(:mol%nat), sigma, &
          & beta=1.0_wp, alpha=-1.0_wp)
       ! pop gradient timer
       call timer%pop
@@ -473,8 +508,8 @@ subroutine solve(self, mol, solver, cache, error, &
 
       call timer%push("cpq")
       do iat = 1, mol%nat
-         daqxdr(:, :, iat) = cache%dxdr(:, :, iat) - cache%dadr(:, :, iat)
-         daqxdL(:, :, iat) = cache%dxdL(:, :, iat) - cache%dadL(:, :, iat)
+         daqxdr(:, :, iat) = dxdr(:, :, iat) - dadr(:, :, iat)
+         daqxdL(:, :, iat) = dxdL(:, :, iat) - dadL(:, :, iat)
       end do
       call gemm(daqxdr, cache%ainv(:, :mol%nat), dqdr, alpha=1.0_wp)
       call gemm(daqxdL, cache%ainv(:, :mol%nat), dqdL, alpha=1.0_wp)
@@ -502,7 +537,7 @@ subroutine add_charge_hessian(self, mol, error, weights, hessian, cache)
    type(mchrg_cache), intent(inout) :: cache
 
    integer :: nat
-   real(wp), allocatable :: adj(:), rhs(:), qvec(:)
+   real(wp), allocatable :: adj(:), rhs(:)
    real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :)
 
    nat = mol%nat
@@ -533,16 +568,10 @@ subroutine add_charge_hessian(self, mol, error, weights, hessian, cache)
    if (allocated(error)) return
 
    ! Reuse the first derivative action with the adjoint in place of the charges
-   call move_alloc(cache%vrhs, qvec)
-   call move_alloc(cache%dadr, dadr)
-   call move_alloc(cache%dadL, dadL)
-   cache%vrhs = adj
-   call self%get_coulomb_derivs(mol, nat + 1, cache)
-   call add_symmetric_product(reshape(cache%dadr(:, :, :nat), [3 * nat, nat]), &
+   allocate(dadr(3, nat, nat + 1), dadL(3, 3, nat + 1))
+   call self%get_coulomb_derivs(mol, nat + 1, cache, adj, dadr, dadL)
+   call add_symmetric_product(reshape(dadr(:, :, :nat), [3 * nat, nat]), &
       & reshape(cache%dqdr, [3 * nat, nat]), hessian, alpha=-1.0_wp)
-   call move_alloc(qvec, cache%vrhs)
-   call move_alloc(dadr, cache%dadr)
-   call move_alloc(dadL, cache%dadL)
 end subroutine add_charge_hessian
 
 
