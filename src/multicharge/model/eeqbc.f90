@@ -196,6 +196,7 @@ subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlo
    real(wp), intent(in), optional :: dqlocdr(:, :, :)
    real(wp), intent(in), optional :: dqlocdL(:, :, :)
 
+   integer :: ndim
    logical :: grad
    type(eeqbc_cache), pointer :: ptr
 
@@ -218,19 +219,30 @@ subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlo
       ptr%dqlocdL = dqlocdL
    end if
 
+   ndim = mol%nat + 1
+
    ! Allocate (for get_xvec and xvec_derivs)
-   if (allocated(ptr%xtmp)) deallocate(ptr%xtmp)
-   allocate(ptr%xtmp(mol%nat + 1))
+   if (allocated(ptr%xtmp)) then
+      if (size(ptr%xtmp) /= ndim) deallocate(ptr%xtmp)
+   end if
+   if (.not. allocated(ptr%xtmp)) allocate(ptr%xtmp(ndim))
 
    ! Allocate cmat
-   if (allocated(ptr%cmat)) deallocate(ptr%cmat)
-   allocate(ptr%cmat(mol%nat + 1, mol%nat + 1))
+   if (allocated(ptr%cmat)) then
+      if (any(shape(ptr%cmat) /= [ndim, ndim])) deallocate(ptr%cmat)
+   end if
+   if (.not. allocated(ptr%cmat)) allocate(ptr%cmat(ndim, ndim))
 
    if (grad) then
-      if (allocated(ptr%dcdr)) deallocate(ptr%dcdr)
-      allocate(ptr%dcdr(3, mol%nat, mol%nat + 1))
-      if (allocated(ptr%dcdL)) deallocate(ptr%dcdL)
-      allocate(ptr%dcdL(3, 3, mol%nat + 1))
+      if (allocated(ptr%dcdr)) then
+         if (any(shape(ptr%dcdr) /= [3, mol%nat, ndim])) deallocate(ptr%dcdr)
+      end if
+      if (.not. allocated(ptr%dcdr)) allocate(ptr%dcdr(3, mol%nat, ndim))
+
+      if (allocated(ptr%dcdL)) then
+         if (any(shape(ptr%dcdL) /= [3, 3, ndim])) deallocate(ptr%dcdL)
+      end if
+      if (.not. allocated(ptr%dcdL)) allocate(ptr%dcdL(3, 3, ndim))
    end if
 
    ! Generate direct-space lattice translations once and store in cache
