@@ -223,7 +223,7 @@ subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlo
       allocate(ptr%xtmp(mol%nat + 1))
    end if
 
-   ! Allocate cmat
+   ! Allocate cmat (leave uninitialized for first-touch locality)
    if (.not. allocated(ptr%cmat)) then
       allocate(ptr%cmat(mol%nat + 1, mol%nat + 1))
    end if
@@ -236,6 +236,7 @@ subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlo
       ! Get full cmat sum over all WSC images (for get_xvec and xvec_derivs)
       call get_cmat_3d(self, mol, ptr%wsc, ptr%cmat)
       if (grad) then
+         ! Leave dcdr uninitialized for first-touch locality
          if (.not. allocated(ptr%dcdr)) then
             allocate(ptr%dcdr(3, mol%nat, mol%nat + 1))
          end if
@@ -249,6 +250,7 @@ subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlo
 
       ! cmat gradients
       if (grad) then
+         ! Leave dcdr uninitialized for first-touch locality
          if (.not. allocated(ptr%dcdr)) then
             allocate(ptr%dcdr(3, mol%nat, mol%nat + 1))
          end if
@@ -365,7 +367,7 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
    if (any(mol%periodic)) then
       call get_dir_trans(mol, dtrans, self%ncoord%cutoff)
 
-      ! Capacitance terms for i = j, T /= 0
+      ! Capacitance terms for i = j, T != 0
       !$omp parallel do default(none) schedule(runtime) &
       !$omp& shared(mol, self, ptr, dtrans, dtmpdr, dtmpdL, dxdr, dxdL) &
       !$omp& private(iat, izp, img, capi, rvdw, wsw, vec, ctmp, csum)
@@ -381,6 +383,7 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
             csum = csum + ctmp
          end do
          csum = csum * wsw
+         ! EN derivative
          dxdr(:, :, iat) = dxdr(:, :, iat) - csum * dtmpdr(:, :, iat)
          dxdL(:, :, iat) = dxdL(:, :, iat) - csum * dtmpdL(:, :, iat)
       end do
@@ -401,9 +404,11 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
             rvdw = self%rvdw(iat, jat)
             xij = ptr%xtmp(iat) - ptr%xtmp(jat)
 
+            ! Diagonal elements
             dxdiag(:, iat) = dxdiag(:, iat) + ptr%xtmp(jat) * ptr%dcdr(:, iat, jat)
             dxdiag(:, jat) = dxdiag(:, jat) + ptr%xtmp(iat) * ptr%dcdr(:, jat, iat)
 
+            ! Derivative of capacitance matrix
             dxdr(:, iat, jat) = dxdr(:, iat, jat) + xij * ptr%dcdr(:, iat, jat)
             dxdr(:, jat, iat) = dxdr(:, jat, iat) - xij * ptr%dcdr(:, jat, iat)
 
@@ -433,9 +438,11 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
          do jat = 1, iat - 1
             xij = ptr%xtmp(iat) - ptr%xtmp(jat)
 
+            ! Diagonal elements
             dxdiag(:, iat) = dxdiag(:, iat) + ptr%xtmp(jat) * ptr%dcdr(:, iat, jat)
             dxdiag(:, jat) = dxdiag(:, jat) + ptr%xtmp(iat) * ptr%dcdr(:, jat, iat)
 
+            ! Derivative of capacitance matrix
             dxdr(:, iat, jat) = dxdr(:, iat, jat) + xij * ptr%dcdr(:, iat, jat)
             dxdr(:, jat, iat) = dxdr(:, jat, iat) - xij * ptr%dcdr(:, jat, iat)
 
@@ -620,7 +627,7 @@ subroutine get_amat_0d(self, mol, cn, qloc, cmat, amat)
    integer :: iat, jat, izp, jzp
    real(wp) :: vec(3), r2, gam2, tmp, norm_cn, radi, radj
 
-   ! Leave uninitialized for first-touch locality; all entries are assigned below
+   ! Each iat iteration owns the off-diagonal pairs (jat < iat) and diagonal (iat, iat)
    !$omp parallel do default(none) schedule(guided) &
    !$omp& shared(amat, mol, self, cn, qloc, cmat) &
    !$omp& private(iat, izp, jat, jzp, gam2, vec, r2, tmp, norm_cn, radi, radj)
@@ -667,7 +674,7 @@ subroutine get_amat_3d(self, mol, wsc, cn, qloc, cmat, amat)
 
    call get_dir_trans(mol, dtrans, self%ncoord%cutoff)
 
-   ! Leave uninitialized for first-touch locality; all entries are assigned below
+   ! Each iat iteration owns the off-diagonal pairs (jat < iat) and diagonal (iat, iat)
    !$omp parallel do default(none) schedule(guided) &
    !$omp& shared(amat, cmat, mol, cn, qloc, self, wsc, dtrans) &
    !$omp& private(iat, izp, jat, jzp, img, gam, rij, vec, dtmp, tmp, norm_cn) &
@@ -1141,7 +1148,7 @@ subroutine get_cmat_0d(self, mol, cmat)
 
    allocate(cdiag(mol%nat), source=0.0_wp)
 
-   ! Leave 1:nat block uninitialized for first-touch; reduce only 1D diagonal
+   ! Off-diagonal pairs (jat < iat) have a unique owner; reduce only the 1D diagonal
    !$omp parallel default(none) &
    !$omp& shared(cmat, cdiag, mol, self) &
    !$omp& private(iat, izp, jat, jzp, vec, r1, rvdw, tmp, capi, capj)
@@ -1194,7 +1201,7 @@ subroutine get_cmat_3d(self, mol, wsc, cmat)
 
    allocate(cdiag(mol%nat), source=0.0_wp)
 
-   ! Leave 1:nat block uninitialized for first-touch; reduce only 1D diagonal
+   ! Off-diagonal pairs (jat < iat) have a unique owner; reduce only the 1D diagonal
    !$omp parallel default(none) &
    !$omp& shared(cmat, cdiag, mol, self, wsc, dtrans) &
    !$omp& private(iat, izp, jat, jzp, img, rij, vec, rvdw, tmp, csum, capi, capj, wsw)
@@ -1323,7 +1330,7 @@ subroutine get_dcmat_0d(self, mol, dcdr, dcdL)
    dcdr(:, :, mol%nat + 1) = 0.0_wp
    dcdL(:, :, :) = 0.0_wp
 
-   ! Leave dcdr(:, :, 1:nat) uninitialized for first-touch; reduce O(N) terms
+   ! Off-diagonal pairs (jat < iat) have a unique owner; reduce only O(N) terms
    !$omp parallel default(none) &
    !$omp& shared(dcdr, dcdL, dcdiag, mol, self) &
    !$omp& private(iat, izp, jat, jzp, vec, rvdw, dG, dS, capi, capj)
@@ -1377,7 +1384,7 @@ subroutine get_dcmat_3d(self, mol, wsc, dcdr, dcdL)
    dcdr(:, :, mol%nat + 1) = 0.0_wp
    dcdL(:, :, :) = 0.0_wp
 
-   ! Leave dcdr(:, :, 1:nat) uninitialized for first-touch; reduce O(N) terms
+   ! Off-diagonal pairs (jat < iat) have a unique owner; reduce only O(N) terms
    !$omp parallel default(none) &
    !$omp& shared(dcdr, dcdL, dcdiag, mol, self, dtrans, wsc) &
    !$omp& private(iat, izp, jat, jzp, img, rij, vec, rvdw, dG, dS, &

@@ -237,7 +237,7 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
    call self%update(mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
    if (allocated(error)) return
 
-   ! Setup the Coulomb matrix
+   ! Setup the Coulomb matrix (leave uninitialized for first-touch locality)
    ndim = mol%nat + 1
    allocate(amat(ndim, ndim))
    call self%get_coulomb_matrix(mol, cache, amat)
@@ -297,6 +297,7 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
    ! Allocate and get amat derivatives
    if (grad .or. cpq) then
       allocate(dadr(3, mol%nat, ndim), dadL(3, 3, ndim), atrace(3, mol%nat))
+      ! Leave uninitialized for first-touch locality
       allocate(dxdr(3, mol%nat, ndim), dxdL(3, 3, ndim))
       call self%get_xvec_derivs(mol, cache, dxdr, dxdL)
       call self%get_coulomb_derivs(mol, cache, vrhs, dadr, dadL, atrace)
