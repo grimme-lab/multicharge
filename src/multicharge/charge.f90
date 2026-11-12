@@ -64,12 +64,12 @@ subroutine get_charges(mchrg_model, mol, error, qvec, dqdr, dqdL, cache)
    real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
    real(wp), allocatable :: trans(:, :)
 
-   grad = present(dqdr) .or. present(dqdL) .or. present(cache)
+   grad = (present(dqdr) .and. present(dqdL)) .or. present(cache)
 
    allocate(cn(mol%nat), qloc(mol%nat))
    if (grad) then
       allocate(dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat))
-      allocate(dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat))
+      allocate (dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat))
    end if
 
    call get_lattice_points(mol%periodic, mol%lattice, mchrg_model%ncoord%cutoff, &

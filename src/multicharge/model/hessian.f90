@@ -75,13 +75,10 @@ end subroutine coulomb_kernel
 
 
 !> Cartesian curvature of a radial kernel
-pure function radial_hessian(vec, r, dr, drr) result(box)
+pure function radial_hessian(vec, dr, drr) result(box)
 
    !> Interatomic displacement vector
    real(wp), intent(in) :: vec(3)
-
-   !> Interatomic distance
-   real(wp), intent(in) :: r
 
    !> First radial derivative
    real(wp), intent(in) :: dr
@@ -95,7 +92,7 @@ pure function radial_hessian(vec, r, dr, drr) result(box)
    real(wp) :: inv_r, d1, u(3)
    integer :: ic
 
-   inv_r = 1.0_wp / r
+   inv_r = 1.0_wp / norm2(vec)
    d1 = dr * inv_r
    u = vec * inv_r
    box = (drr - d1) * outerprod(u, u)
@@ -107,7 +104,7 @@ end function radial_hessian
 
 
 !> Add the Cartesian blocks of a radial pair term (vec = R_i - R_j - T)
-subroutine add_pair_hessian(iat, jat, vec, r, dr, drr, hessian, diagonal)
+subroutine add_pair_hessian(iat, jat, vec, dr, drr, hessian, diagonal)
 
    !> First atom index
    integer, intent(in) :: iat
@@ -117,9 +114,6 @@ subroutine add_pair_hessian(iat, jat, vec, r, dr, drr, hessian, diagonal)
 
    !> Interatomic displacement vector
    real(wp), intent(in) :: vec(3)
-
-   !> Interatomic distance
-   real(wp), intent(in) :: r
 
    !> First radial derivative
    real(wp), intent(in) :: dr
@@ -133,7 +127,7 @@ subroutine add_pair_hessian(iat, jat, vec, r, dr, drr, hessian, diagonal)
    !> Optional diagonal block accumulator
    real(wp), intent(inout), optional :: diagonal(:, :, :)
 
-   call add_pair_block(iat, jat, radial_hessian(vec, r, dr, drr), hessian, diagonal)
+   call add_pair_block(iat, jat, radial_hessian(vec, dr, drr), hessian, diagonal)
 
 end subroutine add_pair_hessian
 

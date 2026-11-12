@@ -555,15 +555,16 @@ subroutine test_numgrad(error, mol, model)
    real(wp), parameter :: step = 1.0e-6_wp
    real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :)
    real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
-   real(wp), allocatable :: energy(:), gradient(:, :)
+   real(wp), allocatable :: energy(:), gradient(:, :), sigma(:, :)
    real(wp), allocatable :: numgrad(:, :)
    real(wp) :: er, el
 
    allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
-      & energy(mol%nat), gradient(3, mol%nat), numgrad(3, mol%nat))
+      & energy(mol%nat), gradient(3, mol%nat), sigma(3, 3), numgrad(3, mol%nat))
    energy(:) = 0.0_wp
    gradient(:, :) = 0.0_wp
+   sigma(:, :) = 0.0_wp
 
    lp: do iat = 1, mol%nat
       do ic = 1, 3
@@ -598,7 +599,7 @@ subroutine test_numgrad(error, mol, model)
    ! dqlocdL(:, :, :) = 0.0_wp
 
    call model%solve(mol, error, cn, qloc, dcndr, dcndL, &
-      & dqlocdr, dqlocdL, gradient=gradient)
+      & dqlocdr, dqlocdL, gradient=gradient, sigma=sigma)
    if (allocated(error)) return
 
    if (any(abs(gradient(:, :) - numgrad(:, :)) > thr2)) then
@@ -630,14 +631,15 @@ subroutine test_numsigma(error, mol, model)
       & [1, 0, 0, 0, 1, 0, 0, 0, 1], [3, 3])
    real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :)
    real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
-   real(wp), allocatable :: energy(:)
+   real(wp), allocatable :: energy(:), gradient(:, :)
    real(wp), allocatable :: xyz(:, :)
    real(wp) :: er, el, eps(3, 3), numsigma(3, 3), sigma(3, 3)
 
    allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
-      & energy(mol%nat), xyz(3, mol%nat))
+      & energy(mol%nat), gradient(3, mol%nat), xyz(3, mol%nat))
    energy(:) = 0.0_wp
+   gradient(:, :) = 0.0_wp
    sigma(:, :) = 0.0_wp
 
    eps(:, :) = unity
@@ -672,8 +674,9 @@ subroutine test_numsigma(error, mol, model)
    call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
+   energy(:) = 0.0_wp
    call model%solve(mol, error, cn, qloc, dcndr, dcndL, &
-      & dqlocdr, dqlocdL, sigma=sigma)
+      & dqlocdr, dqlocdL, energy, gradient, sigma)
    if (allocated(error)) return
 
    if (any(abs(sigma(:, :) - numsigma(:, :)) > thr2)) then
@@ -702,12 +705,14 @@ subroutine test_numdqdr(error, mol, model)
    integer :: iat, ic
    real(wp), parameter :: trans(3, 1) = 0.0_wp
    real(wp), parameter :: step = 1.0e-6_wp
-   real(wp), allocatable :: cn(:), qloc(:)
-   real(wp), allocatable :: ql(:), qr(:), dqdr(:, :, :)
+   real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :)
+   real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
+   real(wp), allocatable :: ql(:), qr(:), dqdr(:, :, :), dqdL(:, :, :)
    real(wp), allocatable :: numdr(:, :, :)
 
-   allocate (cn(mol%nat), qloc(mol%nat), &
-      & ql(mol%nat), qr(mol%nat), dqdr(3, mol%nat, mol%nat), &
+   allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
+      & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
+      & ql(mol%nat), qr(mol%nat), dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat), &
       & numdr(3, mol%nat, mol%nat))
 
    lp: do iat = 1, mol%nat
@@ -730,7 +735,11 @@ subroutine test_numdqdr(error, mol, model)
    end do lp
    if (allocated(error)) return
 
-   call get_charges(model, mol, error, qr, dqdr=dqdr)
+   call model%ncoord%get_coordination_number(mol, trans, cn, dcndr, dcndL)
+   call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
+
+   call model%solve(mol, error, cn, qloc, dcndr, dcndL, &
+      & dqlocdr, dqlocdL, dqdr=dqdr, dqdL=dqdL)
    if (allocated(error)) return
 
    if (any(abs(dqdr(:, :, :) - numdr(:, :, :)) > thr2)) then
@@ -762,13 +771,13 @@ subroutine test_numdqdL(error, mol, model)
       & [1, 0, 0, 0, 1, 0, 0, 0, 1], [3, 3])
    real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :)
    real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
-   real(wp), allocatable :: qr(:), ql(:), dqdL(:, :, :)
+   real(wp), allocatable :: qr(:), ql(:), dqdr(:, :, :), dqdL(:, :, :)
    real(wp), allocatable :: lattr(:, :), xyz(:, :), numdL(:, :, :)
    real(wp) :: eps(3, 3)
 
    allocate (cn(mol%nat), dcndr(3, mol%nat, mol%nat), dcndL(3, 3, mol%nat), &
       & qloc(mol%nat), dqlocdr(3, mol%nat, mol%nat), dqlocdL(3, 3, mol%nat), &
-      & qr(mol%nat), ql(mol%nat), dqdL(3, 3, mol%nat), &
+      & qr(mol%nat), ql(mol%nat), dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat), &
       & xyz(3, mol%nat), numdL(3, 3, mol%nat))
 
    eps(:, :) = unity
@@ -804,7 +813,7 @@ subroutine test_numdqdL(error, mol, model)
    call model%local_charge(mol, trans, qloc, dqlocdr, dqlocdL)
 
    call model%solve(mol, error, cn, qloc, dcndr, dcndL, &
-      & dqlocdr, dqlocdL, dqdL=dqdL)
+      & dqlocdr, dqlocdL, dqdr=dqdr, dqdL=dqdL)
    if (allocated(error)) return
 
    if (any(abs(dqdL(:, :, :) - numdL(:, :, :)) > thr2)) then

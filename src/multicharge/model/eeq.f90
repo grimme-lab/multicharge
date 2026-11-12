@@ -26,7 +26,7 @@ module multicharge_model_eeq
    use mctc_env, only: error_type, fatal_error, wp
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
-   use mctc_io_math, only: crossprod, outerprod
+   use mctc_io_math, only: crossprod
    use mctc_ncoord, only: new_ncoord, cn_count
    use mctc_wignerseitz, only: new_wignerseitz_cell
    use multicharge_blas, only: gemm
@@ -36,8 +36,7 @@ module multicharge_model_eeq
       & get_ewald_rec_trans, get_hess_dir, get_hess_rec_1d, get_hess_rec_2d, &
       & get_hess_rec_3d, get_rec_weights
    use multicharge_model_cache, only: cache_container, model_cache
-   use multicharge_model_hessian, only: coulomb_kernel, add_pair_hessian, &
-      & add_pair_block
+   use multicharge_model_hessian, only: coulomb_kernel, add_pair_hessian, add_pair_block
    use multicharge_model_type, only: mchrg_model_type
    implicit none
    private
@@ -70,72 +69,50 @@ module multicharge_model_eeq
 
    end type eeq_cache
 
-   !> Electronegativity equilibration charge model
    type, extends(mchrg_model_type) :: eeq_model
    contains
-
       !> Update and allocate cache
       procedure :: update
-
       !> Calculate Coulomb matrix
       procedure :: get_coulomb_matrix
-
       !> Calculate derivatives of Coulomb matrix
       procedure :: get_coulomb_derivs
-
       !> Calculate right-hand side (electronegativity vector)
       procedure :: get_xvec
-
       !> Calculate EN vector derivatives
       procedure :: get_xvec_derivs
-
       !> Cartesian second-response curvature at fixed lattice
       procedure :: add_model_hessian
-
    end type eeq_model
 
    real(wp), parameter :: sqrtpi = sqrt(pi)
-   real(wp), parameter :: sqrt2pi = sqrt(2.0_wp / pi)
+   real(wp), parameter :: sqrt2pi = sqrt(2.0_wp/pi)
    real(wp), parameter :: eps = sqrt(epsilon(0.0_wp))
-
 
 contains
 
-
-!> Initialize a new EEQ model instance
 subroutine new_eeq_model(self, mol, error, chi, rad, eta, kcnchi, &
    & cutoff, cn_exp, rcov, cn_max)
-
    !> Electronegativity equilibration model
    type(eeq_model), intent(out) :: self
-
    !> Molecular structure data
    type(structure_type), intent(in) :: mol
-
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
-
    !> Electronegativity
    real(wp), intent(in) :: chi(:)
-
    !> Exponent gaussian charge
    real(wp), intent(in) :: rad(:)
-
    !> Chemical hardness
    real(wp), intent(in) :: eta(:)
-
    !> CN scaling factor for electronegativity
    real(wp), intent(in) :: kcnchi(:)
-
    !> Cutoff radius for coordination number
    real(wp), intent(in), optional :: cutoff
-
    !> Steepness of the CN counting function
    real(wp), intent(in), optional :: cn_exp
-
    !> Covalent radii for CN
    real(wp), intent(in), optional :: rcov(:)
-
    !> Maximum CN cutoff for CN
    real(wp), intent(in), optional :: cn_max
 
@@ -149,38 +126,16 @@ subroutine new_eeq_model(self, mol, error, chi, rad, eta, kcnchi, &
 
 end subroutine new_eeq_model
 
-
-!> Update and populate the EEQ model cache
 subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
-
-   !> Electronegativity equilibration model
    class(eeq_model), intent(in) :: self
-
-   !> Molecular structure data
    type(structure_type), intent(in) :: mol
-
-   !> Error handling
    type(error_type), allocatable, intent(out) :: error
-
-   !> Cache container
    type(cache_container), intent(inout) :: cache
-
-   !> Coordination number
    real(wp), intent(in) :: cn(:)
-
-   !> Local atomic partial charges
    real(wp), intent(in), optional :: qloc(:)
-
-   !> Derivative of coordination number w.r.t. atomic positions
    real(wp), intent(in), optional :: dcndr(:, :, :)
-
-   !> Derivative of coordination number w.r.t. lattice vectors
    real(wp), intent(in), optional :: dcndL(:, :, :)
-
-   !> Derivative of local charges w.r.t. atomic positions
    real(wp), intent(in), optional :: dqlocdr(:, :, :)
-
-   !> Derivative of local charges w.r.t. lattice vectors
    real(wp), intent(in), optional :: dqlocdL(:, :, :)
 
    type(eeq_cache), pointer :: ptr
@@ -201,6 +156,7 @@ subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlo
          return
       end if
 
+      ! Create WSC
       call new_wignerseitz_cell(ptr%wsc, mol, error)
       if (allocated(error)) return
 
@@ -241,6 +197,7 @@ subroutine setup_ewald(self, mol, cache, error)
    call get_ewald_dir_trans(mol%periodic, mol%lattice, cache%alpha, &
       & gam_min, cache%dtrans, error)
    if (allocated(error)) return
+
    call get_ewald_rec_trans(mol%periodic, mol%lattice, cache%alpha, &
       & cache%rtrans, error, cache%vol)
    if (allocated(error)) return
@@ -260,31 +217,22 @@ subroutine setup_ewald(self, mol, cache, error)
 
 end subroutine setup_ewald
 
-
-!> Evaluate the electronegativity right-hand side vector
 subroutine get_xvec(self, mol, cache, xvec)
-
-   !> Electronegativity equilibration model
    class(eeq_model), intent(in) :: self
-
-   !> Molecular structure data
    type(structure_type), intent(in) :: mol
-
-   !> Cache container
    type(cache_container), intent(inout) :: cache
-
-   !> Right-hand side vector
    real(wp), intent(out) :: xvec(:)
-
    real(wp), parameter :: reg = 1.0e-14_wp
+
    integer :: iat, izp
    real(wp) :: tmp
+
    type(eeq_cache), pointer :: ptr
 
    call view(cache, ptr)
 
    !$omp parallel do default(none) schedule(runtime) &
-   !$omp& shared(mol, self, xvec, ptr) private(iat, izp, tmp)
+   !$omp shared(mol, self, xvec, ptr) private(iat, izp, tmp)
    do iat = 1, mol%nat
       izp = mol%id(iat)
       tmp = self%kcnchi(izp) / sqrt(ptr%cn(iat) + reg)
@@ -294,28 +242,17 @@ subroutine get_xvec(self, mol, cache, xvec)
 
 end subroutine get_xvec
 
-
-!> Evaluate derivatives of the electronegativity right-hand side vector
 subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
-
-   !> Electronegativity equilibration model
    class(eeq_model), intent(in) :: self
-
-   !> Molecular structure data
    type(structure_type), intent(in) :: mol
-
-   !> Cache container
    type(cache_container), intent(inout) :: cache
-
-   !> Derivative of right-hand side vector w.r.t. atomic positions
    real(wp), intent(out), contiguous :: dxdr(:, :, :)
-
-   !> Derivative of right-hand side vector w.r.t. lattice vectors
    real(wp), intent(out), contiguous :: dxdL(:, :, :)
-
    real(wp), parameter :: reg = 1.0e-14_wp
+
    integer :: iat, izp
    real(wp) :: tmp
+
    type(eeq_cache), pointer :: ptr
 
    call view(cache, ptr)
@@ -324,37 +261,24 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
    dxdL(:, :, :) = 0.0_wp
 
    !$omp parallel do default(none) schedule(runtime) &
-   !$omp& shared(mol, self, ptr, dxdr, dxdL) private(iat, izp, tmp)
+   !$omp shared(mol, self, ptr, dxdr, dxdL) &
+   !$omp private(iat, izp, tmp)
    do iat = 1, mol%nat
       izp = mol%id(iat)
-      tmp = self%kcnchi(izp) * (0.5_wp * ptr%cn(iat) + reg) &
-         & / (ptr%cn(iat) + reg)**1.5_wp
+      tmp = self%kcnchi(izp) * (0.5_wp*ptr%cn(iat) + reg) / (ptr%cn(iat) + reg)**1.5_wp
       dxdr(:, :, iat) = tmp * ptr%dcndr(:, :, iat)
       dxdL(:, :, iat) = tmp * ptr%dcndL(:, :, iat)
    end do
 
 end subroutine get_xvec_derivs
 
-
-!> Contract model-specific second-response curvature u^T(x_ab - A_ab q) at fixed u and q
+!> u^T(x_ab-A_ab q), with u and q held fixed.
 subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
-
-   !> Electronegativity equilibration model
    class(eeq_model), intent(in) :: self
-
-   !> Molecular structure data
    type(structure_type), intent(in) :: mol
-
-   !> Error handling
    type(error_type), allocatable, intent(out) :: error
-
-   !> Cache container
    type(cache_container), intent(inout) :: cache
-
-   !> Adjoint vector
    real(wp), intent(in) :: adj(:)
-
-   !> Cartesian Hessian matrix
    real(wp), intent(inout) :: hessian(:, :)
 
    type(eeq_cache), pointer :: ptr
@@ -369,23 +293,18 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
       call fatal_error(error, "Incompatible EEQ response cache")
       return
    end if
-
    nat = mol%nat
-   allocate(dEdcn(nat), work(3 * nat, nat))
-   dcndr = reshape(ptr%dcndr, [3 * nat, nat])
+   allocate(dEdcn(nat), work(3*nat, nat))
+   dcndr = reshape(ptr%dcndr, [3*nat, nat])
    do iat = 1, nat
       izp = mol%id(iat)
       c = ptr%cn(iat)
-      dEdcn(iat) = adj(iat) * self%kcnchi(izp) * (0.5_wp * c + reg) &
-         & / (c + reg)**1.5_wp
-      weight = -adj(iat) * self%kcnchi(izp) * (0.25_wp * c + reg) &
-         & / (c + reg)**2.5_wp
-      work(:, iat) = weight * dcndr(:, iat)
+      dEdcn(iat) = adj(iat)*self%kcnchi(izp)*(0.5_wp*c+reg)/(c+reg)**1.5_wp
+      weight = -adj(iat)*self%kcnchi(izp)*(0.25_wp*c+reg)/(c+reg)**2.5_wp
+      work(:, iat) = weight*dcndr(:, iat)
    end do
-   call get_lattice_points(mol%periodic, mol%lattice, self%ncoord%cutoff, &
-      & trans, error)
+   call get_lattice_points(mol%periodic, mol%lattice, self%ncoord%cutoff, trans, error)
    if (allocated(error)) return
-
    call self%ncoord%add_coordination_number_hessian(mol, trans, dEdcn, hessian)
    call gemm(work, dcndr, hessian, transb="t", beta=1.0_wp)
 
@@ -393,39 +312,34 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
    if (any(mol%periodic)) then
       call add_periodic_hessian(self, mol, ptr, cache%qvec, adj, hessian, diagonal)
    else
-      npair = nat * (nat + 1) / 2
+      npair = nat*(nat+1)/2
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp& shared(self, mol, cache, adj, hessian, npair) &
-      !$omp& private(iat, jat, izp, jzp, vec, r, gam, val, dr, drr, weight) &
-      !$omp& reduction(+:diagonal)
+      !$omp shared(self, mol, cache, adj, hessian, npair) &
+      !$omp private(iat, jat, izp, jzp, vec, r, gam, val, dr, drr, weight) &
+      !$omp reduction(+:diagonal)
       do ipair = 1, npair
-         iat = int(0.5_wp * (sqrt(8.0_wp * real(ipair, wp) + 1.0_wp) - 1.0_wp))
-         if (iat * (iat + 1) / 2 < ipair) iat = iat + 1
-         jat = ipair - iat * (iat - 1) / 2
+         iat = int(0.5_wp*(sqrt(8.0_wp*real(ipair, wp)+1.0_wp)-1.0_wp))
+         if (iat*(iat+1)/2 < ipair) iat = iat+1
+         jat = ipair-iat*(iat-1)/2
          if (iat == jat) cycle
-
          izp = mol%id(iat)
          jzp = mol%id(jat)
-         vec = mol%xyz(:, iat) - mol%xyz(:, jat)
+         vec = mol%xyz(:, iat)-mol%xyz(:, jat)
          r = norm2(vec)
-         gam = 1.0_wp / sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
+         gam = 1.0_wp/sqrt(self%rad(izp)**2+self%rad(jzp)**2)
          call coulomb_kernel(r, gam, val, dr, drr)
-         weight = -(adj(iat) * cache%qvec(jat) + adj(jat) * cache%qvec(iat))
-         call add_pair_hessian(iat, jat, vec, r, weight * dr, weight * drr, &
-            & hessian, diagonal)
+         weight = -(adj(iat)*cache%qvec(jat)+adj(jat)*cache%qvec(iat))
+         call add_pair_hessian(iat, jat, vec, weight*dr, weight*drr, hessian, diagonal)
       end do
       !$omp end parallel do
    end if
 
-   !$omp parallel do default(none) schedule(static) &
-   !$omp& shared(nat, hessian, diagonal) private(ii)
+   !$omp parallel do default(none) schedule(static) shared(nat, hessian, diagonal) private(ii)
    do iat = 1, nat
-      ii = 3 * (iat - 1)
-      hessian(ii + 1:ii + 3, ii + 1:ii + 3) = &
-         & hessian(ii + 1:ii + 3, ii + 1:ii + 3) + diagonal(:, :, iat)
+      ii = 3*(iat-1)
+      hessian(ii+1:ii+3, ii+1:ii+3) = hessian(ii+1:ii+3, ii+1:ii+3)+diagonal(:, :, iat)
    end do
    !$omp end parallel do
-
 end subroutine add_model_hessian
 
 
@@ -502,19 +416,10 @@ subroutine add_periodic_hessian(self, mol, ptr, qvec, adj, hessian, diagonal)
 end subroutine add_periodic_hessian
 
 
-!> Evaluate the EEQ Coulomb interaction matrix
 subroutine get_coulomb_matrix(self, mol, cache, amat)
-
-   !> Electronegativity equilibration model
    class(eeq_model), intent(in) :: self
-
-   !> Molecular structure data
    type(structure_type), intent(in) :: mol
-
-   !> Cache container
    type(cache_container), intent(inout) :: cache
-
-   !> Coulomb matrix
    real(wp), intent(out) :: amat(:, :)
 
    type(eeq_cache), pointer :: ptr
@@ -526,34 +431,25 @@ subroutine get_coulomb_matrix(self, mol, cache, amat)
    else
       call get_amat_0d(self, mol, amat)
    end if
-
 end subroutine get_coulomb_matrix
 
-
-!> Evaluate the molecular (0D) Coulomb matrix
 subroutine get_amat_0d(self, mol, amat)
-
-   !> Electronegativity equilibration model
    class(eeq_model), intent(in) :: self
-
-   !> Molecular structure data
    type(structure_type), intent(in) :: mol
-
-   !> Coulomb matrix
    real(wp), intent(out) :: amat(:, :)
 
    integer :: iat, jat, izp, jzp, ipair, npair
    real(wp) :: vec(3), r2, gam, tmp
 
    ! Every matrix element belongs to one pair; no thread-local matrix is needed.
-   npair = mol%nat * (mol%nat + 1) / 2
+   npair = mol%nat*(mol%nat+1)/2
    !$omp parallel do default(none) schedule(runtime) &
-   !$omp& shared(amat, mol, self, npair) &
-   !$omp& private(iat, jat, izp, jzp, gam, vec, r2, tmp)
+   !$omp shared(amat, mol, self, npair) &
+   !$omp private(iat, jat, izp, jzp, gam, vec, r2, tmp)
    do ipair = 1, npair
-      iat = int(0.5_wp * (sqrt(8.0_wp * real(ipair, wp) + 1.0_wp) - 1.0_wp))
-      if (iat * (iat + 1) / 2 < ipair) iat = iat + 1
-      jat = ipair - iat * (iat - 1) / 2
+      iat = int(0.5_wp*(sqrt(8.0_wp*real(ipair, wp)+1.0_wp)-1.0_wp))
+      if (iat*(iat+1)/2 < ipair) iat = iat+1
+      jat = ipair-iat*(iat-1)/2
       izp = mol%id(iat)
       if (iat == jat) then
          tmp = self%eta(izp) + sqrt2pi / self%rad(izp)
@@ -572,7 +468,6 @@ subroutine get_amat_0d(self, mol, amat)
    amat(mol%nat + 1, 1:mol%nat + 1) = 1.0_wp
    amat(1:mol%nat + 1, mol%nat + 1) = 1.0_wp
    amat(mol%nat + 1, mol%nat + 1) = 0.0_wp
-
 end subroutine get_amat_0d
 
 
@@ -651,36 +546,20 @@ subroutine get_amat_pbc(self, mol, ptr, amat)
    end do
    !$omp end parallel do
 
-   amat(mol%nat + 1, 1:mol%nat + 1) = 1.0_wp
-   amat(1:mol%nat + 1, mol%nat + 1) = 1.0_wp
-   amat(mol%nat + 1, mol%nat + 1) = 0.0_wp
+   if (size(amat, 1) == mol%nat + 1) then
+      amat(mol%nat + 1, 1:mol%nat + 1) = 1.0_wp
+      amat(1:mol%nat + 1, mol%nat + 1) = 1.0_wp
+      amat(mol%nat + 1, mol%nat + 1) = 0.0_wp
+   end if
 
 end subroutine get_amat_pbc
 
-
-!> Evaluate derivatives of the EEQ Coulomb interaction matrix
 subroutine get_coulomb_derivs(self, mol, cache, qvec, dadr, dadL, atrace)
-
-   !> Electronegativity equilibration model
    class(eeq_model), intent(in) :: self
-
-   !> Molecular structure data
    type(structure_type), intent(in) :: mol
-
-   !> Cache container
    type(cache_container), intent(inout) :: cache
-
-   !> Partial charge vector
    real(wp), intent(in) :: qvec(:)
-
-   !> Derivative of Coulomb matrix w.r.t. atomic positions
-   real(wp), intent(out) :: dadr(:, :, :)
-
-   !> Derivative of Coulomb matrix w.r.t. lattice strain
-   real(wp), intent(out) :: dadL(:, :, :)
-
-   !> On-site trace of position derivatives
-   real(wp), intent(out) :: atrace(:, :)
+   real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
 
    type(eeq_cache), pointer :: ptr
 
@@ -691,44 +570,25 @@ subroutine get_coulomb_derivs(self, mol, cache, qvec, dadr, dadL, atrace)
    else
       call get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
    end if
-
 end subroutine get_coulomb_derivs
 
-
-!> Evaluate molecular (0D) Coulomb matrix derivatives
 subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
-
-   !> Electronegativity equilibration model
    class(eeq_model), intent(in) :: self
-
-   !> Molecular structure data
    type(structure_type), intent(in) :: mol
-
-   !> Partial charge vector
    real(wp), intent(in) :: qvec(:)
-
-   !> Derivative of Coulomb matrix w.r.t. atomic positions
-   real(wp), intent(out) :: dadr(:, :, :)
-
-   !> Derivative of Coulomb matrix w.r.t. lattice strain
-   real(wp), intent(out) :: dadL(:, :, :)
-
-   !> On-site trace of position derivatives
-   real(wp), intent(out) :: atrace(:, :)
+   real(wp), intent(out) :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
 
    integer :: iat, jat, izp, jzp, ipair, npair
-   real(wp) :: vec(3), r1, r2, inv_r, inv_r2, gam, arg, dtmp, dG(3), dS(3, 3)
+   real(wp) :: vec(3), r2, gam, arg, dtmp, dG(3), dS(3, 3)
 
    atrace(:, :) = 0.0_wp
    dadL(:, :, :) = 0.0_wp
-   npair = mol%nat * (mol%nat + 1) / 2
-
+   npair = mol%nat*(mol%nat+1)/2
    ! Pair derivatives have unique owners. Only atom-wise traces and strain
    ! derivatives need reduction, with O(N) storage per thread.
    !$omp parallel default(none) shared(dadr, mol, self, qvec, npair) &
-   !$omp& private(iat, jat, izp, jzp, ipair, gam, r1, r2, inv_r, inv_r2, &
-   !$omp& vec, dG, dS, dtmp, arg) &
-   !$omp& reduction(+:atrace, dadL)
+   !$omp private(iat, jat, izp, jzp, ipair, gam, r2, vec, dG, dS, dtmp, arg) &
+   !$omp reduction(+:atrace, dadL)
    !$omp do schedule(static)
    do iat = 1, size(dadr, 3)
       dadr(:, :, iat) = 0.0_wp
@@ -736,23 +596,19 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
    !$omp end do
    !$omp do schedule(runtime)
    do ipair = 1, npair
-      iat = int(0.5_wp * (sqrt(8.0_wp * real(ipair, wp) + 1.0_wp) - 1.0_wp))
-      if (iat * (iat + 1) / 2 < ipair) iat = iat + 1
-      jat = ipair - iat * (iat - 1) / 2
+      iat = int(0.5_wp*(sqrt(8.0_wp*real(ipair, wp)+1.0_wp)-1.0_wp))
+      if (iat*(iat+1)/2 < ipair) iat = iat+1
+      jat = ipair-iat*(iat-1)/2
       if (iat == jat) cycle
-
       izp = mol%id(iat)
       jzp = mol%id(jat)
       vec = mol%xyz(:, jat) - mol%xyz(:, iat)
-      r2 = dot_product(vec, vec)
-      r1 = sqrt(r2)
-      inv_r = 1.0_wp / r1
-      inv_r2 = inv_r * inv_r
+      r2 = vec(1)**2 + vec(2)**2 + vec(3)**2
       gam = 1.0_wp / sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
-      arg = gam * r1
-      dtmp = ((2.0_wp / sqrtpi) * gam * exp(-arg**2) - erf(arg) * inv_r) * inv_r2
+      arg = gam * gam * r2
+      dtmp = 2.0_wp * gam * exp(-arg) / (sqrtpi * r2) - erf(sqrt(arg)) / (r2 * sqrt(r2))
       dG = dtmp * vec
-      dS = outerprod(vec, dG)
+      dS = spread(dG, 1, 3) * spread(vec, 2, 3)
       atrace(:, iat) = atrace(:, iat) - dG * qvec(jat)
       atrace(:, jat) = atrace(:, jat) + dG * qvec(iat)
       dadr(:, iat, jat) = -dG * qvec(iat)
@@ -762,7 +618,6 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
    end do
    !$omp end do
    !$omp end parallel
-
 end subroutine get_damat_0d
 
 
@@ -875,13 +730,10 @@ subroutine get_damat_pbc(self, mol, ptr, qvec, dadr, dadL, atrace)
 
 end subroutine get_damat_pbc
 
-
 !> Inspect cache and reallocate it in case of type mismatch
 subroutine taint(cache, ptr)
-
    !> Instance of the cache
    type(cache_container), target, intent(inout) :: cache
-
    !> Reference to the cache
    type(eeq_cache), pointer, intent(out) :: ptr
 
@@ -900,26 +752,19 @@ subroutine taint(cache, ptr)
    end if
 
    call view(cache, ptr)
-
 end subroutine taint
-
 
 !> Return reference to cache after resolving its type
 subroutine view(cache, ptr)
-
    !> Instance of the cache
    type(cache_container), target, intent(inout) :: cache
-
    !> Reference to the cache
    type(eeq_cache), pointer, intent(out) :: ptr
-
    nullify(ptr)
    select type(target => cache%raw)
    type is(eeq_cache)
       ptr => target
    end select
-
 end subroutine view
-
 
 end module multicharge_model_eeq

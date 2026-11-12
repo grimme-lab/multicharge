@@ -19,14 +19,14 @@ module test_pbc
    use mctc_env_testing, only: new_unittest, unittest_type, error_type, &
       & test_failed
    use mctc_io_convert, only: aatoau
-   use mctc_io_structure, only: structure_type, new
-   use mstore, only: get_structure
    use multicharge, only: get_charges, add_charge_hessian
    use multicharge_ewald, only: get_alpha, get_ewald_dir_trans, get_ewald_rec_trans, &
       & fast_f012_1d, fast_k012_1d, erfc_exp_2d
+   use multicharge_model_eeq, only: eeq_cache
+   use mctc_io_structure, only: structure_type, new
+   use mstore, only: get_structure
    use multicharge_model, only: mchrg_model_type
    use multicharge_model_cache, only: cache_container
-   use multicharge_model_eeq, only: eeq_cache
    use multicharge_model_eeqbc, only: eeqbc_model
    use multicharge_param, only: new_eeq2019_model, new_eeqbc2025_model
    implicit none
@@ -49,7 +49,6 @@ module test_pbc
 
 contains
 
-
 !> Collect all exported unit tests
 subroutine collect_pbc(testsuite)
 
@@ -61,19 +60,19 @@ subroutine collect_pbc(testsuite)
       & new_unittest("eeq-energy-formamide", test_eeq_e_formamide), &
       & new_unittest("eeq-dbdr-co2", test_eeq_dbdr_co2), &
       & new_unittest("eeq-dbdL-co2", test_eeq_dbdL_co2), &
-      & new_unittest("eeq-dadr-znoh", test_eeq_dadr_znoh), &
-      & new_unittest("eeq-dadL-znoh", test_eeq_dadL_znoh), &
+      & new_unittest("eeq-dadr-ice", test_eeq_dadr_ice), &
+      & new_unittest("eeq-dadL-ice", test_eeq_dadL_ice), &
       & new_unittest("eeq-gradient-co2", test_eeq_g_co2), &
-      & new_unittest("eeq-sigma-co2", test_eeq_s_co2), &
+      & new_unittest("eeq-sigma-ice", test_eeq_s_ice), &
       & new_unittest("eeq-dqdr-urea", test_eeq_dqdr_urea), &
       & new_unittest("eeq-dqdL-oxacb", test_eeq_dqdL_oxacb), &
       & new_unittest("eeqbc-dbdr-co2", test_eeqbc_dbdr_co2), &
       & new_unittest("eeqbc-dbdL-co2", test_eeqbc_dbdL_co2), &
-      & new_unittest("eeqbc-dadr-znoh", test_eeqbc_dadr_znoh), &
+      & new_unittest("eeqbc-dadr-ice", test_eeqbc_dadr_ice), &
       & new_unittest("eeqbc-response-znoh", test_eeqbc_response_znoh), &
-      & new_unittest("eeqbc-dadL-znoh", test_eeqbc_dadL_znoh), &
+      & new_unittest("eeqbc-dadL-ice", test_eeqbc_dadL_ice), &
       & new_unittest("eeqbc-gradient-co2", test_eeqbc_g_co2), &
-      & new_unittest("eeqbc-sigma-co2", test_eeqbc_s_co2), &
+      & new_unittest("eeqbc-sigma-ice", test_eeqbc_s_ice), &
       & new_unittest("eeqbc-dqdr-urea", test_eeqbc_dqdr_urea), &
       & new_unittest("eeqbc-dqdL-oxacb", test_eeqbc_dqdL_oxacb), &
       & new_unittest("eeq-1d", test_eeq_1d), &
@@ -94,18 +93,17 @@ subroutine collect_pbc(testsuite)
 
 end subroutine collect_pbc
 
-
 !> Compact skew cell probes nonlocal widths and their periodic self images.
 subroutine test_eeqbc_response_znoh(error)
-
-   !> Error handling
    type(error_type), allocatable, intent(out) :: error
-
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call new(mol, znoh_num, znoh_xyz, charge=1.0_wp, lattice=znoh_lat, &
-      & periodic=[.true., .true., .true.])
+   call new(mol, [30, 8, 1], reshape([ &
+      & 0.0_wp, 0.0_wp, 0.0_wp, 3.0_wp, 0.1_wp, 0.2_wp, &
+      & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3]), charge=1.0_wp, &
+      & lattice=reshape([5.1_wp, 0.0_wp, 0.0_wp, 0.4_wp, 6.2_wp, 0.0_wp, &
+      & 0.2_wp, 0.7_wp, 7.1_wp], [3, 3]), periodic=[.true., .true., .true.])
    call new_eeqbc2025_model(mol, model, error)
    if (allocated(error)) return
    call test_dadr(error, mol, model)
@@ -113,9 +111,7 @@ subroutine test_eeqbc_response_znoh(error)
    call test_dadL(error, mol, model)
    if (allocated(error)) return
    call test_numdqdr(error, mol, model)
-
 end subroutine test_eeqbc_response_znoh
-
 
 subroutine gen_test(error, mol, model, qref, eref)
 
@@ -184,7 +180,6 @@ subroutine gen_test(error, mol, model, qref, eref)
    end if
 
 end subroutine gen_test
-
 
 subroutine test_numgrad(error, mol, model)
 
@@ -261,7 +256,6 @@ subroutine test_numgrad(error, mol, model)
    end if
 
 end subroutine test_numgrad
-
 
 subroutine test_numsigma(error, mol, model)
 
@@ -351,7 +345,6 @@ subroutine test_numsigma(error, mol, model)
 
 end subroutine test_numsigma
 
-
 subroutine test_dbdr(error, mol, model)
 
    !> Molecular structure data
@@ -429,7 +422,6 @@ subroutine test_dbdr(error, mol, model)
 
 end subroutine test_dbdr
 
-
 subroutine test_dbdL(error, mol, model)
 
    !> Molecular structure data
@@ -444,7 +436,7 @@ subroutine test_dbdL(error, mol, model)
    integer :: iat, ic, jc
    real(wp), parameter :: cutoff = 25.0_wp
    real(wp), parameter :: step = 1.0e-6_wp, unity(3, 3) = reshape(&
-      & [1, 0, 0, 0, 1, 0, 0, 0, 1], [3, 3])
+   & [1, 0, 0, 0, 1, 0, 0, 0, 1], [3, 3])
    real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :)
    real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
    real(wp), allocatable :: dbdr(:, :, :), dbdL(:, :, :)
@@ -525,7 +517,6 @@ subroutine test_dbdL(error, mol, model)
    end if
 
 end subroutine test_dbdL
-
 
 subroutine test_dadr(error, mol, model)
 
@@ -633,7 +624,6 @@ subroutine test_dadr(error, mol, model)
 
 end subroutine test_dadr
 
-
 subroutine test_dadL(error, mol, model)
 
    !> Molecular structure data
@@ -648,7 +638,7 @@ subroutine test_dadL(error, mol, model)
    integer :: ic, jc, iat
    real(wp), parameter :: cutoff = 25.0_wp
    real(wp), parameter :: step = 1.0e-6_wp, unity(3, 3) = reshape(&
-      & [1, 0, 0, 0, 1, 0, 0, 0, 1], [3, 3])
+   & [1, 0, 0, 0, 1, 0, 0, 0, 1], [3, 3])
    real(wp), allocatable :: cn(:), dcndr(:, :, :), dcndL(:, :, :)
    real(wp), allocatable :: qloc(:), dqlocdr(:, :, :), dqlocdL(:, :, :)
    real(wp), allocatable :: dadr(:, :, :), dadL(:, :, :), atrace(:, :)
@@ -734,7 +724,6 @@ subroutine test_dadL(error, mol, model)
 
 end subroutine test_dadL
 
-
 subroutine test_numdqdr(error, mol, model)
 
    !> Molecular structure data
@@ -801,7 +790,6 @@ subroutine test_numdqdr(error, mol, model)
    end if
 
 end subroutine test_numdqdr
-
 
 subroutine test_numdqdL(error, mol, model)
 
@@ -886,38 +874,6 @@ subroutine test_numdqdL(error, mol, model)
 
 end subroutine test_numdqdL
 
-
-!> Run all finite-difference derivative checks for a given structure and model
-subroutine check_all_derivs(error, mol, model)
-
-   !> Error handling
-   type(error_type), allocatable, intent(out) :: error
-
-   !> Molecular structure data
-   type(structure_type), intent(inout) :: mol
-
-   !> Electronegativity equilibration model
-   class(mchrg_model_type), intent(in) :: model
-
-   call test_dbdr(error, mol, model)
-   if (allocated(error)) return
-   call test_dbdL(error, mol, model)
-   if (allocated(error)) return
-   call test_dadr(error, mol, model)
-   if (allocated(error)) return
-   call test_dadL(error, mol, model)
-   if (allocated(error)) return
-   call test_numgrad(error, mol, model)
-   if (allocated(error)) return
-   call test_numsigma(error, mol, model)
-   if (allocated(error)) return
-   call test_numdqdr(error, mol, model)
-   if (allocated(error)) return
-   call test_numdqdL(error, mol, model)
-
-end subroutine check_all_derivs
-
-
 subroutine test_eeq_q_cyanamide(error)
 
    !> Error handling
@@ -948,7 +904,6 @@ subroutine test_eeq_q_cyanamide(error)
 
 end subroutine test_eeq_q_cyanamide
 
-
 subroutine test_eeq_e_formamide(error)
 
    !> Error handling
@@ -956,6 +911,7 @@ subroutine test_eeq_e_formamide(error)
 
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
+   ! Updated for accuracy-driven Ewald cutoffs and mctc-lib Wigner-Seitz tolerance.
    real(wp), parameter :: ref(24) = [&
       & 4.01820317641649E-1_wp, 4.01826970293715E-1_wp, 4.01778618929473E-1_wp, &
       & 4.01801620737465E-1_wp, 4.30133215169715E-1_wp, 4.30106241841601E-1_wp, &
@@ -973,7 +929,6 @@ subroutine test_eeq_e_formamide(error)
 
 end subroutine test_eeq_e_formamide
 
-
 subroutine test_eeq_dbdr_co2(error)
 
    !> Error handling
@@ -988,7 +943,6 @@ subroutine test_eeq_dbdr_co2(error)
    call test_dbdr(error, mol, model)
 
 end subroutine test_eeq_dbdr_co2
-
 
 subroutine test_eeq_dbdL_co2(error)
 
@@ -1005,8 +959,7 @@ subroutine test_eeq_dbdL_co2(error)
 
 end subroutine test_eeq_dbdL_co2
 
-
-subroutine test_eeq_dadr_znoh(error)
+subroutine test_eeq_dadr_ice(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -1014,15 +967,14 @@ subroutine test_eeq_dadr_znoh(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call new(mol, znoh_num, znoh_xyz, lattice=znoh_lat, periodic=[.true., .true., .true.])
+   call get_structure(mol, "ICE10", "vi")
    call new_eeq2019_model(mol, model, error)
    if (allocated(error)) return
    call test_dadr(error, mol, model)
 
-end subroutine test_eeq_dadr_znoh
+end subroutine test_eeq_dadr_ice
 
-
-subroutine test_eeq_dadL_znoh(error)
+subroutine test_eeq_dadL_ice(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -1030,13 +982,12 @@ subroutine test_eeq_dadL_znoh(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call new(mol, znoh_num, znoh_xyz, lattice=znoh_lat, periodic=[.true., .true., .true.])
+   call get_structure(mol, "ICE10", "vi")
    call new_eeq2019_model(mol, model, error)
    if (allocated(error)) return
    call test_dadL(error, mol, model)
 
-end subroutine test_eeq_dadL_znoh
-
+end subroutine test_eeq_dadL_ice
 
 subroutine test_eeq_g_co2(error)
 
@@ -1053,8 +1004,7 @@ subroutine test_eeq_g_co2(error)
 
 end subroutine test_eeq_g_co2
 
-
-subroutine test_eeq_s_co2(error)
+subroutine test_eeq_s_ice(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -1062,13 +1012,12 @@ subroutine test_eeq_s_co2(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call get_structure(mol, "X23", "CO2")
+   call get_structure(mol, "ICE10", "vi")
    call new_eeq2019_model(mol, model, error)
    if (allocated(error)) return
    call test_numsigma(error, mol, model)
 
-end subroutine test_eeq_s_co2
-
+end subroutine test_eeq_s_ice
 
 subroutine test_eeq_dqdr_urea(error)
 
@@ -1085,7 +1034,6 @@ subroutine test_eeq_dqdr_urea(error)
 
 end subroutine test_eeq_dqdr_urea
 
-
 subroutine test_eeq_dqdL_oxacb(error)
 
    !> Error handling
@@ -1100,7 +1048,6 @@ subroutine test_eeq_dqdL_oxacb(error)
    call test_numdqdL(error, mol, model)
 
 end subroutine test_eeq_dqdL_oxacb
-
 
 subroutine test_eeqbc_dbdr_co2(error)
 
@@ -1117,7 +1064,6 @@ subroutine test_eeqbc_dbdr_co2(error)
 
 end subroutine test_eeqbc_dbdr_co2
 
-
 subroutine test_eeqbc_dbdL_co2(error)
 
    !> Error handling
@@ -1133,8 +1079,7 @@ subroutine test_eeqbc_dbdL_co2(error)
 
 end subroutine test_eeqbc_dbdL_co2
 
-
-subroutine test_eeqbc_dadr_znoh(error)
+subroutine test_eeqbc_dadr_ice(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -1142,15 +1087,14 @@ subroutine test_eeqbc_dadr_znoh(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call new(mol, znoh_num, znoh_xyz, lattice=znoh_lat, periodic=[.true., .true., .true.])
+   call get_structure(mol, "ICE10", "vi")
    call new_eeqbc2025_model(mol, model, error)
    if (allocated(error)) return
    call test_dadr(error, mol, model)
 
-end subroutine test_eeqbc_dadr_znoh
+end subroutine test_eeqbc_dadr_ice
 
-
-subroutine test_eeqbc_dadL_znoh(error)
+subroutine test_eeqbc_dadL_ice(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -1158,13 +1102,12 @@ subroutine test_eeqbc_dadL_znoh(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call new(mol, znoh_num, znoh_xyz, lattice=znoh_lat, periodic=[.true., .true., .true.])
+   call get_structure(mol, "ICE10", "vi")
    call new_eeqbc2025_model(mol, model, error)
    if (allocated(error)) return
    call test_dadL(error, mol, model)
 
-end subroutine test_eeqbc_dadL_znoh
-
+end subroutine test_eeqbc_dadL_ice
 
 subroutine test_eeqbc_g_co2(error)
 
@@ -1181,8 +1124,7 @@ subroutine test_eeqbc_g_co2(error)
 
 end subroutine test_eeqbc_g_co2
 
-
-subroutine test_eeqbc_s_co2(error)
+subroutine test_eeqbc_s_ice(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -1190,13 +1132,12 @@ subroutine test_eeqbc_s_co2(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call get_structure(mol, "X23", "CO2")
+   call get_structure(mol, "ICE10", "vi")
    call new_eeqbc2025_model(mol, model, error)
    if (allocated(error)) return
    call test_numsigma(error, mol, model)
 
-end subroutine test_eeqbc_s_co2
-
+end subroutine test_eeqbc_s_ice
 
 subroutine test_eeqbc_dqdr_urea(error)
 
@@ -1213,7 +1154,6 @@ subroutine test_eeqbc_dqdr_urea(error)
 
 end subroutine test_eeqbc_dqdr_urea
 
-
 subroutine test_eeqbc_dqdL_oxacb(error)
 
    !> Error handling
@@ -1228,6 +1168,37 @@ subroutine test_eeqbc_dqdL_oxacb(error)
    call test_numdqdL(error, mol, model)
 
 end subroutine test_eeqbc_dqdL_oxacb
+
+
+!> Run all finite-difference derivative checks for a given structure and model
+subroutine check_all_derivs(error, mol, model)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   !> Molecular structure data
+   type(structure_type), intent(inout) :: mol
+
+   !> Electronegativity equilibration model
+   class(mchrg_model_type), intent(in) :: model
+
+   call test_dbdr(error, mol, model)
+   if (allocated(error)) return
+   call test_dbdL(error, mol, model)
+   if (allocated(error)) return
+   call test_dadr(error, mol, model)
+   if (allocated(error)) return
+   call test_dadL(error, mol, model)
+   if (allocated(error)) return
+   call test_numgrad(error, mol, model)
+   if (allocated(error)) return
+   call test_numsigma(error, mol, model)
+   if (allocated(error)) return
+   call test_numdqdr(error, mol, model)
+   if (allocated(error)) return
+   call test_numdqdL(error, mol, model)
+
+end subroutine check_all_derivs
 
 
 !> Test 1D periodic EEQ across all mask orientations and verify derivatives.

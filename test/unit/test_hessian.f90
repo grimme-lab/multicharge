@@ -383,21 +383,13 @@ subroutine check_model_response(error, mol, bond_capacity, cn_cut, label)
 end subroutine check_model_response
 
 
-!> Independent reference: central differences of the weighted first response
+!> Independent reference: central differences of the weighted first response.
 subroutine check_response(error, mol, model)
-
-   !> Error handling
    type(error_type), allocatable, intent(out) :: error
-
-   !> Molecular structure data
    type(structure_type), intent(inout) :: mol
-
-   !> Charge model instance
    class(mchrg_model_type), intent(in) :: model
-
-   real(wp), parameter :: step = 1.0e-4_wp
-
    type(cache_container) :: cache
+   real(wp), parameter :: step = 1.0e-4_wp
    real(wp) :: xyz, delta, scale
    real(wp), allocatable :: q(:), weights(:), hess(:, :), numeric(:, :), again(:, :)
    real(wp), allocatable :: dqdr(:, :, :), dqdL(:, :, :), grad(:, :), plus(:, :)
