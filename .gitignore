@@ -34,3 +34,9 @@
 # Directories
 /build*/
 /_*/
+
+# Coverage
+coverage*
+*.gcov
+*.gcda
+*.gcno

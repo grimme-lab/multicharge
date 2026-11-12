@@ -29,10 +29,9 @@ if not mstore_dep.found()
 endif
 
 tests = [
-  'model',
   'hessian',
+  'model',
   'pbc',
-  'wignerseitz',
 ]
 
 test_srcs = files(

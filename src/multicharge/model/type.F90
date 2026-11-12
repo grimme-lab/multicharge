@@ -79,10 +79,11 @@ module multicharge_model_type
    end type mchrg_model_type
 
    abstract interface
-      subroutine update(self, mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
-         import :: mchrg_model_type, structure_type, cache_container, wp
+      subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
+         import :: mchrg_model_type, structure_type, error_type, cache_container, wp
          class(mchrg_model_type), intent(in) :: self
          type(structure_type), intent(in) :: mol
+         type(error_type), allocatable, intent(out) :: error
          type(cache_container), intent(inout) :: cache
          real(wp), intent(in) :: cn(:)
          real(wp), intent(in), optional :: qloc(:)
@@ -233,7 +234,8 @@ subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
    end if
 
    ! Update cache
-   call self%update(mol, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
+   call self%update(mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL)
+   if (allocated(error)) return
 
    ! Setup the Coulomb matrix
    ndim = mol%nat + 1
@@ -408,9 +410,9 @@ subroutine local_charge(self, mol, trans, qloc, dqlocdr, dqlocdL)
    !> Local atomic partial charges
    real(wp), intent(out) :: qloc(:)
    !> Optional derivative of local atomic partial charges w.r.t. atomic positions
-   real(wp), intent(out), optional :: dqlocdr(3, mol%nat, mol%nat)
+   real(wp), intent(out), optional :: dqlocdr(:, :, :)
    !> Optional derivative of local atomic partial charges w.r.t. lattice vectors
-   real(wp), intent(out), optional :: dqlocdL(3, 3, mol%nat)
+   real(wp), intent(out), optional :: dqlocdL(:, :, :)
 
    qloc = 0.0_wp
    if (present(dqlocdr) .and. present(dqlocdL)) then

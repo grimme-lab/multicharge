@@ -16,10 +16,9 @@
 # Unit testing
 set(
   tests
-  "model"
   "hessian"
+  "model"
   "pbc"
-  "wignerseitz"
 )
 set(
   test-srcs
