@@ -28,13 +28,16 @@ module multicharge_model_eeq
    use mctc_io_constants, only: pi
    use mctc_io_math, only: crossprod, outerprod
    use mctc_ncoord, only: new_ncoord, cn_count
-   use mctc_wignerseitz, only: wignerseitz_cell, new_wignerseitz_cell
+   use mctc_wignerseitz, only: new_wignerseitz_cell
    use multicharge_blas, only: gemm
-   use multicharge_ewald, only: get_alpha, get_ewald_dir_trans, get_ewald_rec_trans, &
-      & erfc_exp_2d, fast_f012_1d, fast_k012_1d
+   use multicharge_ewald, only: get_alpha, get_amat_dir, get_amat_rec_1d, &
+      & get_amat_rec_2d, get_amat_rec_3d, get_damat_dir, get_damat_rec_1d, &
+      & get_damat_rec_2d, get_damat_rec_3d, get_ewald_dir_trans, &
+      & get_ewald_rec_trans, get_hess_dir, get_hess_rec_1d, get_hess_rec_2d, &
+      & get_hess_rec_3d, get_rec_weights
    use multicharge_model_cache, only: cache_container, model_cache
-   use multicharge_model_hessian, only: coulomb_kernel, radial_hessian, &
-      & add_pair_hessian, add_pair_block
+   use multicharge_model_hessian, only: coulomb_kernel, add_pair_hessian, &
+      & add_pair_block
    use multicharge_model_type, only: mchrg_model_type
    implicit none
    private
@@ -94,10 +97,6 @@ module multicharge_model_eeq
    real(wp), parameter :: sqrtpi = sqrt(pi)
    real(wp), parameter :: sqrt2pi = sqrt(2.0_wp / pi)
    real(wp), parameter :: eps = sqrt(epsilon(0.0_wp))
-   real(wp), parameter :: unity(3, 3) = reshape([ &
-      & 1.0_wp, 0.0_wp, 0.0_wp, &
-      & 0.0_wp, 1.0_wp, 0.0_wp, &
-      & 0.0_wp, 0.0_wp, 1.0_wp], [3, 3])
 
 
 contains
@@ -228,7 +227,7 @@ subroutine setup_ewald(self, mol, cache, error)
    type(error_type), allocatable, intent(out) :: error
 
    integer :: p_axes(3)
-   real(wp) :: gam_min, max_rij, n_vec(3)
+   real(wp) :: gam_min, n_vec(3)
 
    call get_alpha(mol%lattice, cache%alpha, error, mol%periodic)
    if (allocated(error)) return
@@ -238,10 +237,9 @@ subroutine setup_ewald(self, mol, cache, error)
 
    call get_periodic_axes(mol%periodic, cache%ndim, p_axes)
    gam_min = 1.0_wp / (sqrt(2.0_wp) * maxval(self%rad(mol%id)))
-   max_rij = get_max_wsc_disp(mol, cache%wsc)
 
    call get_ewald_dir_trans(mol%periodic, mol%lattice, cache%alpha, &
-      & gam_min, cache%dtrans, error, max_rij)
+      & gam_min, cache%dtrans, error)
    if (allocated(error)) return
    call get_ewald_rec_trans(mol%periodic, mol%lattice, cache%alpha, &
       & cache%rtrans, error, cache%vol)
@@ -261,35 +259,6 @@ subroutine setup_ewald(self, mol, cache, error)
    end select
 
 end subroutine setup_ewald
-
-
-!> Compute maximum interatomic pair displacement within the Wigner-Seitz cell
-pure function get_max_wsc_disp(mol, wsc) result(max_rij)
-
-   !> Molecular structure data
-   type(structure_type), intent(in) :: mol
-
-   !> Wigner-Seitz cell instance
-   type(wignerseitz_cell), intent(in) :: wsc
-
-   !> Maximum pair displacement norm
-   real(wp) :: max_rij
-
-   integer :: iat, jat, img
-   real(wp) :: vec(3)
-
-   max_rij = 0.0_wp
-   do iat = 1, mol%nat
-      do jat = 1, iat - 1
-         do img = 1, wsc%nimg(jat, iat)
-            vec = mol%xyz(:, jat) - mol%xyz(:, iat) &
-               & + wsc%trans(:, wsc%tridx(img, jat, iat))
-            max_rij = max(max_rij, norm2(vec))
-         end do
-      end do
-   end do
-
-end function get_max_wsc_disp
 
 
 !> Evaluate the electronegativity right-hand side vector
@@ -485,17 +454,16 @@ subroutine add_periodic_hessian(self, mol, ptr, qvec, adj, hessian, diagonal)
    !> Diagonal Cartesian Hessian blocks
    real(wp), intent(inout) :: diagonal(:, :, :)
 
-   integer :: iat, jat, izp, jzp, img, itr, ipair, npair
-   real(wp) :: rij(3), vec(3), box(3, 3), rbox(3, 3), gam, r, weight, wsw
-   real(wp) :: val, dr, drr, ar, arr
+   integer :: iat, jat, izp, jzp, img, ipair, npair
+   real(wp) :: rij(3), vec(3), box(3, 3), dbox(3, 3), rbox(3, 3), gam, weight, wsw
 
    ! Each pair owns its off-diagonal blocks. Only the diagonal blocks are
    ! reduced, avoiding a full (3N, 3N) Hessian copy for every OpenMP thread.
    npair = mol%nat * (mol%nat + 1) / 2
    !$omp parallel do default(none) schedule(runtime) &
    !$omp& shared(self, mol, ptr, qvec, adj, hessian, npair) &
-   !$omp& private(iat, jat, izp, jzp, img, itr, rij, vec, box, rbox, gam, r, &
-   !$omp& weight, wsw, val, dr, drr, ar, arr) &
+   !$omp& private(iat, jat, izp, jzp, img, rij, vec, box, dbox, rbox, gam, &
+   !$omp& weight, wsw) &
    !$omp& reduction(+:diagonal)
    do ipair = 1, npair
       iat = int(0.5_wp * (sqrt(8.0_wp * real(ipair, wp) + 1.0_wp) - 1.0_wp))
@@ -507,190 +475,31 @@ subroutine add_periodic_hessian(self, mol, ptr, qvec, adj, hessian, diagonal)
       jzp = mol%id(jat)
       gam = 1.0_wp / sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
       weight = -(adj(iat) * qvec(jat) + adj(jat) * qvec(iat))
+      rij = mol%xyz(:, jat) - mol%xyz(:, iat)
       wsw = 1.0_wp / real(ptr%wsc%nimg(jat, iat), wp)
       box = 0.0_wp
       do img = 1, ptr%wsc%nimg(jat, iat)
-         rij = mol%xyz(:, iat) - mol%xyz(:, jat) &
-            & - ptr%wsc%trans(:, ptr%wsc%tridx(img, jat, iat))
-         do itr = 1, size(ptr%dtrans, 2)
-            vec = rij + ptr%dtrans(:, itr)
-            r = norm2(vec)
-            if (r < eps) cycle
-
-            call coulomb_kernel(r, gam, val, dr, drr)
-            call coulomb_kernel(r, ptr%alpha, val, ar, arr)
-            box = box + wsw * radial_hessian(vec, r, dr - ar, drr - arr)
-         end do
+         vec = rij + ptr%wsc%trans(:, ptr%wsc%tridx(img, jat, iat))
+         call get_hess_dir(vec, gam, ptr%alpha, ptr%dtrans, dbox)
          select case (ptr%ndim)
          case (1)
-            call get_hess_rec_1d(rij, ptr%alpha, ptr%vol, ptr%axis_vec, &
+            call get_hess_rec_1d(vec, ptr%alpha, ptr%vol, ptr%axis_vec, &
                & ptr%rtrans, rbox)
          case (2)
-            call get_hess_rec_2d(rij, ptr%alpha, ptr%vol, ptr%axis_vec, &
+            call get_hess_rec_2d(vec, ptr%alpha, ptr%vol, ptr%axis_vec, &
                & ptr%rtrans, rbox)
          case (3)
-            call get_hess_rec_3d(rij, ptr%rtrans, ptr%rec_weight, rbox)
+            call get_hess_rec_3d(vec, ptr%rtrans, ptr%rec_weight, rbox)
          case default
             rbox = 0.0_wp
          end select
-         box = box + wsw * rbox
+         box = box + dbox + rbox
       end do
-      call add_pair_block(iat, jat, weight * box, hessian, diagonal)
+      call add_pair_block(iat, jat, weight * wsw * box, hessian, diagonal)
    end do
    !$omp end parallel do
 
 end subroutine add_periodic_hessian
-
-
-!> Reciprocal-space pair Hessian block for 3D Ewald
-pure subroutine get_hess_rec_3d(rij, trans, weight, rbox)
-
-   !> Interatomic displacement vector
-   real(wp), intent(in) :: rij(3)
-
-   !> Reciprocal-space translation vectors
-   real(wp), intent(in) :: trans(:, :)
-
-   !> Reciprocal-space weights
-   real(wp), intent(in) :: weight(:)
-
-   !> Reciprocal-space Hessian block
-   real(wp), intent(out) :: rbox(3, 3)
-
-   integer :: itr
-   real(wp) :: vec(3)
-
-   rbox = 0.0_wp
-   do itr = 1, size(trans, 2)
-      vec = trans(:, itr)
-      rbox = rbox - weight(itr) * cos(dot_product(rij, vec)) &
-         & * outerprod(vec, vec)
-   end do
-
-end subroutine get_hess_rec_3d
-
-
-!> Reciprocal-space and G=0 sheet pair Hessian block for 2D Ewald
-pure subroutine get_hess_rec_2d(rij, alpha, area, n_hat, trans, rbox)
-
-   !> Interatomic displacement vector
-   real(wp), intent(in) :: rij(3)
-
-   !> Ewald splitting parameter
-   real(wp), intent(in) :: alpha
-
-   !> Periodic surface area
-   real(wp), intent(in) :: area
-
-   !> Unit normal vector to the periodic plane
-   real(wp), intent(in) :: n_hat(3)
-
-   !> Reciprocal-space translation vectors
-   real(wp), intent(in) :: trans(:, :)
-
-   !> Reciprocal-space Hessian block
-   real(wp), intent(out) :: rbox(3, 3)
-
-   integer :: itr
-   real(wp) :: z, pi_area, inv_alp2, z2_alp2, g_vec(3), g2, g_norm, gv, cos_gv, sin_gv
-   real(wp) :: ep, em, fp, fm, gauss, pref, gauss_z
-   real(wp) :: gg_mat(3, 3), nn_mat(3, 3), ng_sym(3, 3)
-
-   rbox = 0.0_wp
-   z = dot_product(rij, n_hat)
-   pi_area = pi / area
-   inv_alp2 = 1.0_wp / (alpha * alpha)
-   z2_alp2 = (alpha * z)**2
-   nn_mat = outerprod(n_hat, n_hat)
-
-   do itr = 1, size(trans, 2)
-      g_vec = trans(:, itr)
-      g2 = dot_product(g_vec, g_vec)
-      if (g2 < eps) cycle
-
-      g_norm = sqrt(g2)
-      gv = dot_product(g_vec, rij)
-      cos_gv = cos(gv)
-      sin_gv = sin(gv)
-      ep = erfc_exp_2d(g_norm, +z, alpha)
-      em = erfc_exp_2d(g_norm, -z, alpha)
-      fp = ep + em
-      fm = ep - em
-      gauss = exp(-0.25_wp * g2 * inv_alp2 - z2_alp2)
-      pref = pi_area / g_norm
-      gg_mat = outerprod(g_vec, g_vec)
-      ng_sym = outerprod(g_vec, n_hat) + outerprod(n_hat, g_vec)
-      rbox = rbox - pref * cos_gv * fp * gg_mat &
-         & - pi_area * sin_gv * fm * ng_sym &
-         & + pi_area * cos_gv &
-         & * (g_norm * fp - (4.0_wp / sqrtpi) * alpha * gauss) * nn_mat
-   end do
-
-   gauss_z = exp(-z2_alp2)
-   rbox = rbox - (4.0_wp * sqrtpi * alpha / area) * gauss_z * nn_mat
-
-end subroutine get_hess_rec_2d
-
-
-!> Reciprocal-space and G=0 wire pair Hessian block for 1D Ewald
-pure subroutine get_hess_rec_1d(rij, alpha, len1, u_hat, trans, rbox)
-
-   !> Interatomic displacement vector
-   real(wp), intent(in) :: rij(3)
-
-   !> Ewald splitting parameter
-   real(wp), intent(in) :: alpha
-
-   !> Periodic wire length
-   real(wp), intent(in) :: len1
-
-   !> Unit vector along the periodic wire axis
-   real(wp), intent(in) :: u_hat(3)
-
-   !> Reciprocal-space translation vectors
-   real(wp), intent(in) :: trans(:, :)
-
-   !> Reciprocal-space Hessian block
-   real(wp), intent(out) :: rbox(3, 3)
-
-   integer :: itr
-   real(wp) :: r_perp(3), rho2, alp2, inv_alp2, inv_len, x, y, g_vec(3), g2, gv
-   real(wp) :: cos_gv, sin_gv, k0, k1, k2, f0, f1, f2
-   real(wp) :: p_perp(3, 3), gg_mat(3, 3), rg_sym(3, 3), rr_mat(3, 3)
-
-   rbox = 0.0_wp
-   p_perp = unity - outerprod(u_hat, u_hat)
-   r_perp = rij - dot_product(rij, u_hat) * u_hat
-   rho2 = dot_product(r_perp, r_perp)
-   alp2 = alpha * alpha
-   inv_alp2 = 1.0_wp / alp2
-   inv_len = 1.0_wp / len1
-   y = alp2 * rho2
-   rr_mat = outerprod(r_perp, r_perp)
-
-   do itr = 1, size(trans, 2)
-      g_vec = trans(:, itr)
-      g2 = dot_product(g_vec, g_vec)
-      if (g2 < eps) cycle
-
-      x = 0.25_wp * g2 * inv_alp2
-      gv = dot_product(g_vec, rij)
-      cos_gv = cos(gv)
-      sin_gv = sin(gv)
-      call fast_k012_1d(x, y, k0, k1, k2)
-      gg_mat = outerprod(g_vec, g_vec)
-      rg_sym = outerprod(g_vec, r_perp) + outerprod(r_perp, g_vec)
-      rbox = rbox + inv_len * (-cos_gv * k0 * gg_mat &
-         & + 2.0_wp * alp2 * sin_gv * k1 * rg_sym &
-         & + cos_gv * (-2.0_wp * alp2 * k1 * p_perp &
-         & + 4.0_wp * alp2 * alp2 * k2 * rr_mat))
-   end do
-
-   call fast_f012_1d(y, f0, f1, f2)
-   rbox = rbox + inv_len * (-2.0_wp * alp2 * f1 * p_perp &
-      & - 4.0_wp * alp2 * alp2 * f2 * rr_mat)
-
-end subroutine get_hess_rec_1d
 
 
 !> Evaluate the EEQ Coulomb interaction matrix
@@ -847,158 +656,6 @@ subroutine get_amat_pbc(self, mol, ptr, amat)
    amat(mol%nat + 1, mol%nat + 1) = 0.0_wp
 
 end subroutine get_amat_pbc
-
-
-!> Direct-space Ewald contribution to the Coulomb matrix.
-!> This short-range sum is identical for 1D, 2D, and 3D periodicity.
-subroutine get_amat_dir(rij, gam, alp, trans, amat)
-
-   !> Interatomic displacement vector
-   real(wp), intent(in) :: rij(3)
-
-   !> Effective Gaussian charge width parameter
-   real(wp), intent(in) :: gam
-
-   !> Ewald splitting parameter
-   real(wp), intent(in) :: alp
-
-   !> Direct-space lattice translation vectors
-   real(wp), intent(in) :: trans(:, :)
-
-   !> Direct-space Coulomb matrix element contribution
-   real(wp), intent(out) :: amat
-
-   integer :: itr
-   real(wp) :: vec(3), r1, tmp
-
-   amat = 0.0_wp
-
-   do itr = 1, size(trans, 2)
-      vec(:) = rij + trans(:, itr)
-      r1 = norm2(vec)
-      if (r1 < eps) cycle
-
-      tmp = (erf(gam * r1) - erf(alp * r1)) / r1
-      amat = amat + tmp
-   end do
-
-end subroutine get_amat_dir
-
-
-!> Reciprocal-space contribution to the Coulomb matrix for 3D Ewald
-pure subroutine get_amat_rec_3d(rij, trans, weight, amat)
-
-   !> Interatomic displacement vector
-   real(wp), intent(in) :: rij(3)
-
-   !> Reciprocal-space translation vectors
-   real(wp), intent(in) :: trans(:, :)
-
-   !> Reciprocal-space weights
-   real(wp), intent(in) :: weight(:)
-
-   !> Reciprocal-space Coulomb matrix element contribution
-   real(wp), intent(out) :: amat
-
-   integer :: itr
-
-   amat = 0.0_wp
-   do itr = 1, size(trans, 2)
-      amat = amat + weight(itr) * cos(dot_product(rij, trans(:, itr)))
-   end do
-
-end subroutine get_amat_rec_3d
-
-
-!> Reciprocal-space and G=0 sheet contribution for 2D Ewald
-pure subroutine get_amat_rec_2d(rij, alpha, area, n_hat, trans, amat)
-
-   !> Interatomic displacement vector
-   real(wp), intent(in) :: rij(3)
-
-   !> Ewald splitting parameter
-   real(wp), intent(in) :: alpha
-
-   !> Periodic surface area
-   real(wp), intent(in) :: area
-
-   !> Unit normal vector to the periodic plane
-   real(wp), intent(in) :: n_hat(3)
-
-   !> Reciprocal-space translation vectors
-   real(wp), intent(in) :: trans(:, :)
-
-   !> Reciprocal-space Coulomb matrix element contribution
-   real(wp), intent(out) :: amat
-
-   integer :: itr
-   real(wp) :: z, pi_area, g_vec(3), g_norm, gv, ep, em
-
-   z = dot_product(rij, n_hat)
-   pi_area = pi / area
-   amat = 0.0_wp
-   do itr = 1, size(trans, 2)
-      g_vec = trans(:, itr)
-      g_norm = norm2(g_vec)
-      if (g_norm < eps) cycle
-
-      gv = dot_product(rij, g_vec)
-      ep = erfc_exp_2d(g_norm, +z, alpha)
-      em = erfc_exp_2d(g_norm, -z, alpha)
-      amat = amat + (pi_area / g_norm) * cos(gv) * (ep + em)
-   end do
-   amat = amat - 2.0_wp * pi_area &
-      & * (z * erf(alpha * z) + exp(-(alpha * z)**2) / (alpha * sqrtpi))
-
-end subroutine get_amat_rec_2d
-
-
-!> Reciprocal-space and G=0 wire contribution for 1D Ewald
-pure subroutine get_amat_rec_1d(rij, alpha, len1, u_hat, trans, amat)
-
-   !> Interatomic displacement vector
-   real(wp), intent(in) :: rij(3)
-
-   !> Ewald splitting parameter
-   real(wp), intent(in) :: alpha
-
-   !> Periodic wire length
-   real(wp), intent(in) :: len1
-
-   !> Unit vector along the periodic wire axis
-   real(wp), intent(in) :: u_hat(3)
-
-   !> Reciprocal-space translation vectors
-   real(wp), intent(in) :: trans(:, :)
-
-   !> Reciprocal-space Coulomb matrix element contribution
-   real(wp), intent(out) :: amat
-
-   integer :: itr
-   real(wp) :: r_perp(3), rho2, alp2, inv_alp2, x, y, g_vec(3), g2, gv
-   real(wp) :: k0, k1, k2, f0, f1, f2
-
-   amat = 0.0_wp
-   r_perp = rij - dot_product(rij, u_hat) * u_hat
-   rho2 = dot_product(r_perp, r_perp)
-   alp2 = alpha * alpha
-   inv_alp2 = 1.0_wp / alp2
-   y = alp2 * rho2
-
-   do itr = 1, size(trans, 2)
-      g_vec = trans(:, itr)
-      g2 = dot_product(g_vec, g_vec)
-      if (g2 < eps) cycle
-
-      x = 0.25_wp * g2 * inv_alp2
-      gv = dot_product(rij, g_vec)
-      call fast_k012_1d(x, y, k0, k1, k2)
-      amat = amat + cos(gv) * k0
-   end do
-   call fast_f012_1d(y, f0, f1, f2)
-   amat = (amat - f0 + 2.0_wp * log(alpha)) / len1
-
-end subroutine get_amat_rec_1d
 
 
 !> Evaluate derivatives of the EEQ Coulomb interaction matrix
@@ -1217,284 +874,6 @@ subroutine get_damat_pbc(self, mol, ptr, qvec, dadr, dadL, atrace)
    !$omp end parallel
 
 end subroutine get_damat_pbc
-
-
-!> Direct-space Ewald derivatives of the Coulomb matrix.
-!> This short-range derivative sum is identical for 1D, 2D, and 3D periodicity.
-subroutine get_damat_dir(rij, gam, alp, trans, dg, ds)
-
-   !> Interatomic displacement vector
-   real(wp), intent(in) :: rij(3)
-
-   !> Effective Gaussian charge width parameter
-   real(wp), intent(in) :: gam
-
-   !> Ewald splitting parameter
-   real(wp), intent(in) :: alp
-
-   !> Direct-space lattice translation vectors
-   real(wp), intent(in) :: trans(:, :)
-
-   !> Position derivative contribution
-   real(wp), intent(out) :: dg(3)
-
-   !> Strain derivative contribution
-   real(wp), intent(out) :: ds(3, 3)
-
-   integer :: itr
-   real(wp) :: vec(3), r1, r2, inv_r, inv_r2, gtmp, atmp, dtmp
-   real(wp) :: gam2, alp2, fac_g, fac_a
-
-   dg(:) = 0.0_wp
-   ds(:, :) = 0.0_wp
-
-   gam2 = gam * gam
-   alp2 = alp * alp
-   fac_g = (2.0_wp / sqrtpi) * gam
-   fac_a = (2.0_wp / sqrtpi) * alp
-
-   do itr = 1, size(trans, 2)
-      vec(:) = rij + trans(:, itr)
-      r1 = norm2(vec)
-      if (r1 < eps) cycle
-
-      r2 = r1 * r1
-      inv_r = 1.0_wp / r1
-      inv_r2 = inv_r * inv_r
-      gtmp = fac_g * exp(-r2 * gam2) - erf(r1 * gam) * inv_r
-      atmp = erf(r1 * alp) * inv_r - fac_a * exp(-r2 * alp2)
-      dtmp = (gtmp + atmp) * inv_r2
-      dg(:) = dg + dtmp * vec
-      ds(:, :) = ds + dtmp * outerprod(vec, vec)
-   end do
-
-end subroutine get_damat_dir
-
-
-!> Reciprocal-space Ewald derivatives of the Coulomb matrix for 3D periodicity
-pure subroutine get_damat_rec_3d(rij, trans, weight, strain, dg, ds)
-
-   !> Interatomic displacement vector
-   real(wp), intent(in) :: rij(3)
-
-   !> Reciprocal-space translation vectors
-   real(wp), intent(in) :: trans(:, :)
-
-   !> Reciprocal-space weights
-   real(wp), intent(in) :: weight(:)
-
-   !> Reciprocal-space strain tensors
-   real(wp), intent(in) :: strain(:, :, :)
-
-   !> Position derivative contribution
-   real(wp), intent(out) :: dg(3)
-
-   !> Strain derivative contribution
-   real(wp), intent(out) :: ds(3, 3)
-
-   integer :: itr
-   real(wp) :: gv
-
-   dg(:) = 0.0_wp
-   ds(:, :) = 0.0_wp
-   do itr = 1, size(trans, 2)
-      gv = dot_product(rij, trans(:, itr))
-      dg(:) = dg - weight(itr) * sin(gv) * trans(:, itr)
-      ds(:, :) = ds + cos(gv) * strain(:, :, itr)
-   end do
-
-end subroutine get_damat_rec_3d
-
-
-!> Reciprocal-space and G=0 sheet derivatives for 2D Ewald
-pure subroutine get_damat_rec_2d(rij, alpha, area, n_hat, trans, dg, ds)
-
-   !> Interatomic displacement vector
-   real(wp), intent(in) :: rij(3)
-
-   !> Ewald splitting parameter
-   real(wp), intent(in) :: alpha
-
-   !> Periodic surface area
-   real(wp), intent(in) :: area
-
-   !> Unit normal vector to the periodic plane
-   real(wp), intent(in) :: n_hat(3)
-
-   !> Reciprocal-space translation vectors
-   real(wp), intent(in) :: trans(:, :)
-
-   !> Position derivative contribution
-   real(wp), intent(out) :: dg(3)
-
-   !> Strain derivative contribution
-   real(wp), intent(out) :: ds(3, 3)
-
-   integer :: itr
-   real(wp) :: z, pi_area, inv_alp2, z2_alp2, fac_dg, r_perp(3), g_vec(3)
-   real(wp) :: g_norm, inv_g, gv, cos_gv, sin_gv
-   real(wp) :: ep, em, f_gz, df_dg, df_dz, pref, phi_0, dphi0_dz
-   real(wp) :: i_par(3, 3), nn(3, 3), outer_gg(3, 3), outer_rg(3, 3)
-
-   dg(:) = 0.0_wp
-   ds(:, :) = 0.0_wp
-
-   z = dot_product(rij, n_hat)
-   pi_area = pi / area
-   inv_alp2 = 1.0_wp / alpha**2
-   z2_alp2 = (alpha * z)**2
-   fac_dg = 2.0_wp / (alpha * sqrtpi)
-   r_perp = z * n_hat
-   nn = outerprod(n_hat, n_hat)
-   i_par = unity - nn
-
-   do itr = 1, size(trans, 2)
-      g_vec = trans(:, itr)
-      g_norm = norm2(g_vec)
-      if (g_norm < eps) cycle
-
-      inv_g = 1.0_wp / g_norm
-      gv = dot_product(rij, g_vec)
-      cos_gv = cos(gv)
-      sin_gv = sin(gv)
-      ep = erfc_exp_2d(g_norm, +z, alpha)
-      em = erfc_exp_2d(g_norm, -z, alpha)
-      f_gz = ep + em
-      df_dg = z * (ep - em) - fac_dg * exp(-0.25_wp * g_norm**2 * inv_alp2 - z2_alp2)
-      df_dz = g_norm * (ep - em)
-      pref = pi_area * inv_g
-
-      dg(:) = dg + pref * (-sin_gv * f_gz * g_vec + cos_gv * df_dz * n_hat)
-
-      outer_gg = outerprod(g_vec, g_vec)
-      outer_rg = outerprod(r_perp, g_vec) + outerprod(g_vec, r_perp)
-      ds(:, :) = ds + pref * cos_gv * (-f_gz * i_par &
-         & + (f_gz * inv_g - df_dg) * inv_g * outer_gg + z * df_dz * nn) &
-         & - pref * sin_gv * f_gz * outer_rg
-   end do
-
-   phi_0 = -2.0_wp * pi_area &
-      & * (z * erf(alpha * z) + 0.5_wp * fac_dg * exp(-z2_alp2))
-   dphi0_dz = -2.0_wp * pi_area * erf(alpha * z)
-   dg(:) = dg + dphi0_dz * n_hat
-   ds(:, :) = ds - phi_0 * i_par + dphi0_dz * z * nn
-
-end subroutine get_damat_rec_2d
-
-
-!> Reciprocal-space and G=0 wire derivatives for 1D Ewald
-pure subroutine get_damat_rec_1d(rij, alpha, len1, u_hat, trans, dg, ds)
-
-   !> Interatomic displacement vector
-   real(wp), intent(in) :: rij(3)
-
-   !> Ewald splitting parameter
-   real(wp), intent(in) :: alpha
-
-   !> Periodic wire length
-   real(wp), intent(in) :: len1
-
-   !> Unit vector along the periodic wire axis
-   real(wp), intent(in) :: u_hat(3)
-
-   !> Reciprocal-space translation vectors
-   real(wp), intent(in) :: trans(:, :)
-
-   !> Position derivative contribution
-   real(wp), intent(out) :: dg(3)
-
-   !> Strain derivative contribution
-   real(wp), intent(out) :: ds(3, 3)
-
-   integer :: itr
-   real(wp) :: r_perp(3), rho2, alp2, inv_alp2, inv_len, x, y, g_vec(3), g2, gv
-   real(wp) :: cos_gv, sin_gv, k0, k1, k2, f0, f1, f2, exp_xy
-   real(wp) :: p_par(3, 3), outer_rr(3, 3), outer_rg(3, 3)
-
-   dg(:) = 0.0_wp
-   ds(:, :) = 0.0_wp
-
-   r_perp = rij - dot_product(rij, u_hat) * u_hat
-   rho2 = dot_product(r_perp, r_perp)
-   alp2 = alpha * alpha
-   inv_alp2 = 1.0_wp / alp2
-   inv_len = 1.0_wp / len1
-   y = alp2 * rho2
-   p_par = outerprod(u_hat, u_hat)
-   outer_rr = outerprod(r_perp, r_perp)
-
-   do itr = 1, size(trans, 2)
-      g_vec = trans(:, itr)
-      g2 = dot_product(g_vec, g_vec)
-      if (g2 < eps) cycle
-
-      x = 0.25_wp * g2 * inv_alp2
-      gv = dot_product(rij, g_vec)
-      cos_gv = cos(gv)
-      sin_gv = sin(gv)
-      call fast_k012_1d(x, y, k0, k1, k2)
-      exp_xy = exp(-x - y)
-
-      dg(:) = dg - inv_len * (sin_gv * k0 * g_vec &
-         & + 2.0_wp * alp2 * cos_gv * k1 * r_perp)
-
-      outer_rg = outerprod(g_vec, r_perp) + outerprod(r_perp, g_vec)
-      ds(:, :) = ds + inv_len * (cos_gv * (2.0_wp * exp_xy + 2.0_wp * y * k1 - k0) &
-         & * p_par - 2.0_wp * alp2 * cos_gv * k1 * outer_rr &
-         & - sin_gv * k0 * outer_rg)
-   end do
-
-   call fast_f012_1d(y, f0, f1, f2)
-   dg(:) = dg - (2.0_wp * alp2 * f1 * inv_len) * r_perp
-   ds(:, :) = ds + inv_len * ((f0 - 2.0_wp * log(alpha)) * p_par &
-      & - 2.0_wp * alp2 * f1 * outer_rr)
-
-end subroutine get_damat_rec_1d
-
-
-!> Reciprocal-space factors independent of the atom pair.
-!> Prepare once for each matrix/response evaluation, including strain when needed.
-subroutine get_rec_weights(vol, alpha, trans, weight, strain)
-
-   !> Unit cell volume
-   real(wp), intent(in) :: vol
-
-   !> Ewald splitting parameter
-   real(wp), intent(in) :: alpha
-
-   !> Reciprocal-space translation vectors
-   real(wp), intent(in) :: trans(:, :)
-
-   !> Reciprocal-space weights
-   real(wp), allocatable, intent(out) :: weight(:)
-
-   !> Optional reciprocal-space strain factors
-   real(wp), allocatable, intent(out), optional :: strain(:, :, :)
-
-   integer :: itr
-   real(wp) :: g2, inv_g2, inv_alp2, fac, vec(3)
-
-   fac = 4.0_wp * pi / vol
-   inv_alp2 = 1.0_wp / alpha**2
-   allocate(weight(size(trans, 2)), source=0.0_wp)
-   if (present(strain)) then
-      allocate(strain(3, 3, size(trans, 2)), source=0.0_wp)
-   end if
-
-   do itr = 1, size(trans, 2)
-      vec = trans(:, itr)
-      g2 = dot_product(vec, vec)
-      if (g2 < eps) cycle
-
-      inv_g2 = 1.0_wp / g2
-      weight(itr) = fac * exp(-0.25_wp * g2 * inv_alp2) * inv_g2
-      if (present(strain)) then
-         strain(:, :, itr) = weight(itr) * ((2.0_wp * inv_g2 + 0.5_wp * inv_alp2) &
-            & * outerprod(vec, vec) - unity)
-      end if
-   end do
-
-end subroutine get_rec_weights
 
 
 !> Inspect cache and reallocate it in case of type mismatch

@@ -18,6 +18,7 @@ module test_pbc
    use mctc_env, only: wp
    use mctc_env_testing, only: new_unittest, unittest_type, error_type, &
       & test_failed
+   use mctc_io_convert, only: aatoau
    use mctc_io_structure, only: structure_type, new
    use mstore, only: get_structure
    use multicharge, only: get_charges, add_charge_hessian
@@ -79,8 +80,15 @@ subroutine collect_pbc(testsuite)
       & new_unittest("eeq-2d", test_eeq_2d), &
       & new_unittest("eeqbc-1d", test_eeqbc_1d), &
       & new_unittest("eeqbc-2d", test_eeqbc_2d), &
-      & new_unittest("ewald-invariance", test_ewald_invariance), &
+      & new_unittest("ewald-setup", test_ewald_setup), &
+      & new_unittest("ewald-alpha-1d", test_ewald_alpha_1d), &
+      & new_unittest("ewald-alpha-2d", test_ewald_alpha_2d), &
+      & new_unittest("ewald-lattice-invariance", test_ewald_lattice_invariance), &
       & new_unittest("eeq-slab-285", test_eeq_slab_285), &
+      & new_unittest("eeq-slab-3d-limit", test_eeq_slab_3d_limit), &
+      & new_unittest("supercell-1d", test_supercell_1d), &
+      & new_unittest("supercell-2d", test_supercell_2d), &
+      & new_unittest("supercell-3d", test_supercell_3d), &
       & new_unittest("special-functions", test_special_functions) &
       & ]
 
@@ -879,6 +887,37 @@ subroutine test_numdqdL(error, mol, model)
 end subroutine test_numdqdL
 
 
+!> Run all finite-difference derivative checks for a given structure and model
+subroutine check_all_derivs(error, mol, model)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   !> Molecular structure data
+   type(structure_type), intent(inout) :: mol
+
+   !> Electronegativity equilibration model
+   class(mchrg_model_type), intent(in) :: model
+
+   call test_dbdr(error, mol, model)
+   if (allocated(error)) return
+   call test_dbdL(error, mol, model)
+   if (allocated(error)) return
+   call test_dadr(error, mol, model)
+   if (allocated(error)) return
+   call test_dadL(error, mol, model)
+   if (allocated(error)) return
+   call test_numgrad(error, mol, model)
+   if (allocated(error)) return
+   call test_numsigma(error, mol, model)
+   if (allocated(error)) return
+   call test_numdqdr(error, mol, model)
+   if (allocated(error)) return
+   call test_numdqdL(error, mol, model)
+
+end subroutine check_all_derivs
+
+
 subroutine test_eeq_q_cyanamide(error)
 
    !> Error handling
@@ -1189,37 +1228,6 @@ subroutine test_eeqbc_dqdL_oxacb(error)
    call test_numdqdL(error, mol, model)
 
 end subroutine test_eeqbc_dqdL_oxacb
-
-
-!> Run all finite-difference derivative checks for a given structure and model
-subroutine check_all_derivs(error, mol, model)
-
-   !> Error handling
-   type(error_type), allocatable, intent(out) :: error
-
-   !> Molecular structure data
-   type(structure_type), intent(inout) :: mol
-
-   !> Electronegativity equilibration model
-   class(mchrg_model_type), intent(in) :: model
-
-   call test_dbdr(error, mol, model)
-   if (allocated(error)) return
-   call test_dbdL(error, mol, model)
-   if (allocated(error)) return
-   call test_dadr(error, mol, model)
-   if (allocated(error)) return
-   call test_dadL(error, mol, model)
-   if (allocated(error)) return
-   call test_numgrad(error, mol, model)
-   if (allocated(error)) return
-   call test_numsigma(error, mol, model)
-   if (allocated(error)) return
-   call test_numdqdr(error, mol, model)
-   if (allocated(error)) return
-   call test_numdqdL(error, mol, model)
-
-end subroutine check_all_derivs
 
 
 !> Test 1D periodic EEQ across all mask orientations and verify derivatives.
@@ -1540,52 +1548,27 @@ subroutine test_eeqbc_2d(error)
 end subroutine test_eeqbc_2d
 
 
-!> Verify Ewald splitting parameter invariance, unimodular invariance, and error handling.
-subroutine test_ewald_invariance(error)
+!> Verify one-element periodicity mask handling and degenerate-lattice error propagation.
+subroutine test_ewald_setup(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
 
-   integer, parameter :: num(3) = [8, 1, 1]
-   real(wp), parameter :: xyz_1d(3, 3) = reshape([ &
-      & 0.0_wp,  0.0_wp,  0.0_wp, &
-      & 1.1_wp,  0.8_wp, -0.3_wp, &
-      & 0.5_wp, -0.9_wp,  0.6_wp], [3, 3])
-   real(wp), parameter :: lat_1d(3, 3) = reshape([ &
+   real(wp), parameter :: lat_ref(3, 3) = reshape([ &
       & 3.6_wp, 0.0_wp, 0.0_wp, &
       & 0.0_wp, 20.0_wp, 0.0_wp, &
       & 0.0_wp, 0.0_wp, 20.0_wp], [3, 3])
-   real(wp), parameter :: xyz_2d(3, 3) = reshape([ &
-      & 0.1_wp, 0.2_wp, -0.1_wp, &
-      & 1.7_wp, 0.6_wp,  0.3_wp, &
-      & 0.3_wp, 1.8_wp,  0.5_wp], [3, 3])
-   real(wp), parameter :: a1_2d(3) = [5.5_wp, 0.0_wp, 0.0_wp]
-   real(wp), parameter :: a2_2d(3) = [0.5_wp, 6.0_wp, 2.0_wp]
-   real(wp), parameter :: alphas(3) = [0.16_wp, 0.26_wp, 0.40_wp]
-   real(wp), parameter :: qvec(4) = [0.35_wp, -0.55_wp, 0.20_wp, 0.05_wp]
-   real(wp), parameter :: adj(4) = [-0.40_wp, 0.25_wp, 0.15_wp, 0.0_wp]
-   real(wp), parameter :: weights(3) = [0.6_wp, -0.4_wp, 0.25_wp]
 
    type(error_type), allocatable :: expected
-   type(structure_type) :: mol, mol_shift
-   class(mchrg_model_type), allocatable :: model
-   type(cache_container) :: cache
    real(wp), allocatable :: trans(:, :)
-   real(wp) :: cn(3), qloc(3), lat_ref(3, 3), lat_skew(3, 3), lat_deg(3, 3), xyz_shift(3, 3)
-   real(wp) :: alpha_1, alpha_3
-   real(wp) :: amat_ref(4, 4), amat_cur(4, 4)
-   real(wp) :: dadr_ref(3, 3, 4), dadL_ref(3, 3, 4), atrace_ref(3, 3)
-   real(wp) :: dadr_cur(3, 3, 4), dadL_cur(3, 3, 4), atrace_cur(3, 3)
-   real(wp) :: hess_ref(9, 9), hess_cur(9, 9)
-   real(wp) :: q_ref(3), q_shift(3), dqdr_ref(3, 3, 3), dqdr_shift(3, 3, 3)
-   real(wp) :: dqdL_ref(3, 3, 3), dqdL_shift(3, 3, 3)
-   integer :: ig, ia
+   real(wp) :: lat_deg(3, 3), alpha_1, alpha_3
 
-   ! Verify one-element periodicity mask in get_alpha and degenerate lattice error propagation
-   call get_alpha(lat_1d, alpha_1, error, periodic=[.true.])
+   call get_alpha(lat_ref, alpha_1, error, periodic=[.true.])
    if (allocated(error)) return
-   call get_alpha(lat_1d, alpha_3, error, periodic=[.true., .true., .true.])
+
+   call get_alpha(lat_ref, alpha_3, error, periodic=[.true., .true., .true.])
    if (allocated(error)) return
+
    if (abs(alpha_1 - alpha_3) > thr) then
       call test_failed(error, "get_alpha with 1-element mask differs from 3-element mask")
       return
@@ -1597,136 +1580,233 @@ subroutine test_ewald_invariance(error)
       call test_failed(error, "get_alpha did not report error for degenerate lattice")
       return
    end if
+
    deallocate(expected)
-   call get_ewald_dir_trans([.true., .false., .false.], lat_deg, 0.25_wp, 0.2_wp, trans, expected)
+   call get_ewald_dir_trans([.true., .false., .false.], lat_deg, 0.25_wp, 0.2_wp, &
+      & trans, expected)
    if (.not. allocated(expected)) then
       call test_failed(error, "get_ewald_dir_trans did not report error for degenerate lattice")
       return
    end if
+
    deallocate(expected)
    call get_ewald_rec_trans([.true., .false., .false.], lat_deg, 0.25_wp, trans, expected)
    if (.not. allocated(expected)) then
       call test_failed(error, "get_ewald_rec_trans did not report error for degenerate lattice")
       return
    end if
-   deallocate(expected)
+
+end subroutine test_ewald_setup
+
+
+!> Verify Ewald splitting parameter invariance for 1D periodic EEQ.
+subroutine test_ewald_alpha_1d(error)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   real(wp), parameter :: xyz_1d(3, 3) = reshape([ &
+      & 0.0_wp,  0.0_wp,  0.0_wp, &
+      & 1.1_wp,  0.8_wp, -0.3_wp, &
+      & 0.5_wp, -0.9_wp,  0.6_wp], [3, 3])
+   real(wp), parameter :: lat_1d(3, 3) = reshape([ &
+      & 3.6_wp,  0.0_wp,  0.0_wp, &
+      & 0.0_wp, 20.0_wp,  0.0_wp, &
+      & 0.0_wp,  0.0_wp, 20.0_wp], [3, 3])
+
+   type(structure_type) :: mol
+
+   call new(mol, [8, 1, 6], xyz_1d, charge=0.0_wp, lattice=lat_1d, &
+      & periodic=[.true., .false., .false.])
+   call check_alpha_invariance(error, mol)
+
+end subroutine test_ewald_alpha_1d
+
+
+!> Verify Ewald splitting parameter invariance for 2D periodic EEQ.
+subroutine test_ewald_alpha_2d(error)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   real(wp), parameter :: xyz_2d(3, 3) = reshape([ &
+      & 0.1_wp, 0.2_wp, -0.1_wp, &
+      & 1.7_wp, 0.6_wp,  0.3_wp, &
+      & 0.3_wp, 1.8_wp,  0.5_wp], [3, 3])
+   real(wp), parameter :: lat_2d(3, 3) = reshape([ &
+      & 5.5_wp, 0.0_wp, 0.0_wp, &
+      & 0.0_wp, 0.0_wp, 0.0_wp, &
+      & 0.5_wp, 6.0_wp, 2.0_wp], [3, 3])
+
+   type(structure_type) :: mol
+
+   call new(mol, [8, 1, 1], xyz_2d, charge=0.0_wp, lattice=lat_2d, &
+      & periodic=[.true., .false., .true.])
+   call check_alpha_invariance(error, mol)
+
+end subroutine test_ewald_alpha_2d
+
+
+!> Check Ewald alpha-splitting invariance of Coulomb matrix, first derivatives, and Hessian
+subroutine check_alpha_invariance(error, mol)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   !> Periodic structure (3 atoms)
+   type(structure_type), intent(in) :: mol
+
+   real(wp), parameter :: alphas(3) = [0.16_wp, 0.26_wp, 0.40_wp]
+   real(wp), parameter :: qvec(4) = [0.35_wp, -0.55_wp, 0.20_wp, 0.05_wp]
+   real(wp), parameter :: adj(4) = [-0.40_wp, 0.25_wp, 0.15_wp, 0.0_wp]
+
+   class(mchrg_model_type), allocatable :: model
+   type(cache_container) :: cache
+   real(wp), allocatable :: trans(:, :)
+   real(wp) :: cn(3), qloc(3), gam_min
+   real(wp) :: amat_ref(4, 4), amat_cur(4, 4)
+   real(wp) :: dadr_ref(3, 3, 4), dadL_ref(3, 3, 4), atrace_ref(3, 3)
+   real(wp) :: dadr_cur(3, 3, 4), dadL_cur(3, 3, 4), atrace_cur(3, 3)
+   real(wp) :: hess_ref(9, 9), hess_cur(9, 9)
+   integer :: ia
+
+   call new_eeq2019_model(mol, model, error)
+   if (allocated(error)) return
+
+   call get_lattice_points(mol%periodic, mol%lattice, 25.0_wp, trans, error)
+   if (allocated(error)) return
+
+   call model%ncoord%get_coordination_number(mol, trans, cn)
+   call model%local_charge(mol, trans, qloc)
+   call model%update(mol, error, cache, cn, qloc)
+   if (allocated(error)) return
+
+   allocate(cache%qvec(4), source=qvec)
+   select type (raw => cache%raw)
+   type is (eeq_cache)
+      allocate(raw%dcndr(3, 3, 3), source=0.0_wp)
+   end select
+
+   gam_min = 1.0_wp / (sqrt(2.0_wp) * maxval(model%rad(mol%id)))
+
+   do ia = 1, size(alphas)
+      select type (raw => cache%raw)
+      type is (eeq_cache)
+         raw%alpha = alphas(ia)
+         call get_ewald_dir_trans(mol%periodic, mol%lattice, raw%alpha, &
+            & gam_min, raw%dtrans, error)
+         if (allocated(error)) return
+
+         call get_ewald_rec_trans(mol%periodic, mol%lattice, raw%alpha, &
+            & raw%rtrans, error, raw%vol)
+         if (allocated(error)) return
+      end select
+
+      call model%get_coulomb_matrix(mol, cache, amat_cur)
+      call model%get_coulomb_derivs(mol, cache, qvec, dadr_cur, dadL_cur, atrace_cur)
+      hess_cur = 0.0_wp
+      call model%add_model_hessian(mol, error, cache, adj, hess_cur)
+      if (allocated(error)) return
+
+      if (ia == 1) then
+         amat_ref = amat_cur
+         dadr_ref = dadr_cur
+         dadL_ref = dadL_cur
+         atrace_ref = atrace_cur
+         hess_ref = hess_cur
+      else
+         if (maxval(abs(amat_cur - amat_ref)) > 1.0e-11_wp &
+            & .or. maxval(abs(dadr_cur - dadr_ref)) > 1.0e-11_wp &
+            & .or. maxval(abs(dadL_cur - dadL_ref)) > 1.0e-11_wp &
+            & .or. maxval(abs(atrace_cur - atrace_ref)) > 1.0e-11_wp &
+            & .or. maxval(abs(hess_cur - hess_ref)) > 1.0e-10_wp) then
+            call test_failed(error, "Periodic Ewald sum is not invariant to alpha")
+            return
+         end if
+      end if
+   end do
+
+end subroutine check_alpha_invariance
+
+
+!> Verify invariance under unimodular basis shear (a2' = a2 + a1) and multi-cell shifts.
+subroutine test_ewald_lattice_invariance(error)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   integer, parameter :: num(3) = [8, 1, 1]
+   real(wp), parameter :: xyz_2d(3, 3) = reshape([ &
+      & 0.1_wp, 0.2_wp, -0.1_wp, &
+      & 1.7_wp, 0.6_wp,  0.3_wp, &
+      & 0.3_wp, 1.8_wp,  0.5_wp], [3, 3])
+   real(wp), parameter :: a1_2d(3) = [5.5_wp, 0.0_wp, 0.0_wp]
+   real(wp), parameter :: a2_2d(3) = [0.5_wp, 6.0_wp, 2.0_wp]
+   real(wp), parameter :: weights(3) = [0.6_wp, -0.4_wp, 0.25_wp]
+
+   type(structure_type) :: mol, mol_shift
+   class(mchrg_model_type), allocatable :: model
+   type(cache_container) :: cache
+   real(wp) :: lat_ref(3, 3), lat_skew(3, 3), xyz_shift(3, 3)
+   real(wp) :: q_ref(3), q_shift(3), dqdr_ref(3, 3, 3), dqdr_shift(3, 3, 3)
+   real(wp) :: dqdL_ref(3, 3, 3), dqdL_shift(3, 3, 3)
+   real(wp) :: hess_ref(9, 9), hess_shift(9, 9)
 
    lat_ref = 0.0_wp
    lat_ref(:, 1) = a1_2d
    lat_ref(:, 3) = a2_2d
 
-   ! Check alpha invariance for 1D and 2D periodic Ewald sums
-   do ig = 1, 2
-      if (ig == 1) then
-         call new(mol, [8, 1, 6], xyz_1d, charge=0.0_wp, lattice=lat_1d, &
-            & periodic=[.true., .false., .false.])
-      else
-         call new(mol, num, xyz_2d, charge=0.0_wp, lattice=lat_ref, &
-            & periodic=[.true., .false., .true.])
-      end if
-
-      call new_eeq2019_model(mol, model, error)
-      if (allocated(error)) return
-
-      call get_lattice_points(mol%periodic, mol%lattice, 25.0_wp, trans, error)
-      if (allocated(error)) return
-      call model%ncoord%get_coordination_number(mol, trans, cn)
-      call model%local_charge(mol, trans, qloc)
-      call model%update(mol, error, cache, cn, qloc)
-      if (allocated(error)) return
-
-      allocate(cache%qvec(4), source=qvec)
-      select type (raw => cache%raw)
-      type is (eeq_cache)
-         allocate(raw%dcndr(3, 3, 3), source=0.0_wp)
-      end select
-
-      do ia = 1, size(alphas)
-         select type (raw => cache%raw)
-         type is (eeq_cache)
-            raw%alpha = alphas(ia)
-            call get_ewald_dir_trans(mol%periodic, mol%lattice, raw%alpha, &
-               & 1.0_wp / (sqrt(2.0_wp) * maxval(model%rad(mol%id))), &
-               & raw%dtrans, error)
-            if (allocated(error)) return
-            call get_ewald_rec_trans(mol%periodic, mol%lattice, raw%alpha, &
-               & raw%rtrans, error, raw%vol)
-            if (allocated(error)) return
-         end select
-         call model%get_coulomb_matrix(mol, cache, amat_cur)
-         call model%get_coulomb_derivs(mol, cache, qvec, dadr_cur, dadL_cur, atrace_cur)
-         hess_cur = 0.0_wp
-         call model%add_model_hessian(mol, error, cache, adj, hess_cur)
-         if (allocated(error)) return
-
-         if (ia == 1) then
-            amat_ref = amat_cur
-            dadr_ref = dadr_cur
-            dadL_ref = dadL_cur
-            atrace_ref = atrace_cur
-            hess_ref = hess_cur
-         else
-            if (maxval(abs(amat_cur - amat_ref)) > 1.0e-11_wp &
-               & .or. maxval(abs(dadr_cur - dadr_ref)) > 1.0e-11_wp &
-               & .or. maxval(abs(dadL_cur - dadL_ref)) > 1.0e-11_wp &
-               & .or. maxval(abs(atrace_cur - atrace_ref)) > 1.0e-11_wp &
-               & .or. maxval(abs(hess_cur - hess_ref)) > 1.0e-10_wp) then
-               call test_failed(error, "Periodic Ewald sum is not invariant to alpha")
-               return
-            end if
-         end if
-      end do
-      deallocate(cache%qvec, cache%raw, model)
-   end do
-
-   ! Check invariance under unimodular basis transform (a2' = a2 + a1) and lattice shift
    lat_skew = 0.0_wp
    lat_skew(:, 1) = a1_2d
    lat_skew(:, 3) = a2_2d + a1_2d
+
    xyz_shift = xyz_2d
    xyz_shift(:, 2) = xyz_2d(:, 2) + a1_2d
    xyz_shift(:, 3) = xyz_2d(:, 3) - a2_2d
 
-   call new(mol, num, xyz_2d, charge=0.0_wp, lattice=lat_ref, periodic=[.true., .false., .true.])
-   call new(mol_shift, num, xyz_shift, charge=0.0_wp, lattice=lat_skew, periodic=[.true., .false., .true.])
+   call new(mol, num, xyz_2d, charge=0.0_wp, lattice=lat_ref, &
+      & periodic=[.true., .false., .true.])
+   call new(mol_shift, num, xyz_shift, charge=0.0_wp, lattice=lat_skew, &
+      & periodic=[.true., .false., .true.])
    call new_eeq2019_model(mol, model, error)
    if (allocated(error)) return
 
    call get_charges(model, mol, error, q_ref, dqdr_ref, dqdL_ref, cache=cache)
    if (allocated(error)) return
+
    hess_ref = 0.0_wp
    call add_charge_hessian(model, mol, error, weights, hess_ref, cache)
    if (allocated(error)) return
 
    call get_charges(model, mol_shift, error, q_shift, dqdr_shift, dqdL_shift, cache=cache)
    if (allocated(error)) return
-   hess_cur = 0.0_wp
-   call add_charge_hessian(model, mol_shift, error, weights, hess_cur, cache)
+
+   hess_shift = 0.0_wp
+   call add_charge_hessian(model, mol_shift, error, weights, hess_shift, cache)
    if (allocated(error)) return
 
    if (maxval(abs(q_shift - q_ref)) > 1.0e-11_wp &
       & .or. maxval(abs(dqdr_shift - dqdr_ref)) > 1.0e-10_wp &
       & .or. maxval(abs(dqdL_shift - dqdL_ref)) > 1.0e-10_wp &
-      & .or. maxval(abs(hess_cur - hess_ref)) > 1.0e-9_wp) then
-      call test_failed(error, "2D EEQ not invariant under unimodular transform and multi-cell shift")
-      return
+      & .or. maxval(abs(hess_shift - hess_ref)) > 1.0e-9_wp) then
+      call test_failed(error, &
+         & "2D EEQ not invariant under unimodular transform and multi-cell shift")
    end if
 
-end subroutine test_ewald_invariance
+end subroutine test_ewald_lattice_invariance
 
 
-!> Regression test for DFT-D4 issue #285: 2D and large-vacuum 3D periodic slabs.
+!> Regression test for DFT-D4 issue #285: 2D slab reference charges across cell shapes.
 subroutine test_eeq_slab_285(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
 
-   real(wp), parameter :: aa2au = 1.8897261246257702_wp
    integer, parameter :: num(3) = [8, 1, 1]
    real(wp), parameter :: xyz(3, 3) = reshape([ &
       & -0.3910542064024872_wp,  0.3976645623910747_wp, 2.977929077294636_wp, &
       & -0.3542054272959850_wp,  1.0567259314317760_wp, 2.610987477729398_wp, &
-      & -0.9445722089116435_wp, -0.0304014548863456_wp, 3.370602014356701_wp], [3, 3]) * aa2au
+      & -0.9445722089116435_wp, -0.0304014548863456_wp, 3.370602014356701_wp], [3, 3]) * aatoau
    real(wp), parameter :: q2d_hex_ref(3) = [ &
       & -1.06091408_wp, 0.54516560_wp, 0.51574848_wp]
    real(wp), parameter :: q2d_ahex_ref(3) = [ &
@@ -1734,32 +1814,96 @@ subroutine test_eeq_slab_285(error)
    real(wp), parameter :: q2d_orth_ref(3) = [ &
       & -1.06073102_wp, 0.54653780_wp, 0.51419322_wp]
 
+   real(wp) :: lat(3, 3)
+
+   lat = 0.0_wp
+   lat(:, 1) = [2.794646093662685_wp, 0.0_wp, 0.0_wp] * aatoau
+   lat(:, 2) = [-1.397323046831344_wp, 2.420234511698831_wp, 0.0_wp] * aatoau
+   call check_slab_charges(error, num, xyz, lat, q2d_hex_ref, "hexagonal")
+   if (allocated(error)) return
+
+   lat(:, 1) = [2.8_wp, 0.0_wp, 0.0_wp] * aatoau
+   call check_slab_charges(error, num, xyz, lat, q2d_ahex_ref, "almost-hexagonal")
+   if (allocated(error)) return
+
+   lat(:, 2) = [0.0_wp, 2.8_wp, 0.0_wp] * aatoau
+   call check_slab_charges(error, num, xyz, lat, q2d_orth_ref, "orthorhombic")
+
+end subroutine test_eeq_slab_285
+
+
+!> Check 2D slab EEQ charges against a reference vector
+subroutine check_slab_charges(error, num, xyz, lat, q_ref, label)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   !> Atomic numbers
+   integer, intent(in) :: num(:)
+
+   !> Cartesian coordinates in Bohr
+   real(wp), intent(in) :: xyz(:, :)
+
+   !> Lattice vectors in Bohr
+   real(wp), intent(in) :: lat(3, 3)
+
+   !> Reference partial charges
+   real(wp), intent(in) :: q_ref(:)
+
+   !> Cell shape label
+   character(len=*), intent(in) :: label
+
+   type(structure_type) :: mol
+   class(mchrg_model_type), allocatable :: model
+   real(wp) :: q(size(num))
+
+   call new(mol, num, xyz, lattice=lat, periodic=[.true., .true., .false.])
+   call new_eeq2019_model(mol, model, error)
+   if (allocated(error)) return
+
+   call get_charges(model, mol, error, q)
+   if (allocated(error)) return
+
+   if (maxval(abs(q - q_ref)) > 1.0e-7_wp) then
+      call test_failed(error, "2D " // label // " #285 slab charges deviate from reference")
+   end if
+
+end subroutine check_slab_charges
+
+
+!> Verify 3D large-vacuum slab convergence (1/Lz dipole-sheet scaling) toward 2D EEQ.
+subroutine test_eeq_slab_3d_limit(error)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   integer, parameter :: num(3) = [8, 1, 1]
+   real(wp), parameter :: xyz(3, 3) = reshape([ &
+      & -0.3910542064024872_wp,  0.3976645623910747_wp, 2.977929077294636_wp, &
+      & -0.3542054272959850_wp,  1.0567259314317760_wp, 2.610987477729398_wp, &
+      & -0.9445722089116435_wp, -0.0304014548863456_wp, 3.370602014356701_wp], [3, 3]) * aatoau
+
    type(structure_type) :: mol2d, mol3d
    class(mchrg_model_type), allocatable :: model
    real(wp) :: lat(3, 3), q2d(3), q_z50(3), q_z100(3)
 
-   ! Hexagonal slab cell
    lat = 0.0_wp
-   lat(:, 1) = [2.794646093662685_wp, 0.0_wp, 0.0_wp] * aa2au
-   lat(:, 2) = [-1.397323046831344_wp, 2.420234511698831_wp, 0.0_wp] * aa2au
-   lat(:, 3) = [0.0_wp, 0.0_wp, 50.0_wp] * aa2au
+   lat(:, 1) = [2.794646093662685_wp, 0.0_wp, 0.0_wp] * aatoau
+   lat(:, 2) = [-1.397323046831344_wp, 2.420234511698831_wp, 0.0_wp] * aatoau
+   lat(:, 3) = [0.0_wp, 0.0_wp, 50.0_wp] * aatoau
 
    call new(mol2d, num, xyz, lattice=lat, periodic=[.true., .true., .false.])
    call new_eeq2019_model(mol2d, model, error)
    if (allocated(error)) return
+
    call get_charges(model, mol2d, error, q2d)
    if (allocated(error)) return
-   if (maxval(abs(q2d - q2d_hex_ref)) > 1.0e-7_wp) then
-      call test_failed(error, "2D hexagonal #285 slab charges deviate from reference")
-      return
-   end if
 
-   ! Verify 3D supercell convergence toward the 2D slab limit (1/Lz dipole-sheet scaling)
    call new(mol3d, num, xyz, lattice=lat, periodic=[.true., .true., .true.])
    call get_charges(model, mol3d, error, q_z50)
    if (allocated(error)) return
 
-   lat(:, 3) = [0.0_wp, 0.0_wp, 100.0_wp] * aa2au
+   lat(:, 3) = [0.0_wp, 0.0_wp, 100.0_wp] * aatoau
    call new(mol3d, num, xyz, lattice=lat, periodic=[.true., .true., .true.])
    call get_charges(model, mol3d, error, q_z100)
    if (allocated(error)) return
@@ -1768,29 +1912,9 @@ subroutine test_eeq_slab_285(error)
       & .or. maxval(abs(q_z100 - q2d)) > 1.5e-5_wp &
       & .or. maxval(abs(50.0_wp * (q_z50 - q2d) - 100.0_wp * (q_z100 - q2d))) > 1.0e-5_wp) then
       call test_failed(error, "3D slab charges failed to converge toward 2D EEQ limit")
-      return
    end if
 
-   ! Verify almost-hexagonal and orthorhombic #285 slab geometries
-   lat(:, 1) = [2.8_wp, 0.0_wp, 0.0_wp] * aa2au
-   call new(mol2d, num, xyz, lattice=lat, periodic=[.true., .true., .false.])
-   call get_charges(model, mol2d, error, q2d)
-   if (allocated(error)) return
-   if (maxval(abs(q2d - q2d_ahex_ref)) > 1.0e-7_wp) then
-      call test_failed(error, "Almost-hexagonal #285 slab charges deviate from reference")
-      return
-   end if
-
-   lat(:, 2) = [0.0_wp, 2.8_wp, 0.0_wp] * aa2au
-   call new(mol2d, num, xyz, lattice=lat, periodic=[.true., .true., .false.])
-   call get_charges(model, mol2d, error, q2d)
-   if (allocated(error)) return
-   if (maxval(abs(q2d - q2d_orth_ref)) > 1.0e-7_wp) then
-      call test_failed(error, "Orthorhombic #285 slab charges deviate from reference")
-      return
-   end if
-
-end subroutine test_eeq_slab_285
+end subroutine test_eeq_slab_3d_limit
 
 
 !> Verify 1D and 2D Ewald special-function accuracy against 50-digit references.
@@ -1862,6 +1986,267 @@ subroutine test_special_functions(error)
    end do
 
 end subroutine test_special_functions
+
+
+!> Verify linear energy scaling and charge invariance for 1D elongated supercells.
+subroutine test_supercell_1d(error)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   real(wp), parameter :: lat_1d(3, 3) = reshape([ &
+      & 5.3_wp,  0.6_wp, -0.5_wp, &
+      & 0.0_wp, 20.0_wp,  0.0_wp, &
+      & 0.0_wp,  0.0_wp, 20.0_wp], [3, 3])
+   integer, parameter :: reps(3) = [2, 3, 4]
+
+   type(structure_type) :: mol
+   integer :: i
+
+   call new(mol, znoh_num, znoh_xyz, charge=0.0_wp, lattice=lat_1d, &
+      & periodic=[.true., .false., .false.])
+
+   do i = 1, size(reps)
+      call check_supercell_scaling(error, mol, .false., reps(i), 1, 1, thr)
+      if (allocated(error)) return
+   end do
+
+   do i = 1, 2
+      call check_supercell_scaling(error, mol, .true., reps(i), 1, 1, thr2)
+      if (allocated(error)) return
+   end do
+
+   mol%charge = 1.0_wp
+   do i = 1, 2
+      call check_supercell_scaling(error, mol, .true., reps(i), 1, 1, thr2)
+      if (allocated(error)) return
+   end do
+
+end subroutine test_supercell_1d
+
+
+!> Verify linear energy scaling and charge invariance for 2D elongated supercells.
+subroutine test_supercell_2d(error)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   real(wp), parameter :: lat_2d(3, 3) = reshape([ &
+      & 5.2_wp, 0.3_wp,  0.1_wp, &
+      & 0.5_wp, 6.1_wp, -0.2_wp, &
+      & 0.0_wp, 0.0_wp, 25.0_wp], [3, 3])
+   integer, parameter :: n1_eeq(4) = [2, 1, 4, 2]
+   integer, parameter :: n2_eeq(4) = [1, 3, 1, 3]
+
+   type(structure_type) :: mol
+   integer :: i
+
+   call new(mol, znoh_num, znoh_xyz, charge=0.0_wp, lattice=lat_2d, &
+      & periodic=[.true., .true., .false.])
+
+   do i = 1, size(n1_eeq)
+      call check_supercell_scaling(error, mol, .false., n1_eeq(i), n2_eeq(i), 1, thr)
+      if (allocated(error)) return
+   end do
+
+   call check_supercell_scaling(error, mol, .true., 3, 1, 1, thr2)
+   if (allocated(error)) return
+
+   call check_supercell_scaling(error, mol, .true., 2, 2, 1, thr2)
+   if (allocated(error)) return
+
+   mol%charge = -1.0_wp
+   call check_supercell_scaling(error, mol, .true., 2, 2, 1, thr2)
+
+end subroutine test_supercell_2d
+
+
+!> Verify linear energy scaling and charge invariance for 3D elongated supercells.
+subroutine test_supercell_3d(error)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   integer, parameter :: n1_eeq(3) = [3, 1, 2]
+   integer, parameter :: n2_eeq(3) = [1, 1, 3]
+   integer, parameter :: n3_eeq(3) = [1, 4, 1]
+
+   type(structure_type) :: mol
+   integer :: i
+
+   call new(mol, znoh_num, znoh_xyz, charge=0.0_wp, lattice=znoh_lat, &
+      & periodic=[.true., .true., .true.])
+
+   do i = 1, size(n1_eeq)
+      call check_supercell_scaling(error, mol, .false., n1_eeq(i), n2_eeq(i), &
+         & n3_eeq(i), thr)
+      if (allocated(error)) return
+   end do
+
+   call check_supercell_scaling(error, mol, .true., 2, 1, 1, thr2)
+   if (allocated(error)) return
+
+   call check_supercell_scaling(error, mol, .true., 2, 2, 1, thr2)
+   if (allocated(error)) return
+
+   mol%charge = 1.0_wp
+   call check_supercell_scaling(error, mol, .true., 2, 2, 1, thr2)
+
+end subroutine test_supercell_3d
+
+
+!> Check linear extensivity of total energy and invariance of atomic energies/charges
+subroutine check_supercell_scaling(error, mol, use_eeqbc, n1, n2, n3, tol)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   !> Unit-cell structure
+   type(structure_type), intent(in) :: mol
+
+   !> Select EEQ-BC (.true.) or EEQ (.false.)
+   logical, intent(in) :: use_eeqbc
+
+   !> Supercell replication factor along axis 1
+   integer, intent(in) :: n1
+
+   !> Supercell replication factor along axis 2
+   integer, intent(in) :: n2
+
+   !> Supercell replication factor along axis 3
+   integer, intent(in) :: n3
+
+   !> Per-unit-cell comparison tolerance
+   real(wp), intent(in) :: tol
+
+   type(structure_type) :: sc
+   real(wp), allocatable :: e_unit(:), q_unit(:), e_sc(:), q_sc(:)
+   real(wp) :: etot_unit, etot_sc
+   integer :: ntot, nat, irep, offset
+
+   call solve_cell(mol, use_eeqbc, e_unit, q_unit, error)
+   if (allocated(error)) return
+
+   call make_supercell(mol, n1, n2, n3, sc)
+   call solve_cell(sc, use_eeqbc, e_sc, q_sc, error)
+   if (allocated(error)) return
+
+   ntot = n1 * n2 * n3
+   nat = mol%nat
+   etot_unit = sum(e_unit)
+   etot_sc = sum(e_sc)
+
+   if (abs(etot_sc - real(ntot, wp) * etot_unit) > real(ntot, wp) * tol) then
+      call test_failed(error, "Supercell total energy does not scale linearly")
+      print "(a,3es21.14)", "E_sc, N*E_unit, diff:", etot_sc, &
+         & real(ntot, wp) * etot_unit, etot_sc - real(ntot, wp) * etot_unit
+      return
+   end if
+
+   do irep = 0, ntot - 1
+      offset = irep * nat
+      if (any(abs(e_sc(offset + 1:offset + nat) - e_unit) > tol) &
+         & .or. any(abs(q_sc(offset + 1:offset + nat) - q_unit) > tol)) then
+         call test_failed(error, "Supercell atomic energies or charges differ from unit cell")
+         return
+      end if
+   end do
+
+end subroutine check_supercell_scaling
+
+
+!> Replicate a periodic structure into an (n1 x n2 x n3) supercell
+subroutine make_supercell(mol, n1, n2, n3, sc)
+
+   !> Unit-cell structure
+   type(structure_type), intent(in) :: mol
+
+   !> Replication factor along lattice vector 1
+   integer, intent(in) :: n1
+
+   !> Replication factor along lattice vector 2
+   integer, intent(in) :: n2
+
+   !> Replication factor along lattice vector 3
+   integer, intent(in) :: n3
+
+   !> Replicated supercell structure
+   type(structure_type), intent(out) :: sc
+
+   integer :: ntot, nat_sc, i1, i2, i3, ia, idx
+   integer, allocatable :: num_sc(:)
+   real(wp), allocatable :: xyz_sc(:, :)
+   real(wp) :: lat_sc(3, 3), shift(3)
+
+   ntot = n1 * n2 * n3
+   nat_sc = mol%nat * ntot
+   allocate(num_sc(nat_sc), xyz_sc(3, nat_sc))
+
+   idx = 0
+   do i1 = 0, n1 - 1
+      do i2 = 0, n2 - 1
+         do i3 = 0, n3 - 1
+            shift = real(i1, wp) * mol%lattice(:, 1) &
+               & + real(i2, wp) * mol%lattice(:, 2) &
+               & + real(i3, wp) * mol%lattice(:, 3)
+            do ia = 1, mol%nat
+               idx = idx + 1
+               num_sc(idx) = mol%num(mol%id(ia))
+               xyz_sc(:, idx) = mol%xyz(:, ia) + shift
+            end do
+         end do
+      end do
+   end do
+
+   lat_sc(:, 1) = real(n1, wp) * mol%lattice(:, 1)
+   lat_sc(:, 2) = real(n2, wp) * mol%lattice(:, 2)
+   lat_sc(:, 3) = real(n3, wp) * mol%lattice(:, 3)
+
+   call new(sc, num_sc, xyz_sc, charge=real(ntot, wp) * mol%charge, &
+      & lattice=lat_sc, periodic=mol%periodic)
+
+end subroutine make_supercell
+
+
+!> Evaluate atomic energies and partial charges for a structure
+subroutine solve_cell(mol, use_eeqbc, energy, qvec, error)
+
+   !> Molecular structure data
+   type(structure_type), intent(in) :: mol
+
+   !> Select EEQ-BC (.true.) or EEQ (.false.)
+   logical, intent(in) :: use_eeqbc
+
+   !> Atomic electrostatic energies
+   real(wp), allocatable, intent(out) :: energy(:)
+
+   !> Atomic partial charges
+   real(wp), allocatable, intent(out) :: qvec(:)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   class(mchrg_model_type), allocatable :: model
+   real(wp), allocatable :: trans(:, :), cn(:), qloc(:)
+
+   if (use_eeqbc) then
+      call new_eeqbc2025_model(mol, model, error)
+   else
+      call new_eeq2019_model(mol, model, error)
+   end if
+   if (allocated(error)) return
+
+   call get_lattice_points(mol%periodic, mol%lattice, model%ncoord%cutoff, &
+      & trans, error)
+   if (allocated(error)) return
+
+   allocate(cn(mol%nat), qloc(mol%nat), energy(mol%nat), qvec(mol%nat))
+   energy = 0.0_wp
+   call model%ncoord%get_coordination_number(mol, trans, cn)
+   call model%local_charge(mol, trans, qloc)
+   call model%solve(mol, error, cn, qloc, energy=energy, qvec=qvec)
+
+end subroutine solve_cell
 
 
 end module test_pbc
