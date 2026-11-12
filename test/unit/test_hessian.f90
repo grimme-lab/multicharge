@@ -65,7 +65,7 @@ end subroutine test_eeqbc_charged
 subroutine test_eeq_periodic(error)
    type(error_type), allocatable, intent(out) :: error
    integer :: icase
-   do icase = 5, 9
+   do icase = 5, 13
       call run_case(error, .false., icase)
       if (allocated(error)) return
    end do
@@ -74,7 +74,7 @@ end subroutine test_eeq_periodic
 subroutine test_eeqbc_periodic(error)
    type(error_type), allocatable, intent(out) :: error
    integer :: icase
-   do icase = 5, 9
+   do icase = 5, 15
       call run_case(error, .true., icase)
       if (allocated(error)) return
    end do
@@ -98,6 +98,12 @@ subroutine run_case(error, bond_capacity, icase)
    real(wp), parameter :: xyz_tri(3, 3) = reshape([ &
       & 0.0_wp, 0.0_wp, 0.0_wp, 3.0_wp, 0.1_wp, 0.2_wp, &
       & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3])
+   real(wp), parameter :: xyz_wire(3, 3) = reshape([ &
+      & 0.0_wp, 0.0_wp, 0.0_wp, 0.16_wp, 2.12_wp, -0.12_wp, &
+      & -0.4_wp, 1.1_wp, 1.5_wp], [3, 3])
+   real(wp), parameter :: xyz_slab(3, 3) = reshape([ &
+      & 0.0_wp, -0.3_wp, 0.0_wp, 2.5_wp, 0.4_wp, 0.2_wp, &
+      & 0.6_wp, 0.5_wp, 2.1_wp], [3, 3])
    real(wp), parameter :: xyz_half(3, 2) = reshape([ &
       & 0.0_wp, 0.0_wp, -0.2_wp, 3.0_wp, 0.2_wp, 0.3_wp], [3, 2])
    real(wp), parameter :: lattice(3, 3) = reshape([ &
@@ -106,6 +112,12 @@ subroutine run_case(error, bond_capacity, icase)
    real(wp), parameter :: lat_orth(3, 3) = reshape([ &
       & 6.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 7.0_wp, 0.0_wp, &
       & 0.0_wp, 0.0_wp, 8.0_wp], [3, 3])
+   real(wp), parameter :: lat_wire(3, 3) = reshape([ &
+      & 0.0_wp, 0.0_wp, 0.0_wp, 0.4_wp, 5.3_wp, -0.3_wp, &
+      & 0.0_wp, 0.0_wp, 0.0_wp], [3, 3])
+   real(wp), parameter :: lat_slab(3, 3) = reshape([ &
+      & 5.2_wp, 0.1_wp, 0.3_wp, 0.0_wp, 0.0_wp, 0.0_wp, &
+      & 0.5_wp, -0.2_wp, 6.1_wp], [3, 3])
    character(len=30) :: label
 
    select case(icase)
@@ -126,6 +138,26 @@ subroutine run_case(error, bond_capacity, icase)
    case(9)
       ! The half-cell displacement has two equivalent WS images.
       call new(mol, num_di, xyz_half, lattice=lat_orth, periodic=[.true., .true., .true.])
+   case(10)
+      ! 1D periodic wire (FTF), neutral, with both on-axis and off-axis pairs
+      call new(mol, num_tri, xyz_wire, lattice=lat_wire, periodic=[.false., .true., .false.])
+   case(11)
+      ! 2D periodic slab (TFT), neutral
+      call new(mol, num_tri, xyz_slab, lattice=lat_slab, periodic=[.true., .false., .true.])
+   case(12)
+      ! 1D periodic wire (TFF) with half-cell displacement (competing WSC images)
+      call new(mol, num_di, xyz_half, lattice=lat_orth, periodic=[.true., .false., .false.])
+   case(13)
+      ! 2D periodic slab (TTF) with half-cell displacement (competing WSC images)
+      call new(mol, num_di, xyz_half, lattice=lat_orth, periodic=[.true., .true., .false.])
+   case(14)
+      ! 1D periodic wire (FTF), charged (EEQBC only)
+      call new(mol, num_tri, xyz_wire, charge=1.0_wp, &
+         & lattice=lat_wire, periodic=[.false., .true., .false.])
+   case(15)
+      ! 2D periodic slab (TFT), charged (EEQBC only)
+      call new(mol, num_tri, xyz_slab, charge=-1.0_wp, &
+         & lattice=lat_slab, periodic=[.true., .false., .true.])
    case default
       call test_failed(error, "Unknown charge Hessian test case")
       return
@@ -339,10 +371,9 @@ subroutine test_invalid(error)
    end if
    call get_charges(model, mol, error, q, cache=cache)
    if (allocated(error)) return
-   mol%periodic = [.true., .false., .false.]
-   call add_charge_hessian(model, mol, expected, [1.0_wp], hess, cache)
+   call add_charge_hessian(model, mol, expected, [1.0_wp, 2.0_wp], hess, cache)
    if (.not. allocated(expected)) then
-      call test_failed(error, "Partial periodicity is not supported by the 3D response")
+      call test_failed(error, "Mismatched weight dimensions must be rejected")
       return
    end if
    if (any(hess /= 0.125_wp)) call test_failed(error, "Rejected calls changed the Hessian")

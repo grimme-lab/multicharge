@@ -10,6 +10,8 @@ multicharge - Atomic partial charge model.
 
 == Description
 Electronegativity equilibration model for atomic partial charges.
+Supports molecular (0D) and periodic systems in 1D (wires), 2D (slabs), and 3D (crystals).
+For 1D and 2D periodic systems, the standard EEQ model uses exact 1D/2D Ewald summation and requires a neutral unit cell (`--charge 0`), whereas the EEQBC model uses screened direct-space lattice summation and supports both neutral and charged periodic unit cells.
 
 
 == Options
