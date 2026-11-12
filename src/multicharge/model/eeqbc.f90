@@ -352,8 +352,8 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
    end do
    !$omp end parallel do
 
-   if (size(dxdr, 3) > mol%nat) dxdr(:, :, mol%nat + 1:) = 0.0_wp
-   if (size(dxdL, 3) > mol%nat) dxdL(:, :, mol%nat + 1:) = 0.0_wp
+   dxdr(:, :, mol%nat + 1) = 0.0_wp
+   dxdL(:, :, mol%nat + 1) = 0.0_wp
    dtmpdr(:, :, mol%nat + 1) = 0.0_wp
    dtmpdL(:, :, mol%nat + 1) = 0.0_wp
 
@@ -1174,11 +1174,9 @@ subroutine get_cmat_0d(self, mol, cmat)
    !$omp end do
    !$omp end parallel
 
-   if (size(cmat, 1) > mol%nat) then
-      cmat(mol%nat + 1, 1:mol%nat) = 0.0_wp
-      cmat(1:mol%nat, mol%nat + 1) = 0.0_wp
-      cmat(mol%nat + 1, mol%nat + 1) = 1.0_wp
-   end if
+   cmat(mol%nat + 1, 1:mol%nat) = 0.0_wp
+   cmat(1:mol%nat, mol%nat + 1) = 0.0_wp
+   cmat(mol%nat + 1, mol%nat + 1) = 1.0_wp
 
 end subroutine get_cmat_0d
 
@@ -1246,11 +1244,9 @@ subroutine get_cmat_3d(self, mol, wsc, cmat)
    !$omp end do
    !$omp end parallel
 
-   if (size(cmat, 1) > mol%nat) then
-      cmat(mol%nat + 1, 1:mol%nat) = 0.0_wp
-      cmat(1:mol%nat, mol%nat + 1) = 0.0_wp
-      cmat(mol%nat + 1, mol%nat + 1) = 1.0_wp
-   end if
+   cmat(mol%nat + 1, 1:mol%nat) = 0.0_wp
+   cmat(1:mol%nat, mol%nat + 1) = 0.0_wp
+   cmat(mol%nat + 1, mol%nat + 1) = 1.0_wp
 
 end subroutine get_cmat_3d
 
@@ -1324,7 +1320,7 @@ subroutine get_dcmat_0d(self, mol, dcdr, dcdL)
    real(wp), allocatable :: dcdiag(:, :)
 
    allocate(dcdiag(3, mol%nat), source=0.0_wp)
-   if (size(dcdr, 3) > mol%nat) dcdr(:, :, mol%nat + 1:) = 0.0_wp
+   dcdr(:, :, mol%nat + 1) = 0.0_wp
    dcdL(:, :, :) = 0.0_wp
 
    ! Leave dcdr(:, :, 1:nat) uninitialized for first-touch; reduce O(N) terms
@@ -1378,7 +1374,7 @@ subroutine get_dcmat_3d(self, mol, wsc, dcdr, dcdL)
    call get_dir_trans(mol, dtrans, self%ncoord%cutoff)
 
    allocate(dcdiag(3, mol%nat), source=0.0_wp)
-   if (size(dcdr, 3) > mol%nat) dcdr(:, :, mol%nat + 1:) = 0.0_wp
+   dcdr(:, :, mol%nat + 1) = 0.0_wp
    dcdL(:, :, :) = 0.0_wp
 
    ! Leave dcdr(:, :, 1:nat) uninitialized for first-touch; reduce O(N) terms
