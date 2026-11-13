@@ -203,20 +203,17 @@ subroutine get_ewald_damat(mol, wsc, alpha, dtrans, rtrans, rad, qvec, dadr, &
 
    atrace(:, :) = 0.0_wp
    dadL(:, :, :) = 0.0_wp
+   if (size(dadr, 3) > mol%nat) then
+      dadr(:, :, mol%nat + 1:) = 0.0_wp
+   end if
 
    npair = mol%nat * (mol%nat + 1) / 2
-   !$omp parallel default(none) &
+   !$omp parallel do default(none) schedule(runtime) &
    !$omp& shared(mol, wsc, alpha, dtrans, rtrans, rad, qvec, dadr, &
    !$omp& rec_weight, rec_strain, ndim, vol, axis_vec, ds_self, npair) &
-   !$omp& private(iat, jat, izp, jzp, img, ipair, gam, wsw, rij, vec, &
+   !$omp& private(iat, jat, izp, jzp, img, gam, wsw, rij, vec, &
    !$omp& dg, ds, dgd, dsd, dgr, dsr) &
    !$omp& reduction(+:atrace, dadL)
-   !$omp do schedule(static)
-   do iat = 1, size(dadr, 3)
-      dadr(:, :, iat) = 0.0_wp
-   end do
-   !$omp end do
-   !$omp do schedule(runtime)
    do ipair = 1, npair
       iat = int(0.5_wp * (sqrt(8.0_wp * real(ipair, wp) + 1.0_wp) - 1.0_wp))
       if (iat * (iat + 1) / 2 < ipair) iat = iat + 1
@@ -226,6 +223,7 @@ subroutine get_ewald_damat(mol, wsc, alpha, dtrans, rtrans, rad, qvec, dadr, &
       gam = 1.0_wp / sqrt(rad(izp)**2 + rad(jzp)**2)
       if (iat == jat) then
          call get_damat_dir(zero, gam, alpha, dtrans, dgd, dsd)
+         dadr(:, iat, iat) = 0.0_wp
          dadL(:, :, iat) = dadL(:, :, iat) + (dsd + ds_self) * qvec(iat)
       else
          rij = mol%xyz(:, jat) - mol%xyz(:, iat)
@@ -259,8 +257,7 @@ subroutine get_ewald_damat(mol, wsc, alpha, dtrans, rtrans, rad, qvec, dadr, &
          dadL(:, :, iat) = dadL(:, :, iat) + ds * qvec(jat)
       end if
    end do
-   !$omp end do
-   !$omp end parallel
+   !$omp end parallel do
 
 end subroutine get_ewald_damat
 

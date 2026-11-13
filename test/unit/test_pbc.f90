@@ -23,7 +23,6 @@ module test_pbc
    use mstore, only: get_structure
    use multicharge, only: get_charges, add_charge_hessian
    use multicharge_ewald, only: get_alpha, get_ewald_trans
-   use multicharge_ewald_cutoff, only: get_ewald_dir_trans, get_ewald_rec_trans
    use multicharge_ewald_special, only: fast_f012_1d, fast_k012_1d, erfc_exp_2d
    use multicharge_model, only: mchrg_model_type
    use multicharge_model_cache, only: cache_container
@@ -1520,7 +1519,7 @@ subroutine test_eeqbc_2d(error)
 end subroutine test_eeqbc_2d
 
 
-!> Verify one-element periodicity mask handling and degenerate-lattice error propagation.
+!> Verify periodicity mask handling and 0D / degenerate-lattice error propagation.
 subroutine test_ewald_setup(error)
 
    !> Error handling
@@ -1532,8 +1531,8 @@ subroutine test_ewald_setup(error)
       & 0.0_wp, 0.0_wp, 20.0_wp], [3, 3])
 
    type(error_type), allocatable :: expected
-   real(wp), allocatable :: dtrans(:, :), rtrans(:, :), trans(:, :)
-   real(wp) :: lat_deg(3, 3), alpha_1, alpha_3
+   real(wp), allocatable :: dtrans(:, :), rtrans(:, :)
+   real(wp) :: lat_deg(3, 3), lat_empty(0, 0), alpha_1, alpha_3
 
    call get_alpha(lat_ref, alpha_1, error, periodic=[.true.])
    if (allocated(error)) return
@@ -1562,17 +1561,17 @@ subroutine test_ewald_setup(error)
    end if
 
    deallocate(expected)
-   call get_ewald_dir_trans([.true., .false., .false.], lat_deg, 0.25_wp, 0.2_wp, &
-      & trans, expected)
+   call get_alpha(lat_ref, alpha_1, expected, periodic=[.false., .false., .false.])
    if (.not. allocated(expected)) then
-      call test_failed(error, "get_ewald_dir_trans did not report error for degenerate lattice")
+      call test_failed(error, "get_alpha did not reject nonperiodic mask")
       return
    end if
 
    deallocate(expected)
-   call get_ewald_rec_trans([.true., .false., .false.], lat_deg, 0.25_wp, trans, expected)
+   call get_ewald_trans([.true., .false., .false.], lat_empty, 0.25_wp, 0.2_wp, &
+      & dtrans, rtrans, expected)
    if (.not. allocated(expected)) then
-      call test_failed(error, "get_ewald_rec_trans did not report error for degenerate lattice")
+      call test_failed(error, "get_ewald_trans did not reject empty lattice")
       return
    end if
 
