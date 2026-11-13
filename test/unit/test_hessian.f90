@@ -27,6 +27,7 @@ subroutine collect_hessian(testsuite)
       & new_unittest("eeqbc-periodic", test_eeqbc_periodic), &
       & new_unittest("isolated-atom", test_atom), &
       & new_unittest("response-cache", test_cache), &
+      & new_unittest("periodic-lattice-coincident", test_periodic_coincident), &
       & new_unittest("invalid-response", test_invalid) &
       & ]
 end subroutine collect_hessian
@@ -92,24 +93,30 @@ subroutine run_case(error, bond_capacity, icase)
    integer, intent(in) :: icase
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
+   integer, parameter :: num_tri(3) = [30, 8, 1]
+   integer, parameter :: num_di(2) = [8, 1]
+   real(wp), parameter :: xyz_tri(3, 3) = reshape([ &
+      & 0.0_wp, 0.0_wp, 0.0_wp, 3.0_wp, 0.1_wp, 0.2_wp, &
+      & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3])
+   real(wp), parameter :: xyz_half(3, 2) = reshape([ &
+      & 0.0_wp, 0.0_wp, -0.2_wp, 3.0_wp, 0.2_wp, 0.3_wp], [3, 2])
    real(wp), parameter :: lattice(3, 3) = reshape([ &
       & 5.1_wp, 0.0_wp, 0.0_wp, 0.4_wp, 6.2_wp, 0.0_wp, &
       & 0.2_wp, 0.7_wp, 7.1_wp], [3, 3])
+   real(wp), parameter :: lat_orth(3, 3) = reshape([ &
+      & 6.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 7.0_wp, 0.0_wp, &
+      & 0.0_wp, 0.0_wp, 8.0_wp], [3, 3])
    character(len=30) :: label
 
    select case(icase)
    case(1, 2)
       call get_structure(mol, "MB16-43", "01")
    case(3)
-      call new(mol, [30, 8, 1], reshape([ &
-         & 0.0_wp, 0.0_wp, 0.0_wp, 3.0_wp, 0.1_wp, 0.2_wp, &
-         & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3]), charge=1.0_wp)
+      call new(mol, num_tri, xyz_tri, charge=1.0_wp)
    case(4)
       call new(mol, [8], reshape([0.0_wp, 0.0_wp, 0.0_wp], [3, 1]), charge=-1.0_wp)
    case(5, 6)
-      call new(mol, [30, 8, 1], reshape([ &
-         & 0.0_wp, 0.0_wp, 0.0_wp, 3.0_wp, 0.1_wp, 0.2_wp, &
-         & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3]), charge=1.0_wp, &
+      call new(mol, num_tri, xyz_tri, charge=1.0_wp, &
          & lattice=lattice, periodic=[.true., .true., .true.])
    case(7)
       call get_structure(mol, "X23", "urea")
@@ -118,10 +125,7 @@ subroutine run_case(error, bond_capacity, icase)
          & lattice=lattice, periodic=[.true., .true., .true.])
    case(9)
       ! The half-cell displacement has two equivalent WS images.
-      call new(mol, [8, 1], reshape([0.0_wp, 0.0_wp, 0.0_wp, &
-         & 3.0_wp, 0.2_wp, 0.3_wp], [3, 2]), lattice=reshape([ &
-         & 6.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 7.0_wp, 0.0_wp, &
-         & 0.0_wp, 0.0_wp, 8.0_wp], [3, 3]), periodic=[.true., .true., .true.])
+      call new(mol, num_di, xyz_half, lattice=lat_orth, periodic=[.true., .true., .true.])
    case default
       call test_failed(error, "Unknown charge Hessian test case")
       return
@@ -263,6 +267,58 @@ subroutine test_cache(error)
      call test_failed(error, "Refreshing the response cache changed second response")
    end if
 end subroutine test_cache
+
+
+subroutine test_periodic_coincident(error)
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   type(structure_type) :: mol
+   type(mchrg_cache) :: cache
+   class(mchrg_model_type), allocatable :: model
+   real(wp), parameter :: lat(3, 3) = reshape([ &
+      & 6.0_wp, 0.0_wp, 0.0_wp, &
+      & 0.0_wp, 7.0_wp, 0.0_wp, &
+      & 0.0_wp, 0.0_wp, 8.0_wp], [3, 3])
+   real(wp), parameter :: xyz(3, 2) = reshape([ &
+      & 0.0_wp, 0.0_wp, 0.0_wp, &
+      & 6.0_wp, 0.0_wp, 0.0_wp], [3, 2])
+   real(wp) :: q(2), weights(2), hess(6, 6), scale
+   integer :: a
+
+   call new(mol, [8, 1], xyz, lattice=lat, periodic=[.true., .true., .true.])
+   call new_eeq2019_model(mol, model, error)
+   if (allocated(error)) return
+
+   call get_charges(model, mol, error, q, cache=cache)
+   if (allocated(error)) return
+
+   weights = [0.4_wp, -0.9_wp]
+   hess = 0.0_wp
+   call add_charge_hessian(model, mol, error, weights, hess, cache)
+   if (allocated(error)) return
+
+   if (any(ieee_is_nan(hess))) then
+      call test_failed(error, "Lattice-equivalent pair produced NaN in periodic Hessian")
+      return
+   end if
+
+   scale = max(1.0_wp, maxval(abs(hess)))
+   if (maxval(abs(hess - transpose(hess))) > 1.0e-11_wp * scale) then
+      call test_failed(error, "Periodic coincident-image Hessian is not symmetric")
+      return
+   end if
+   do a = 1, 3
+      if (maxval(abs(sum(hess(:, a:6:3), dim=2))) > 1.0e-10_wp * scale) then
+         call test_failed(error, "Periodic coincident-image Hessian violates translation invariance")
+         return
+      end if
+   end do
+
+end subroutine test_periodic_coincident
+
 
 subroutine test_invalid(error)
    type(error_type), allocatable, intent(out) :: error

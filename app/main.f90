@@ -110,7 +110,11 @@ program main
       error stop
    end if
 
-   call get_lattice_points(mol%periodic, mol%lattice, model%ncoord%cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, model%ncoord%cutoff, trans, error)
+   if (allocated(error)) then
+      write(error_unit, "(a)") error%message
+      error stop
+   end if
 
    call timer%pop
 
@@ -136,8 +140,12 @@ program main
    grad = egrad .or. qgrad
 
    call timer%push("update")
-   call model%update(mol, cache, trans, grad)
+   call model%update(mol, error, cache, trans, grad)
    call timer%pop
+   if (allocated(error)) then
+      write(error_unit, "(a)") error%message
+      error stop
+   end if
    if (verbosity > 1) then
       write(output_unit, "(a, 1x, a)") "Get coordination number time : ", &
          & format_time(timer%get("update"))

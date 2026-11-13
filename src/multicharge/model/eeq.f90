@@ -16,7 +16,7 @@
 !> @file multicharge/model/eeq.f90
 !> Provides implementation of the electronegativity equilibration model (EEQ)
 
-!> Electronegativity equlibration charge model published in
+!> Electronegativity equilibration charge model published in
 !>
 !> E. Caldeweyher, S. Ehlert, A. Hansen, H. Neugebauer, S. Spicher, C. Bannwarth
 !> and S. Grimme, *J. Chem. Phys.*, **2019**, 150, 154122.
@@ -99,13 +99,16 @@ subroutine new_eeq_model(self, mol, error, chi, rad, eta, kcnchi, &
 end subroutine new_eeq_model
 
 !> Update coordination numbers and, if needed, the Wigner-Seitz cell and alpha
-subroutine update(self, mol, cache, trans, grad)
+subroutine update(self, mol, error, cache, trans, grad)
 
    !> EEQ model type
    class(eeq_model), intent(in) :: self
 
    !> Structure type
    type(structure_type), intent(in) :: mol
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
 
    !> Multicharge cache
    type(mchrg_cache), intent(inout) :: cache
@@ -132,8 +135,11 @@ subroutine update(self, mol, cache, trans, grad)
 
    if (any(mol%periodic)) then
       ! Create WSC
-      call new_wignerseitz_cell(cache%wsc, mol)
-      call get_alpha(mol%lattice, cache%alpha)
+      call new_wignerseitz_cell(cache%wsc, mol, error)
+      if (allocated(error)) return
+
+      call get_alpha(mol%lattice, cache%alpha, error)
+      if (allocated(error)) return
    end if
 
 end subroutine update
@@ -233,7 +239,8 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
       weight = -adj(iat)*self%kcnchi(izp)*(0.25_wp*c+reg)/(c+reg)**2.5_wp
       work(:, iat) = weight*dcndr(:, iat)
    end do
-   call get_lattice_points(mol%periodic, mol%lattice, self%ncoord%cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, self%ncoord%cutoff, trans, error)
+   if (allocated(error)) return
    call self%ncoord%add_coordination_number_hessian(mol, trans, dEdcn, hessian)
    call gemm(work, dcndr, hessian, transb="t", beta=1.0_wp)
 

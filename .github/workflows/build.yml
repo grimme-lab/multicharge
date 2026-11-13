@@ -26,7 +26,7 @@ env:
     meson!=1.8.0
     cmake
     ninja
-    gcovr
+    gcovr>=8.7
     numpy
     pytest
   MACOS_BASEKIT_URL: >-
@@ -78,7 +78,7 @@ jobs:
       FC: ${{ matrix.compiler == 'intel' && 'ifort' || 'gfortran' }}
       CC: ${{ matrix.compiler == 'intel' && 'icc' || 'gcc' }}
       GCC_V: ${{ matrix.version }}
-      PYTHON_V: 3.9
+      PYTHON_V: "3.14"
       OMP_NUM_THREADS: 1,2,1
 
     steps:
@@ -237,7 +237,7 @@ jobs:
         MESON_ARGS: >-
           ${{ matrix.compiler == 'intel' && '-Dfortran_link_args=-qopenmp' || '' }}
           ${{ contains(matrix.os, 'macos') && '-Dlapack=openblas' || '' }}
-          ${{ matrix.compiler == 'msys' && '-Dopenmp=false' || '' }}
+          ${{ (matrix.compiler == 'msys' || matrix.build-type == 'coverage') && '-Dopenmp=false' || '' }}
 
     - name: Configure build (CMake)
       if: ${{ matrix.build == 'cmake' }}
@@ -274,10 +274,21 @@ jobs:
         ctest --output-on-failure --parallel 2
       working-directory: ${{ env.BUILD_DIR }}
 
+    # Use gcovr directly instead of `ninja -C _build coverage` for explicit filtering.
+    # Requires gcovr >= 8.7 (Python >= 3.10) so Fortran module procedures
+    # (`__<mod>_MOD_<proc>`) are preserved natively while compiler-synthesized
+    # OOP vtable thunks (`___copy_*`, `___final_*`) remain excluded.
     - name: Create coverage report
       if: ${{ matrix.build == 'meson' && matrix.build-type == 'coverage' }}
-      run:
-        ninja -C ${{ env.BUILD_DIR }} coverage
+      run: |
+        gcovr ${{ env.BUILD_DIR }} \
+          --root . \
+          --filter "app/" \
+          --filter "src/" \
+          --exclude "subprojects/" \
+          --exclude "test/" \
+          --cobertura coverage.xml \
+          --txt-summary
 
     - name: Install project
       run: |
@@ -315,6 +326,11 @@ jobs:
     - name: Upload coverage report
       if: ${{ matrix.build == 'meson' && matrix.build-type == 'coverage' }}
       uses: codecov/codecov-action@v5
+      with:
+        files: coverage.xml
+        disable_search: true
+        fail_ci_if_error: false
+        flags: fortran
 
   lint:
     runs-on: ubuntu-latest

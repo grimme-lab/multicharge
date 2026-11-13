@@ -88,14 +88,17 @@ module multicharge_model_type
    abstract interface
 
       !> Update model-dependent quantities and cache
-      subroutine update(self, mol, cache, trans, grad)
-         import :: mchrg_model_type, structure_type, mchrg_cache, wp
+      subroutine update(self, mol, error, cache, trans, grad)
+         import :: mchrg_model_type, structure_type, error_type, mchrg_cache, wp
 
          !> Multicharge model type
          class(mchrg_model_type), intent(in) :: self
 
          !> Structure type
          type(structure_type), intent(in) :: mol
+
+         !> Error handling
+         type(error_type), allocatable, intent(out) :: error
 
          !> Multicharge cache with CN, local charges, and Wigner-Seitz cell
          type(mchrg_cache), intent(inout) :: cache
@@ -600,9 +603,9 @@ subroutine local_charge(self, mol, trans, qloc, dqlocdr, dqlocdL)
    !> Local atomic partial charges
    real(wp), intent(out) :: qloc(:)
    !> Optional derivative of local atomic partial charges w.r.t. atomic positions
-   real(wp), intent(out), optional :: dqlocdr(3, mol%nat, mol%nat)
+   real(wp), intent(out), optional :: dqlocdr(:, :, :)
    !> Optional derivative of local atomic partial charges w.r.t. lattice vectors
-   real(wp), intent(out), optional :: dqlocdL(3, 3, mol%nat)
+   real(wp), intent(out), optional :: dqlocdL(:, :, :)
 
    qloc = 0.0_wp
    if (present(dqlocdr) .and. present(dqlocdL)) then

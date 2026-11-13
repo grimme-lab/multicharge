@@ -68,6 +68,8 @@ subroutine new_eeq2019_model(mol, model, error)
    call new_eeq_model(eeq, mol=mol, error=error, chi=chi, &
       & rad=rad, eta=eta, kcnchi=kcnchi, cutoff=cutoff, &
       & cn_exp=cn_exp, rcov=rcov, cn_max=cn_max)
+   if (allocated(error)) return
+
    call move_alloc(eeq, model)
 
 end subroutine new_eeq2019_model
@@ -130,6 +132,8 @@ subroutine new_eeqbc2025_model(mol, model, error)
       & kcnrad=kcnrad, cap=cap, avg_cn=avg_cn, rvdw=rvdw, kbc=kbc, &
       & cutoff=cutoff, cn_exp=cn_exp, rcov=rcov, en=en, &
       & norm_exp=norm_exp)
+   if (allocated(error)) return
+
    call move_alloc(eeqbc, model)
 
 end subroutine new_eeqbc2025_model

@@ -115,7 +115,8 @@ subroutine gen_test(error, mol, model, qref, eref)
 
    allocate(cache)
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
    if (present(eref)) then
       allocate(energy(mol%nat))
@@ -125,7 +126,8 @@ subroutine gen_test(error, mol, model, qref, eref)
       allocate(qvec(mol%nat))
    end if
 
-   call model%update(mol, cache, trans, grad=.false.)
+   call model%update(mol, error, cache, trans, grad=.false.)
+   if (allocated(error)) return
    call model%solve(mol, solver, cache, error, energy=energy, qvec=qvec, unit=output_unit)
    if (allocated(error)) return
 
@@ -199,20 +201,23 @@ subroutine test_numgrad(error, mol, model)
    gradient(:, :) = 0.0_wp
    sigma(:, :) = 0.0_wp
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
    lp: do iat = 1, mol%nat
       do ic = 1, 3
          energy(:) = 0.0_wp
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
-         call model%update(mol, cache, trans, grad=.false.)
+         call model%update(mol, error, cache, trans, grad=.false.)
+         if (allocated(error)) return
          call model%solve(mol, solver, cache, error,energy=energy, unit=output_unit)
          if (allocated(error)) exit lp
          er = sum(energy)
 
          energy(:) = 0.0_wp
          mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2 * step
-         call model%update(mol, cache, trans, grad=.false.)
+         call model%update(mol, error, cache, trans, grad=.false.)
+         if (allocated(error)) return
          call model%solve(mol, solver, cache, error, energy=energy, unit=output_unit)
          if (allocated(error)) exit lp
          el = sum(energy)
@@ -223,7 +228,8 @@ subroutine test_numgrad(error, mol, model)
    end do lp
    if (allocated(error)) return
 
-   call model%update(mol, cache, trans, grad)
+   call model%update(mol, error, cache, trans, grad)
+   if (allocated(error)) return
    call model%solve(mol, solver, cache, error, &
       & gradient=gradient, sigma=sigma, unit=output_unit)
    if (allocated(error)) return
@@ -284,7 +290,8 @@ subroutine test_numsigma(error, mol, model)
    gradient(:, :) = 0.0_wp
    sigma(:, :) = 0.0_wp
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
    eps(:, :) = unity
    xyz(:, :) = mol%xyz
@@ -297,7 +304,8 @@ subroutine test_numsigma(error, mol, model)
          mol%xyz(:, :) = matmul(eps, xyz)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
-         call model%update(mol, cache, lattr, grad=.false.)
+         call model%update(mol, error, cache, lattr, grad=.false.)
+         if (allocated(error)) return
          call model%solve(mol, solver, cache, error, energy=energy, unit=output_unit)
          if (allocated(error)) exit lp
          er = sum(energy)
@@ -307,7 +315,8 @@ subroutine test_numsigma(error, mol, model)
          mol%xyz(:, :) = matmul(eps, xyz)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
-         call model%update(mol, cache, lattr, grad=.false.)
+         call model%update(mol, error, cache, lattr, grad=.false.)
+         if (allocated(error)) return
          call model%solve(mol, solver, cache, error, energy=energy, unit=output_unit)
          if (allocated(error)) exit lp
          el = sum(energy)
@@ -322,7 +331,8 @@ subroutine test_numsigma(error, mol, model)
    if (allocated(error)) return
 
    energy(:) = 0.0_wp
-   call model%update(mol, cache, trans, grad)
+   call model%update(mol, error, cache, trans, grad)
+   if (allocated(error)) return
    call model%get_capacitance_matrix(mol, ndim, cache)
    call model%solve(mol, solver, cache, error, &
       & gradient=gradient, sigma=sigma, unit=output_unit)
@@ -383,21 +393,24 @@ subroutine test_dbdr(error, mol, model)
    allocate (xvecr(mol%nat), xvecl(mol%nat), numgrad(3, mol%nat, mol%nat), &
       & dbdr(3, mol%nat, mol%nat), dbdL(3, 3, mol%nat))
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
    lp: do iat = 1, mol%nat
       do ic = 1, 3
          ! Right-hand side
          xvecr(:) = 0.0_wp
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
-         call model%update(mol, cache, trans, grad=.false.)
+         call model%update(mol, error, cache, trans, grad=.false.)
+         if (allocated(error)) return
          call model%get_capacitance_matrix(mol, ndim, cache)
          call model%get_xvec(mol, ndim, cache, xvecr)
 
          ! Left-hand side
          xvecl(:) = 0.0_wp
          mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2 * step
-         call model%update(mol, cache, trans, grad=.false.)
+         call model%update(mol, error, cache, trans, grad=.false.)
+         if (allocated(error)) return
          call model%get_capacitance_matrix(mol, ndim, cache)
          call model%get_xvec(mol, ndim, cache, xvecl)
 
@@ -407,7 +420,8 @@ subroutine test_dbdr(error, mol, model)
    end do lp
 
    ! Analytical gradient
-   call model%update(mol, cache, trans, grad)
+   call model%update(mol, error, cache, trans, grad)
+   if (allocated(error)) return
    call model%get_capacitance_matrix(mol, ndim, cache)
    call model%get_xvec(mol, ndim, cache, xvecl) ! need to call this for xtmp in cache (eeqbc)
    call model%get_xvec_derivs(mol, ndim, cache, dbdr, dbdL)
@@ -470,7 +484,8 @@ subroutine test_dbdL(error, mol, model)
    allocate (xvecr(mol%nat), xvecl(mol%nat), numsigma(3, 3, mol%nat), &
       & dbdr(3, mol%nat, mol%nat), dbdL(3, 3, mol%nat), xyz(3, mol%nat), lattice(3, 3))
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
    numsigma = 0.0_wp
 
@@ -486,7 +501,8 @@ subroutine test_dbdL(error, mol, model)
          mol%xyz(:, :) = matmul(eps, xyz)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
-         call model%update(mol, cache, lattr, grad=.false.)
+         call model%update(mol, error, cache, lattr, grad=.false.)
+         if (allocated(error)) return
          call model%get_capacitance_matrix(mol, ndim, cache)
          call model%get_xvec(mol, ndim, cache, xvecr)
 
@@ -496,7 +512,8 @@ subroutine test_dbdL(error, mol, model)
          mol%xyz(:, :) = matmul(eps, xyz)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
-         call model%update(mol, cache, lattr, grad=.false.)
+         call model%update(mol, error, cache, lattr, grad=.false.)
+         if (allocated(error)) return
          call model%get_capacitance_matrix(mol, ndim, cache)
          call model%get_xvec(mol, ndim, cache, xvecl)
 
@@ -511,7 +528,8 @@ subroutine test_dbdL(error, mol, model)
    end do lp
 
    ! Analytical gradient
-   call model%update(mol, cache, trans, grad)
+   call model%update(mol, error, cache, trans, grad)
+   if (allocated(error)) return
    call model%get_capacitance_matrix(mol, ndim, cache)
    call model%get_xvec(mol, ndim, cache, xvecl) ! need to call this for xtmp in cache (eeqbc)
    call model%get_xvec_derivs(mol, ndim, cache, dbdr, dbdL)
@@ -582,10 +600,12 @@ subroutine test_dadr(error, mol, model)
       thr2_local = thr2
    end select
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
    ! Obtain the vector of charges
-   call model%update(mol, cache, trans, grad=.false.)
+   call model%update(mol, error, cache, trans, grad=.false.)
+   if (allocated(error)) return
    call model%solve(mol, solver, cache, error, qvec=qvec, unit=output_unit)
    if (allocated(error)) return
 
@@ -600,14 +620,16 @@ subroutine test_dadr(error, mol, model)
 
          ! First right-hand side (x+h)
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
-         call model%update(mol, cache, trans, grad=.false.)
+         call model%update(mol, error, cache, trans, grad=.false.)
+         if (allocated(error)) return
          call model%get_capacitance_matrix(mol, ndim, cache)
          call model%get_coulomb_matrix(mol, ndim, cache)
          amatr1 = cache%amat
 
          ! Second right-hand side (x+2h)
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
-         call model%update(mol, cache, trans, grad=.false.)
+         call model%update(mol, error, cache, trans, grad=.false.)
+         if (allocated(error)) return
          call model%get_capacitance_matrix(mol, ndim, cache)
          call model%get_coulomb_matrix(mol, ndim, cache)
          amatr2 = cache%amat
@@ -617,14 +639,16 @@ subroutine test_dadr(error, mol, model)
 
          ! First left-hand side (x-h)
          mol%xyz(ic, iat) = mol%xyz(ic, iat) - step
-         call model%update(mol, cache, trans, grad=.false.)
+         call model%update(mol, error, cache, trans, grad=.false.)
+         if (allocated(error)) return
          call model%get_capacitance_matrix(mol, ndim, cache)
          call model%get_coulomb_matrix(mol, ndim, cache)
          amatl1 = cache%amat
 
          ! Second left-hand side (x-2h)
          mol%xyz(ic, iat) = mol%xyz(ic, iat) - step
-         call model%update(mol, cache, trans, grad=.false.)
+         call model%update(mol, error, cache, trans, grad=.false.)
+         if (allocated(error)) return
          call model%get_capacitance_matrix(mol, ndim, cache)
          call model%get_coulomb_matrix(mol, ndim, cache)
          amatl2 = cache%amat
@@ -645,7 +669,8 @@ subroutine test_dadr(error, mol, model)
    end do lp
 
    ! Analytical gradient
-   call model%update(mol, cache, trans, grad)
+   call model%update(mol, error, cache, trans, grad)
+   if (allocated(error)) return
    call model%get_capacitance_matrix(mol, ndim, cache)
    allocate(dadr(3, mol%nat, ndim), dadL(3, 3, ndim))
    call model%get_coulomb_derivs(mol, ndim, cache, qvec, dadr, dadL)
@@ -717,9 +742,11 @@ subroutine test_dadL(error, mol, model)
       thr2_local = thr2
    end select
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
-   call model%update(mol, cache, trans, grad=.false.)
+   call model%update(mol, error, cache, trans, grad=.false.)
+   if (allocated(error)) return
    call model%solve(mol, solver, cache, error, qvec=qvec, unit=output_unit)
    if (allocated(error)) return
 
@@ -736,7 +763,8 @@ subroutine test_dadL(error, mol, model)
          mol%xyz(:, :) = matmul(eps, xyz)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
-         call model%update(mol, cache, lattr, grad=.false.)
+         call model%update(mol, error, cache, lattr, grad=.false.)
+         if (allocated(error)) return
          call model%get_capacitance_matrix(mol, ndim, cache)
          call model%get_coulomb_matrix(mol, ndim, cache)
          if (allocated(error)) exit lp
@@ -747,7 +775,8 @@ subroutine test_dadL(error, mol, model)
          mol%xyz(:, :) = matmul(eps, xyz)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
-         call model%update(mol, cache, lattr, grad=.false.)
+         call model%update(mol, error, cache, lattr, grad=.false.)
+         if (allocated(error)) return
          call model%get_capacitance_matrix(mol, ndim, cache)
          call model%get_coulomb_matrix(mol, ndim, cache)
          if (allocated(error)) exit lp
@@ -766,7 +795,8 @@ subroutine test_dadL(error, mol, model)
    end do lp
    if (allocated(error)) return
 
-   call model%update(mol, cache, trans, grad)
+   call model%update(mol, error, cache, trans, grad)
+   if (allocated(error)) return
    call model%get_capacitance_matrix(mol, ndim, cache)
    allocate(dadr(3, mol%nat, ndim), dadL(3, 3, ndim))
    call model%get_coulomb_derivs(mol, ndim, cache, qvec, dadr, dadL)
@@ -824,17 +854,20 @@ subroutine test_numdqdr(error, mol, model)
    allocate (ql(mol%nat), qr(mol%nat), dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat), &
       & numdr(3, mol%nat, mol%nat))
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
    lp: do iat = 1, mol%nat
       do ic = 1, 3
          mol%xyz(ic, iat) = mol%xyz(ic, iat) + step
-         call model%update(mol, cache, trans, grad=.false.)
+         call model%update(mol, error, cache, trans, grad=.false.)
+         if (allocated(error)) return
          call model%solve(mol, solver, cache, error, qvec=qr, unit=output_unit)
          if (allocated(error)) exit lp
 
          mol%xyz(ic, iat) = mol%xyz(ic, iat) - 2 * step
-         call model%update(mol, cache, trans, grad=.false.)
+         call model%update(mol, error, cache, trans, grad=.false.)
+         if (allocated(error)) return
          call model%solve(mol, solver, cache, error, qvec=ql, unit=output_unit)
          if (allocated(error)) exit lp
 
@@ -844,7 +877,8 @@ subroutine test_numdqdr(error, mol, model)
    end do lp
    if (allocated(error)) return
 
-   call model%update(mol, cache, trans, grad)
+   call model%update(mol, error, cache, trans, grad)
+   if (allocated(error)) return
    call model%solve(mol, solver, cache, error, &
       & dqdr=dqdr, dqdL=dqdL, unit=output_unit)
    if (allocated(error)) return
@@ -903,7 +937,8 @@ subroutine test_numdqdL(error, mol, model)
    allocate (qr(mol%nat), ql(mol%nat), dqdr(3, mol%nat, mol%nat), dqdL(3, 3, mol%nat), &
       & xyz(3, mol%nat), lattice(3, 3), numdL(3, 3, mol%nat))
 
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
+   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans, error)
+   if (allocated(error)) return
 
    eps(:, :) = unity
    xyz(:, :) = mol%xyz
@@ -917,7 +952,8 @@ subroutine test_numdqdL(error, mol, model)
          mol%xyz(:, :) = matmul(eps, xyz)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
-         call model%update(mol, cache, lattr, grad=.false.)
+         call model%update(mol, error, cache, lattr, grad=.false.)
+         if (allocated(error)) return
          call model%solve(mol, solver, cache, error, qvec=qr, unit=output_unit)
          if (allocated(error)) exit lp
 
@@ -925,7 +961,8 @@ subroutine test_numdqdL(error, mol, model)
          mol%xyz(:, :) = matmul(eps, xyz)
          mol%lattice(:, :) = matmul(eps, lattice)
          lattr(:, :) = matmul(eps, trans)
-         call model%update(mol, cache, lattr, grad=.false.)
+         call model%update(mol, error, cache, lattr, grad=.false.)
+         if (allocated(error)) return
          call model%solve(mol, solver, cache, error, qvec=ql, unit=output_unit)
          if (allocated(error)) exit lp
 
@@ -938,7 +975,8 @@ subroutine test_numdqdL(error, mol, model)
    end do lp
    if (allocated(error)) return
 
-   call model%update(mol, cache, trans, grad)
+   call model%update(mol, error, cache, trans, grad)
+   if (allocated(error)) return
    call model%solve(mol, solver, cache, error, &
       & dqdr=dqdr, dqdL=dqdL, unit=output_unit)
    if (allocated(error)) return
@@ -995,14 +1033,14 @@ subroutine test_eeq_e_formamide(error)
    class(mchrg_model_type), allocatable :: model
    ! Updated for the mctc-lib Wigner-Seitz image tolerance in the finite Ewald sum.
    real(wp), parameter :: ref(24) = [&
-      & 4.01878374787191E-1_wp, 4.01885037899597E-1_wp, 4.01836688390911E-1_wp, &
-      & 4.01859670984182E-1_wp, 4.30132953804280E-1_wp, 4.30105983229582E-1_wp, &
-      & 4.30085942904623E-1_wp, 4.30109219580760E-1_wp, 1.90400205083764E-1_wp, &
-      & 1.90401834703106E-1_wp, 1.90404142905890E-1_wp, 1.90407459232625E-1_wp, &
-      & 3.33868772086876E-1_wp, 3.33849119518316E-1_wp, 3.33876414218980E-1_wp, &
-      & 3.33893467423880E-1_wp, -8.35636285533486E-1_wp, -8.35615627485463E-1_wp, &
-      &-8.35543385304371E-1_wp, -8.35590189215555E-1_wp, -6.31079470991667E-1_wp, &
-      &-6.31060026823144E-1_wp, -6.31085555821538E-1_wp, -6.31082095933280E-1_wp]
+      & 4.01878374362997E-1_wp, 4.01885037903943E-1_wp, 4.01836688394892E-1_wp, &
+      & 4.01859669863049E-1_wp, 4.30132953379425E-1_wp, 4.30105983205457E-1_wp, &
+      & 4.30085942886818E-1_wp, 4.30109219466914E-1_wp, 1.90400205128928E-1_wp, &
+      & 1.90401834745755E-1_wp, 1.90404142926720E-1_wp, 1.90407459238031E-1_wp, &
+      & 3.33868771612188E-1_wp, 3.33849119482075E-1_wp, 3.33876414202270E-1_wp, &
+      & 3.33893467357834E-1_wp, -8.35636283871575E-1_wp, -8.35615627471340E-1_wp, &
+      &-8.35543385331647E-1_wp, -8.35590188319278E-1_wp, -6.31079470990741E-1_wp, &
+      &-6.31060026819872E-1_wp, -6.31085555552299E-1_wp, -6.31082095960253E-1_wp]
 
    call get_structure(mol, "X23", "formamide")
    call new_eeq2019_model(mol, model, error)
