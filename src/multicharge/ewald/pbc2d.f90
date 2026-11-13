@@ -38,7 +38,8 @@ module multicharge_ewald_pbc2d
 contains
 
 
-!> Reciprocal-space and G=0 sheet contribution for 2D Ewald
+!> Reciprocal-space and G=0 sheet contribution for 2D Ewald.
+!> Expects open half-space reciprocal vectors (one representative per +G/-G pair).
 pure subroutine get_amat_rec_2d(rij, alpha, area, n_hat, trans, amat)
 
    !> Interatomic displacement vector
@@ -53,7 +54,7 @@ pure subroutine get_amat_rec_2d(rij, alpha, area, n_hat, trans, amat)
    !> Unit normal vector to the periodic plane
    real(wp), intent(in) :: n_hat(3)
 
-   !> Reciprocal-space translation vectors
+   !> Half-space reciprocal lattice vectors
    real(wp), intent(in) :: trans(:, :)
 
    !> Reciprocal-space Coulomb matrix element contribution
@@ -73,15 +74,16 @@ pure subroutine get_amat_rec_2d(rij, alpha, area, n_hat, trans, amat)
       gv = dot_product(rij, g_vec)
       ep = erfc_exp_2d(g_norm, +z, alpha)
       em = erfc_exp_2d(g_norm, -z, alpha)
-      amat = amat + (pi_area / g_norm) * cos(gv) * (ep + em)
+      amat = amat + (cos(gv) * (ep + em)) / g_norm
    end do
-   amat = amat - 2.0_wp * pi_area &
-      & * (z * erf(alpha * z) + exp(-(alpha * z)**2) / (alpha * sqrtpi))
+   amat = 2.0_wp * pi_area * (amat &
+      & - z * erf(alpha * z) - exp(-(alpha * z)**2) / (alpha * sqrtpi))
 
 end subroutine get_amat_rec_2d
 
 
-!> Reciprocal-space and G=0 sheet derivatives for 2D Ewald
+!> Reciprocal-space and G=0 sheet derivatives for 2D Ewald.
+!> Expects open half-space reciprocal vectors (one representative per +G/-G pair).
 pure subroutine get_damat_rec_2d(rij, alpha, area, n_hat, trans, dg, ds)
 
    !> Interatomic displacement vector
@@ -96,7 +98,7 @@ pure subroutine get_damat_rec_2d(rij, alpha, area, n_hat, trans, dg, ds)
    !> Unit normal vector to the periodic plane
    real(wp), intent(in) :: n_hat(3)
 
-   !> Reciprocal-space translation vectors
+   !> Half-space reciprocal lattice vectors
    real(wp), intent(in) :: trans(:, :)
 
    !> Position derivative contribution
@@ -106,8 +108,8 @@ pure subroutine get_damat_rec_2d(rij, alpha, area, n_hat, trans, dg, ds)
    real(wp), intent(out) :: ds(3, 3)
 
    integer :: itr
-   real(wp) :: z, pi_area, inv_alp2, z2_alp2, fac_dg, r_perp(3), g_vec(3)
-   real(wp) :: g_norm, inv_g, gv, cos_gv, sin_gv
+   real(wp) :: z, pi_area, twopi_area, inv_alp2, z2_alp2, fac_dg, r_perp(3)
+   real(wp) :: g_vec(3), g_norm, inv_g, gv, cos_gv, sin_gv
    real(wp) :: ep, em, f_gz, df_dg, df_dz, pref, phi_0, dphi0_dz
    real(wp) :: i_par(3, 3), nn(3, 3), outer_gg(3, 3), outer_rg(3, 3)
 
@@ -116,6 +118,7 @@ pure subroutine get_damat_rec_2d(rij, alpha, area, n_hat, trans, dg, ds)
 
    z = dot_product(rij, n_hat)
    pi_area = pi / area
+   twopi_area = 2.0_wp * pi_area
    inv_alp2 = 1.0_wp / alpha**2
    z2_alp2 = (alpha * z)**2
    fac_dg = 2.0_wp / (alpha * sqrtpi)
@@ -138,7 +141,7 @@ pure subroutine get_damat_rec_2d(rij, alpha, area, n_hat, trans, dg, ds)
       df_dg = z * (ep - em) &
          & - fac_dg * exp(-0.25_wp * g_norm**2 * inv_alp2 - z2_alp2)
       df_dz = g_norm * (ep - em)
-      pref = pi_area * inv_g
+      pref = twopi_area * inv_g
 
       dg(:) = dg + pref * (-sin_gv * f_gz * g_vec + cos_gv * df_dz * n_hat)
 
@@ -158,7 +161,8 @@ pure subroutine get_damat_rec_2d(rij, alpha, area, n_hat, trans, dg, ds)
 end subroutine get_damat_rec_2d
 
 
-!> Reciprocal-space and G=0 sheet pair Hessian block for 2D Ewald
+!> Reciprocal-space and G=0 sheet pair Hessian block for 2D Ewald.
+!> Expects open half-space reciprocal vectors (one representative per +G/-G pair).
 pure subroutine get_hess_rec_2d(rij, alpha, area, n_hat, trans, rbox)
 
    !> Interatomic displacement vector
@@ -173,15 +177,15 @@ pure subroutine get_hess_rec_2d(rij, alpha, area, n_hat, trans, rbox)
    !> Unit normal vector to the periodic plane
    real(wp), intent(in) :: n_hat(3)
 
-   !> Reciprocal-space translation vectors
+   !> Half-space reciprocal lattice vectors
    real(wp), intent(in) :: trans(:, :)
 
    !> Reciprocal-space Hessian block
    real(wp), intent(out) :: rbox(3, 3)
 
    integer :: itr
-   real(wp) :: z, pi_area, inv_alp2, z2_alp2, g_vec(3), g2, g_norm, gv
-   real(wp) :: cos_gv, sin_gv, ep, em, fp, fm, gauss, pref, gauss_z
+   real(wp) :: z, pi_area, inv_alp2, z2_alp2, g_vec(3), g2, g_norm, inv_g, gv
+   real(wp) :: cos_gv, sin_gv, ep, em, fp, fm, gauss, gauss_z
    real(wp) :: gg_mat(3, 3), nn_mat(3, 3), ng_sym(3, 3)
 
    rbox = 0.0_wp
@@ -197,6 +201,7 @@ pure subroutine get_hess_rec_2d(rij, alpha, area, n_hat, trans, rbox)
       if (g2 < eps) cycle
 
       g_norm = sqrt(g2)
+      inv_g = 1.0_wp / g_norm
       gv = dot_product(g_vec, rij)
       cos_gv = cos(gv)
       sin_gv = sin(gv)
@@ -205,17 +210,16 @@ pure subroutine get_hess_rec_2d(rij, alpha, area, n_hat, trans, rbox)
       fp = ep + em
       fm = ep - em
       gauss = exp(-0.25_wp * g2 * inv_alp2 - z2_alp2)
-      pref = pi_area / g_norm
       gg_mat = outerprod(g_vec, g_vec)
       ng_sym = outerprod(g_vec, n_hat) + outerprod(n_hat, g_vec)
-      rbox = rbox - pref * cos_gv * fp * gg_mat &
-         & - pi_area * sin_gv * fm * ng_sym &
-         & + pi_area * cos_gv &
-         & * (g_norm * fp - (4.0_wp / sqrtpi) * alpha * gauss) * nn_mat
+      rbox = rbox - inv_g * cos_gv * fp * gg_mat &
+         & - sin_gv * fm * ng_sym &
+         & + cos_gv * (g_norm * fp - (4.0_wp / sqrtpi) * alpha * gauss) * nn_mat
    end do
 
    gauss_z = exp(-z2_alp2)
-   rbox = rbox - (4.0_wp * sqrtpi * alpha / area) * gauss_z * nn_mat
+   rbox = (2.0_wp * pi_area) * rbox &
+      & - (4.0_wp * sqrtpi * alpha / area) * gauss_z * nn_mat
 
 end subroutine get_hess_rec_2d
 

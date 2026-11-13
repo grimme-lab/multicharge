@@ -22,21 +22,17 @@
 !> and S. Grimme, *J. Chem. Phys.*, **2019**, 150, 154122.
 !> DOI: [10.1063/1.5090222](https://dx.doi.org/10.1063/1.5090222)
 module multicharge_model_eeq
-   use mctc_cutoff, only: get_lattice_points, get_periodic_axes
+   use mctc_cutoff, only: get_lattice_points
    use mctc_env, only: error_type, fatal_error, wp
    use mctc_io, only: structure_type
    use mctc_io_constants, only: pi
-   use mctc_io_math, only: crossprod
    use mctc_ncoord, only: new_ncoord, cn_count
    use mctc_wignerseitz, only: new_wignerseitz_cell
    use multicharge_blas, only: gemm
-   use multicharge_ewald, only: get_alpha, get_amat_dir, get_amat_rec_1d, &
-      & get_amat_rec_2d, get_amat_rec_3d, get_damat_dir, get_damat_rec_1d, &
-      & get_damat_rec_2d, get_damat_rec_3d, get_ewald_dir_trans, &
-      & get_ewald_rec_trans, get_hess_dir, get_hess_rec_1d, get_hess_rec_2d, &
-      & get_hess_rec_3d, get_rec_weights
+   use multicharge_ewald, only: get_alpha, get_ewald_trans, get_ewald_amat, &
+      & get_ewald_damat, add_ewald_hessian
    use multicharge_model_cache, only: cache_container, model_cache
-   use multicharge_model_hessian, only: coulomb_kernel, add_pair_hessian, add_pair_block
+   use multicharge_model_hessian, only: coulomb_kernel, add_pair_hessian
    use multicharge_model_type, only: mchrg_model_type
    implicit none
    private
@@ -46,26 +42,11 @@ module multicharge_model_eeq
    !> Reusable data container for EEQ model evaluations
    type, extends(model_cache), public :: eeq_cache
 
-      !> Number of periodic dimensions
-      integer :: ndim = 0
-
-      !> Cell length (1D), area (2D), or volume (3D)
-      real(wp) :: vol = 0.0_wp
-
-      !> Wire direction (1D) or slab normal (2D)
-      real(wp) :: axis_vec(3) = 0.0_wp
-
-      !> Direct-space Ewald translations
+      !> Direct-space Ewald lattice translations
       real(wp), allocatable :: dtrans(:, :)
 
-      !> Nonzero reciprocal-space Ewald vectors
+      !> Open half-space reciprocal Ewald vectors
       real(wp), allocatable :: rtrans(:, :)
-
-      !> Reciprocal-space Ewald weights (3D)
-      real(wp), allocatable :: rec_weight(:)
-
-      !> Reciprocal-space Ewald strain tensors (3D)
-      real(wp), allocatable :: rec_strain(:, :, :)
 
    end type eeq_cache
 
@@ -139,6 +120,7 @@ subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlo
    real(wp), intent(in), optional :: dqlocdL(:, :, :)
 
    type(eeq_cache), pointer :: ptr
+   real(wp) :: gam_min
 
    call taint(cache, ptr)
 
@@ -160,62 +142,16 @@ subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlo
       call new_wignerseitz_cell(ptr%wsc, mol, error)
       if (allocated(error)) return
 
-      call setup_ewald(self, mol, ptr, error)
+      call get_alpha(mol%lattice, ptr%alpha, error, mol%periodic)
+      if (allocated(error)) return
+
+      gam_min = 1.0_wp / (sqrt(2.0_wp) * maxval(self%rad(mol%id)))
+      call get_ewald_trans(mol%periodic, mol%lattice, ptr%alpha, gam_min, &
+         & ptr%dtrans, ptr%rtrans, error)
       if (allocated(error)) return
    end if
 
 end subroutine update
-
-
-!> Set up Ewald splitting parameter, cell geometry, and lattice translations
-subroutine setup_ewald(self, mol, cache, error)
-
-   !> Electronegativity equilibration model
-   class(eeq_model), intent(in) :: self
-
-   !> Molecular structure data
-   type(structure_type), intent(in) :: mol
-
-   !> EEQ model cache
-   type(eeq_cache), intent(inout) :: cache
-
-   !> Error handling
-   type(error_type), allocatable, intent(out) :: error
-
-   integer :: p_axes(3)
-   real(wp) :: gam_min, n_vec(3)
-
-   call get_alpha(mol%lattice, cache%alpha, error, mol%periodic)
-   if (allocated(error)) return
-
-   cache%vol = 0.0_wp
-   cache%axis_vec = 0.0_wp
-
-   call get_periodic_axes(mol%periodic, cache%ndim, p_axes)
-   gam_min = 1.0_wp / (sqrt(2.0_wp) * maxval(self%rad(mol%id)))
-
-   call get_ewald_dir_trans(mol%periodic, mol%lattice, cache%alpha, &
-      & gam_min, cache%dtrans, error)
-   if (allocated(error)) return
-
-   call get_ewald_rec_trans(mol%periodic, mol%lattice, cache%alpha, &
-      & cache%rtrans, error, cache%vol)
-   if (allocated(error)) return
-
-   select case (cache%ndim)
-   case (1)
-      cache%axis_vec = mol%lattice(:, p_axes(1)) / cache%vol
-   case (2)
-      n_vec = crossprod(mol%lattice(:, p_axes(1)), mol%lattice(:, p_axes(2)))
-      cache%axis_vec = n_vec / norm2(n_vec)
-   case (3)
-      call get_rec_weights(cache%vol, cache%alpha, cache%rtrans, cache%rec_weight, &
-         & cache%rec_strain)
-   case default
-      continue
-   end select
-
-end subroutine setup_ewald
 
 subroutine get_xvec(self, mol, cache, xvec)
    class(eeq_model), intent(in) :: self
@@ -310,7 +246,8 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
 
    allocate(diagonal(3, 3, nat), source=0.0_wp)
    if (any(mol%periodic)) then
-      call add_periodic_hessian(self, mol, ptr, cache%qvec, adj, hessian, diagonal)
+      call add_ewald_hessian(mol, ptr%wsc, ptr%alpha, ptr%dtrans, ptr%rtrans, &
+         & self%rad, cache%qvec, adj, hessian, diagonal)
    else
       npair = nat*(nat+1)/2
       !$omp parallel do default(none) schedule(runtime) &
@@ -341,80 +278,6 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
    end do
    !$omp end parallel do
 end subroutine add_model_hessian
-
-
-!> Curvature of the finite Ewald sums and Wigner-Seitz average used for A.
-!> The lattice, Ewald parameter, and self-image distances are fixed here.
-subroutine add_periodic_hessian(self, mol, ptr, qvec, adj, hessian, diagonal)
-
-   !> Electronegativity equilibration model
-   class(eeq_model), intent(in) :: self
-
-   !> Molecular structure data
-   type(structure_type), intent(in) :: mol
-
-   !> EEQ model cache
-   type(eeq_cache), intent(in) :: ptr
-
-   !> Partial charge vector
-   real(wp), intent(in) :: qvec(:)
-
-   !> Adjoint vector
-   real(wp), intent(in) :: adj(:)
-
-   !> Off-diagonal Cartesian Hessian blocks
-   real(wp), intent(inout) :: hessian(:, :)
-
-   !> Diagonal Cartesian Hessian blocks
-   real(wp), intent(inout) :: diagonal(:, :, :)
-
-   integer :: iat, jat, izp, jzp, img, ipair, npair
-   real(wp) :: rij(3), vec(3), box(3, 3), dbox(3, 3), rbox(3, 3), gam, weight, wsw
-
-   ! Each pair owns its off-diagonal blocks. Only the diagonal blocks are
-   ! reduced, avoiding a full (3N, 3N) Hessian copy for every OpenMP thread.
-   npair = mol%nat * (mol%nat + 1) / 2
-   !$omp parallel do default(none) schedule(runtime) &
-   !$omp& shared(self, mol, ptr, qvec, adj, hessian, npair) &
-   !$omp& private(iat, jat, izp, jzp, img, rij, vec, box, dbox, rbox, gam, &
-   !$omp& weight, wsw) &
-   !$omp& reduction(+:diagonal)
-   do ipair = 1, npair
-      iat = int(0.5_wp * (sqrt(8.0_wp * real(ipair, wp) + 1.0_wp) - 1.0_wp))
-      if (iat * (iat + 1) / 2 < ipair) iat = iat + 1
-      jat = ipair - iat * (iat - 1) / 2
-      if (iat == jat) cycle
-
-      izp = mol%id(iat)
-      jzp = mol%id(jat)
-      gam = 1.0_wp / sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
-      weight = -(adj(iat) * qvec(jat) + adj(jat) * qvec(iat))
-      rij = mol%xyz(:, jat) - mol%xyz(:, iat)
-      wsw = 1.0_wp / real(ptr%wsc%nimg(jat, iat), wp)
-      box = 0.0_wp
-      do img = 1, ptr%wsc%nimg(jat, iat)
-         vec = rij + ptr%wsc%trans(:, ptr%wsc%tridx(img, jat, iat))
-         call get_hess_dir(vec, gam, ptr%alpha, ptr%dtrans, dbox)
-         select case (ptr%ndim)
-         case (1)
-            call get_hess_rec_1d(vec, ptr%alpha, ptr%vol, ptr%axis_vec, &
-               & ptr%rtrans, rbox)
-         case (2)
-            call get_hess_rec_2d(vec, ptr%alpha, ptr%vol, ptr%axis_vec, &
-               & ptr%rtrans, rbox)
-         case (3)
-            call get_hess_rec_3d(vec, ptr%rtrans, ptr%rec_weight, rbox)
-         case default
-            rbox = 0.0_wp
-         end select
-         box = box + dbox + rbox
-      end do
-      call add_pair_block(iat, jat, weight * wsw * box, hessian, diagonal)
-   end do
-   !$omp end parallel do
-
-end subroutine add_periodic_hessian
-
 
 subroutine get_coulomb_matrix(self, mol, cache, amat)
    class(eeq_model), intent(in) :: self
@@ -486,65 +349,15 @@ subroutine get_amat_pbc(self, mol, ptr, amat)
    !> Coulomb matrix
    real(wp), intent(out) :: amat(:, :)
 
-   integer :: iat, jat, izp, jzp, img, ipair, npair
-   real(wp) :: rij(3), vec(3), gam, wsw, dtmp, rtmp, tmp
+   integer :: iat, izp
 
-   ! Every matrix element belongs to one pair; no thread-local matrix is needed.
-   npair = mol%nat * (mol%nat + 1) / 2
-   !$omp parallel do default(none) schedule(runtime) &
-   !$omp& shared(amat, mol, self, ptr, npair) &
-   !$omp& private(iat, jat, izp, jzp, img, gam, wsw, rij, vec, dtmp, rtmp, tmp)
-   do ipair = 1, npair
-      iat = int(0.5_wp * (sqrt(8.0_wp * real(ipair, wp) + 1.0_wp) - 1.0_wp))
-      if (iat * (iat + 1) / 2 < ipair) iat = iat + 1
-      jat = ipair - iat * (iat - 1) / 2
+   call get_ewald_amat(mol, ptr%wsc, ptr%alpha, ptr%dtrans, ptr%rtrans, &
+      & self%rad, amat)
+
+   do iat = 1, mol%nat
       izp = mol%id(iat)
-      jzp = mol%id(jat)
-      gam = 1.0_wp / sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
-      if (iat == jat) then
-         vec = 0.0_wp
-         call get_amat_dir(vec, gam, ptr%alpha, ptr%dtrans, dtmp)
-         select case (ptr%ndim)
-         case (1)
-            call get_amat_rec_1d(vec, ptr%alpha, ptr%vol, ptr%axis_vec, &
-               & ptr%rtrans, rtmp)
-         case (2)
-            call get_amat_rec_2d(vec, ptr%alpha, ptr%vol, ptr%axis_vec, &
-               & ptr%rtrans, rtmp)
-         case (3)
-            call get_amat_rec_3d(vec, ptr%rtrans, ptr%rec_weight, rtmp)
-         case default
-            rtmp = 0.0_wp
-         end select
-         tmp = dtmp + rtmp + self%eta(izp) + sqrt2pi / self%rad(izp) &
-            & - 2.0_wp * ptr%alpha / sqrtpi
-      else
-         rij = mol%xyz(:, jat) - mol%xyz(:, iat)
-         wsw = 1.0_wp / real(ptr%wsc%nimg(jat, iat), wp)
-         tmp = 0.0_wp
-         do img = 1, ptr%wsc%nimg(jat, iat)
-            vec = rij + ptr%wsc%trans(:, ptr%wsc%tridx(img, jat, iat))
-            call get_amat_dir(vec, gam, ptr%alpha, ptr%dtrans, dtmp)
-            select case (ptr%ndim)
-            case (1)
-               call get_amat_rec_1d(vec, ptr%alpha, ptr%vol, ptr%axis_vec, &
-                  & ptr%rtrans, rtmp)
-            case (2)
-               call get_amat_rec_2d(vec, ptr%alpha, ptr%vol, ptr%axis_vec, &
-                  & ptr%rtrans, rtmp)
-            case (3)
-               call get_amat_rec_3d(vec, ptr%rtrans, ptr%rec_weight, rtmp)
-            case default
-               rtmp = 0.0_wp
-            end select
-            tmp = tmp + dtmp + rtmp
-         end do
-         tmp = tmp * wsw
-      end if
-      amat(jat, iat) = tmp
-      amat(iat, jat) = tmp
+      amat(iat, iat) = amat(iat, iat) + self%eta(izp) + sqrt2pi / self%rad(izp)
    end do
-   !$omp end parallel do
 
    if (size(amat, 1) == mol%nat + 1) then
       amat(mol%nat + 1, 1:mol%nat + 1) = 1.0_wp
@@ -566,7 +379,8 @@ subroutine get_coulomb_derivs(self, mol, cache, qvec, dadr, dadL, atrace)
    call view(cache, ptr)
 
    if (any(mol%periodic)) then
-      call get_damat_pbc(self, mol, ptr, qvec, dadr, dadL, atrace)
+      call get_ewald_damat(mol, ptr%wsc, ptr%alpha, ptr%dtrans, ptr%rtrans, &
+         & self%rad, qvec, dadr, dadL, atrace)
    else
       call get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
    end if
@@ -619,116 +433,6 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
    !$omp end do
    !$omp end parallel
 end subroutine get_damat_0d
-
-
-!> Evaluate 1D, 2D, or 3D Ewald Coulomb matrix derivatives
-subroutine get_damat_pbc(self, mol, ptr, qvec, dadr, dadL, atrace)
-
-   !> Electronegativity equilibration model
-   class(eeq_model), intent(in) :: self
-
-   !> Molecular structure data
-   type(structure_type), intent(in) :: mol
-
-   !> EEQ model cache
-   type(eeq_cache), intent(in) :: ptr
-
-   !> Partial charge vector
-   real(wp), intent(in) :: qvec(:)
-
-   !> Derivative of Coulomb matrix w.r.t. atomic positions
-   real(wp), intent(out) :: dadr(:, :, :)
-
-   !> Derivative of Coulomb matrix w.r.t. lattice strain
-   real(wp), intent(out) :: dadL(:, :, :)
-
-   !> On-site trace of position derivatives
-   real(wp), intent(out) :: atrace(:, :)
-
-   integer :: iat, jat, izp, jzp, img, ipair, npair
-   real(wp) :: gam, wsw, rij(3), vec(3), dG(3), dS(3, 3)
-   real(wp) :: dGd(3), dSd(3, 3), dGr(3), dSr(3, 3)
-
-   atrace(:, :) = 0.0_wp
-   dadL(:, :, :) = 0.0_wp
-
-   npair = mol%nat * (mol%nat + 1) / 2
-   !$omp parallel default(none) &
-   !$omp& shared(mol, self, ptr, qvec, dadr, npair) &
-   !$omp& private(iat, jat, izp, jzp, img, ipair, gam, wsw, rij, vec, dG, dS, &
-   !$omp& dGr, dSr, dGd, dSd) &
-   !$omp& reduction(+:atrace, dadL)
-   !$omp do schedule(static)
-   do iat = 1, size(dadr, 3)
-      dadr(:, :, iat) = 0.0_wp
-   end do
-   !$omp end do
-   !$omp do schedule(runtime)
-   do ipair = 1, npair
-      iat = int(0.5_wp * (sqrt(8.0_wp * real(ipair, wp) + 1.0_wp) - 1.0_wp))
-      if (iat * (iat + 1) / 2 < ipair) iat = iat + 1
-      jat = ipair - iat * (iat - 1) / 2
-      izp = mol%id(iat)
-      jzp = mol%id(jat)
-      dG(:) = 0.0_wp
-      dS(:, :) = 0.0_wp
-      gam = 1.0_wp / sqrt(self%rad(izp)**2 + self%rad(jzp)**2)
-      if (iat == jat) then
-         vec = 0.0_wp
-         call get_damat_dir(vec, gam, ptr%alpha, ptr%dtrans, dGd, dSd)
-         select case (ptr%ndim)
-         case (1)
-            call get_damat_rec_1d(vec, ptr%alpha, ptr%vol, ptr%axis_vec, &
-               & ptr%rtrans, dGr, dSr)
-         case (2)
-            call get_damat_rec_2d(vec, ptr%alpha, ptr%vol, ptr%axis_vec, &
-               & ptr%rtrans, dGr, dSr)
-         case (3)
-            call get_damat_rec_3d(vec, ptr%rtrans, ptr%rec_weight, &
-               & ptr%rec_strain, dGr, dSr)
-         case default
-            dGr = 0.0_wp
-            dSr = 0.0_wp
-         end select
-         dS = dSd + dSr
-         dadL(:, :, iat) = dadL(:, :, iat) + dS * qvec(iat)
-      else
-         rij = mol%xyz(:, jat) - mol%xyz(:, iat)
-         wsw = 1.0_wp / real(ptr%wsc%nimg(jat, iat), wp)
-         do img = 1, ptr%wsc%nimg(jat, iat)
-            vec = rij + ptr%wsc%trans(:, ptr%wsc%tridx(img, jat, iat))
-            call get_damat_dir(vec, gam, ptr%alpha, ptr%dtrans, dGd, dSd)
-            select case (ptr%ndim)
-            case (1)
-               call get_damat_rec_1d(vec, ptr%alpha, ptr%vol, ptr%axis_vec, &
-                  & ptr%rtrans, dGr, dSr)
-            case (2)
-               call get_damat_rec_2d(vec, ptr%alpha, ptr%vol, ptr%axis_vec, &
-                  & ptr%rtrans, dGr, dSr)
-            case (3)
-               call get_damat_rec_3d(vec, ptr%rtrans, ptr%rec_weight, &
-                  & ptr%rec_strain, dGr, dSr)
-            case default
-               dGr = 0.0_wp
-               dSr = 0.0_wp
-            end select
-            dG = dG + dGd + dGr
-            dS = dS + dSd + dSr
-         end do
-         dG = dG * wsw
-         dS = dS * wsw
-         atrace(:, iat) = atrace(:, iat) - dG * qvec(jat)
-         atrace(:, jat) = atrace(:, jat) + dG * qvec(iat)
-         dadr(:, iat, jat) = -dG * qvec(iat)
-         dadr(:, jat, iat) = +dG * qvec(jat)
-         dadL(:, :, jat) = dadL(:, :, jat) + dS * qvec(iat)
-         dadL(:, :, iat) = dadL(:, :, iat) + dS * qvec(jat)
-      end if
-   end do
-   !$omp end do
-   !$omp end parallel
-
-end subroutine get_damat_pbc
 
 !> Inspect cache and reallocate it in case of type mismatch
 subroutine taint(cache, ptr)

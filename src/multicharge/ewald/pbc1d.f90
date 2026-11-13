@@ -36,7 +36,8 @@ module multicharge_ewald_pbc1d
 contains
 
 
-!> Reciprocal-space and G=0 wire contribution for 1D Ewald
+!> Reciprocal-space and G=0 wire contribution for 1D Ewald.
+!> Expects open half-space reciprocal vectors (one representative per +G/-G pair).
 pure subroutine get_amat_rec_1d(rij, alpha, len1, u_hat, trans, amat)
 
    !> Interatomic displacement vector
@@ -51,7 +52,7 @@ pure subroutine get_amat_rec_1d(rij, alpha, len1, u_hat, trans, amat)
    !> Unit vector along the periodic wire axis
    real(wp), intent(in) :: u_hat(3)
 
-   !> Reciprocal-space translation vectors
+   !> Half-space reciprocal lattice vectors
    real(wp), intent(in) :: trans(:, :)
 
    !> Reciprocal-space Coulomb matrix element contribution
@@ -79,12 +80,13 @@ pure subroutine get_amat_rec_1d(rij, alpha, len1, u_hat, trans, amat)
       amat = amat + cos(gv) * k0
    end do
    call fast_f012_1d(y, f0, f1, f2)
-   amat = (amat - f0 + 2.0_wp * log(alpha)) / len1
+   amat = (2.0_wp * amat - f0 + 2.0_wp * log(alpha)) / len1
 
 end subroutine get_amat_rec_1d
 
 
-!> Reciprocal-space and G=0 wire derivatives for 1D Ewald
+!> Reciprocal-space and G=0 wire derivatives for 1D Ewald.
+!> Expects open half-space reciprocal vectors (one representative per +G/-G pair).
 pure subroutine get_damat_rec_1d(rij, alpha, len1, u_hat, trans, dg, ds)
 
    !> Interatomic displacement vector
@@ -99,7 +101,7 @@ pure subroutine get_damat_rec_1d(rij, alpha, len1, u_hat, trans, dg, ds)
    !> Unit vector along the periodic wire axis
    real(wp), intent(in) :: u_hat(3)
 
-   !> Reciprocal-space translation vectors
+   !> Half-space reciprocal lattice vectors
    real(wp), intent(in) :: trans(:, :)
 
    !> Position derivative contribution
@@ -137,24 +139,25 @@ pure subroutine get_damat_rec_1d(rij, alpha, len1, u_hat, trans, dg, ds)
       call fast_k012_1d(x, y, k0, k1, k2)
       exp_xy = exp(-x - y)
 
-      dg(:) = dg - inv_len * (sin_gv * k0 * g_vec &
+      dg(:) = dg - (sin_gv * k0 * g_vec &
          & + 2.0_wp * alp2 * cos_gv * k1 * r_perp)
 
       outer_rg = outerprod(g_vec, r_perp) + outerprod(r_perp, g_vec)
-      ds(:, :) = ds + inv_len * (cos_gv * (2.0_wp * exp_xy + 2.0_wp * y * k1 - k0) &
+      ds(:, :) = ds + cos_gv * (2.0_wp * exp_xy + 2.0_wp * y * k1 - k0) &
          & * p_par - 2.0_wp * alp2 * cos_gv * k1 * outer_rr &
-         & - sin_gv * k0 * outer_rg)
+         & - sin_gv * k0 * outer_rg
    end do
 
    call fast_f012_1d(y, f0, f1, f2)
-   dg(:) = dg - (2.0_wp * alp2 * f1 * inv_len) * r_perp
-   ds(:, :) = ds + inv_len * ((f0 - 2.0_wp * log(alpha)) * p_par &
-      & - 2.0_wp * alp2 * f1 * outer_rr)
+   dg(:) = (2.0_wp * inv_len) * dg - (2.0_wp * alp2 * f1 * inv_len) * r_perp
+   ds(:, :) = (2.0_wp * inv_len) * ds + inv_len * ((f0 - 2.0_wp * log(alpha)) &
+      & * p_par - 2.0_wp * alp2 * f1 * outer_rr)
 
 end subroutine get_damat_rec_1d
 
 
-!> Reciprocal-space and G=0 wire pair Hessian block for 1D Ewald
+!> Reciprocal-space and G=0 wire pair Hessian block for 1D Ewald.
+!> Expects open half-space reciprocal vectors (one representative per +G/-G pair).
 pure subroutine get_hess_rec_1d(rij, alpha, len1, u_hat, trans, rbox)
 
    !> Interatomic displacement vector
@@ -169,7 +172,7 @@ pure subroutine get_hess_rec_1d(rij, alpha, len1, u_hat, trans, rbox)
    !> Unit vector along the periodic wire axis
    real(wp), intent(in) :: u_hat(3)
 
-   !> Reciprocal-space translation vectors
+   !> Half-space reciprocal lattice vectors
    real(wp), intent(in) :: trans(:, :)
 
    !> Reciprocal-space Hessian block
@@ -202,14 +205,14 @@ pure subroutine get_hess_rec_1d(rij, alpha, len1, u_hat, trans, rbox)
       call fast_k012_1d(x, y, k0, k1, k2)
       gg_mat = outerprod(g_vec, g_vec)
       rg_sym = outerprod(g_vec, r_perp) + outerprod(r_perp, g_vec)
-      rbox = rbox + inv_len * (-cos_gv * k0 * gg_mat &
+      rbox = rbox - cos_gv * k0 * gg_mat &
          & + 2.0_wp * alp2 * sin_gv * k1 * rg_sym &
          & + cos_gv * (-2.0_wp * alp2 * k1 * p_perp &
-         & + 4.0_wp * alp2 * alp2 * k2 * rr_mat))
+         & + 4.0_wp * alp2 * alp2 * k2 * rr_mat)
    end do
 
    call fast_f012_1d(y, f0, f1, f2)
-   rbox = rbox + inv_len * (-2.0_wp * alp2 * f1 * p_perp &
+   rbox = (2.0_wp * inv_len) * rbox + inv_len * (-2.0_wp * alp2 * f1 * p_perp &
       & - 4.0_wp * alp2 * alp2 * f2 * rr_mat)
 
 end subroutine get_hess_rec_1d

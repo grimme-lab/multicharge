@@ -19,13 +19,13 @@
 !> Ewald splitting parameter search and converged direct/reciprocal lattice cutoffs
 module multicharge_ewald_cutoff
    use mctc_cutoff, only : get_inverse_metric, get_lattice_points, get_periodic_axes
-   use mctc_env, only : error_type, wp
+   use mctc_env, only : error_type, fatal_error, wp
    use mctc_io_constants, only : pi
    use mctc_io_math, only : crossprod, matdet_3x3
    implicit none
    private
 
-   public :: get_alpha, get_ewald_dir_trans, get_ewald_rec_trans
+   public :: get_alpha, get_ewald_trans, get_ewald_dir_trans, get_ewald_rec_trans
 
    real(wp), parameter :: twopi = 2.0_wp * pi
    real(wp), parameter :: eps = sqrt(epsilon(0.0_wp))
@@ -115,6 +115,46 @@ subroutine get_alpha(lattice, alpha, error, periodic, vol, rec_lat)
 end subroutine get_alpha
 
 
+!> Generate converged direct-space and half-space reciprocal Ewald vectors
+subroutine get_ewald_trans(periodic, lattice, alpha, gam_min, dtrans, rtrans, error)
+
+   !> Periodicity mask along each lattice axis
+   logical, intent(in) :: periodic(:)
+
+   !> Real-space lattice vectors as columns (3, 3)
+   real(wp), intent(in) :: lattice(:, :)
+
+   !> Ewald splitting parameter
+   real(wp), intent(in) :: alpha
+
+   !> Minimum Gaussian exponent min_ij(gamma_ij)
+   real(wp), intent(in) :: gam_min
+
+   !> Direct-space lattice translations (3, ndir)
+   real(wp), allocatable, intent(out) :: dtrans(:, :)
+
+   !> Open half-space reciprocal lattice vectors (3, nrec)
+   real(wp), allocatable, intent(out) :: rtrans(:, :)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   integer :: ndim, p_axes(3)
+   real(wp) :: red_lat(3, 3), rec_lat(3, 3), vol
+
+   call prepare_periodic_lattice(periodic, lattice, ndim, p_axes, red_lat, rec_lat, &
+      & vol, error)
+   if (allocated(error)) return
+
+   call build_dir_trans(periodic, ndim, p_axes, red_lat, alpha, gam_min, dtrans, error)
+   if (allocated(error)) return
+
+   call build_rec_trans(ndim, p_axes, red_lat, rec_lat, vol, alpha, rtrans, error)
+   if (allocated(error)) return
+
+end subroutine get_ewald_trans
+
+
 !> Generate converged direct-space lattice translations for 1D, 2D, or 3D Ewald summation
 subroutine get_ewald_dir_trans(periodic, lattice, alpha, gam_min, trans, error)
 
@@ -136,15 +176,86 @@ subroutine get_ewald_dir_trans(periodic, lattice, alpha, gam_min, trans, error)
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
 
-   real(wp), parameter :: tol_wsc = 0.3_wp
-
-   integer :: ndim, p_axes(3), i
+   integer :: ndim, p_axes(3)
    real(wp) :: red_lat(3, 3), rec_lat(3, 3), vol
-   real(wp) :: kappa, kappa_max, tol_val, u_cut, rcut, len_i, min_len, r_disp, r_dir
 
    call prepare_periodic_lattice(periodic, lattice, ndim, p_axes, red_lat, rec_lat, &
       & vol, error)
    if (allocated(error)) return
+
+   call build_dir_trans(periodic, ndim, p_axes, red_lat, alpha, gam_min, trans, error)
+   if (allocated(error)) return
+
+end subroutine get_ewald_dir_trans
+
+
+!> Generate converged open half-space reciprocal lattice vectors for 1D, 2D, or 3D Ewald
+subroutine get_ewald_rec_trans(periodic, lattice, alpha, trans, error, vol)
+
+   !> Periodicity mask along each lattice axis
+   logical, intent(in) :: periodic(:)
+
+   !> Real-space lattice vectors as columns (3, 3)
+   real(wp), intent(in) :: lattice(:, :)
+
+   !> Ewald splitting parameter
+   real(wp), intent(in) :: alpha
+
+   !> Open half-space reciprocal lattice vectors (3, nrec)
+   real(wp), allocatable, intent(out) :: trans(:, :)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   !> Optional generalized cell measure (length in 1D, area in 2D, volume in 3D)
+   real(wp), intent(out), optional :: vol
+
+   integer :: ndim, p_axes(3)
+   real(wp) :: red_lat(3, 3), rec_lat(3, 3), cell_vol
+
+   call prepare_periodic_lattice(periodic, lattice, ndim, p_axes, red_lat, rec_lat, &
+      & cell_vol, error)
+   if (present(vol)) vol = cell_vol
+   if (allocated(error)) return
+
+   call build_rec_trans(ndim, p_axes, red_lat, rec_lat, cell_vol, alpha, trans, error)
+   if (allocated(error)) return
+
+end subroutine get_ewald_rec_trans
+
+
+!> Build direct-space lattice translations from a prepared reduced basis
+pure subroutine build_dir_trans(periodic, ndim, p_axes, red_lat, alpha, gam_min, &
+   & trans, error)
+
+   !> Periodicity mask along each lattice axis
+   logical, intent(in) :: periodic(:)
+
+   !> Number of periodic dimensions
+   integer, intent(in) :: ndim
+
+   !> Active periodic axis indices
+   integer, intent(in) :: p_axes(3)
+
+   !> Size-reduced real-space lattice vectors (3, 3)
+   real(wp), intent(in) :: red_lat(3, 3)
+
+   !> Ewald splitting parameter
+   real(wp), intent(in) :: alpha
+
+   !> Minimum Gaussian exponent min_ij(gamma_ij)
+   real(wp), intent(in) :: gam_min
+
+   !> Direct-space lattice translations (3, ntrans)
+   real(wp), allocatable, intent(out) :: trans(:, :)
+
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
+   real(wp), parameter :: tol_wsc = 0.3_wp
+
+   integer :: i
+   real(wp) :: kappa, kappa_max, tol_val, u_cut, rcut, len_i, min_len, r_disp, r_dir
 
    if (ndim == 0) then
       allocate(trans(3, 1), source=0.0_wp)
@@ -176,38 +287,39 @@ subroutine get_ewald_dir_trans(periodic, lattice, alpha, gam_min, trans, error)
    call get_lattice_points(periodic, red_lat, r_dir, trans, error)
    if (allocated(error)) return
 
-end subroutine get_ewald_dir_trans
+end subroutine build_dir_trans
 
 
-!> Generate converged nonzero reciprocal-space lattice vectors for 1D, 2D, or 3D Ewald
-subroutine get_ewald_rec_trans(periodic, lattice, alpha, trans, error, vol)
+!> Build open half-space reciprocal vectors from a prepared reduced basis
+pure subroutine build_rec_trans(ndim, p_axes, red_lat, rec_lat, cell_vol, alpha, &
+   & trans, error)
 
-   !> Periodicity mask along each lattice axis
-   logical, intent(in) :: periodic(:)
+   !> Number of periodic dimensions
+   integer, intent(in) :: ndim
 
-   !> Real-space lattice vectors as columns (3, 3)
-   real(wp), intent(in) :: lattice(:, :)
+   !> Active periodic axis indices
+   integer, intent(in) :: p_axes(3)
+
+   !> Size-reduced real-space lattice vectors (3, 3)
+   real(wp), intent(in) :: red_lat(3, 3)
+
+   !> Reciprocal-space lattice vectors (3, 3)
+   real(wp), intent(in) :: rec_lat(3, 3)
+
+   !> Generalized cell measure (length in 1D, area in 2D, volume in 3D)
+   real(wp), intent(in) :: cell_vol
 
    !> Ewald splitting parameter
    real(wp), intent(in) :: alpha
 
-   !> Nonzero reciprocal lattice vectors (3, nrec)
+   !> Open half-space reciprocal lattice vectors (3, nrec)
    real(wp), allocatable, intent(out) :: trans(:, :)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
 
-   !> Optional generalized cell measure (length in 1D, area in 2D, volume in 3D)
-   real(wp), intent(out), optional :: vol
-
-   integer :: ndim, p_axes(3), rep(3), i, ax
-   real(wp) :: red_lat(3, 3), rec_lat(3, 3), cell_vol
-   real(wp) :: tol_val, u_cut, gcut
-
-   call prepare_periodic_lattice(periodic, lattice, ndim, p_axes, red_lat, rec_lat, &
-      & cell_vol, error)
-   if (present(vol)) vol = cell_vol
-   if (allocated(error)) return
+   integer :: rep(3), i, ax, nrec, itr, ix, iy, iz, jy, jz
+   real(wp) :: tol_val, u_cut, gcut, npts
 
    if (ndim == 0) then
       allocate(trans(3, 0))
@@ -251,10 +363,33 @@ subroutine get_ewald_rec_trans(periodic, lattice, alpha, trans, error, vol)
       rep(ax) = max(2, ceiling(gcut * norm2(red_lat(:, ax)) / twopi))
    end do
 
-   call get_lattice_points(rec_lat, rep, .false., trans, error)
-   if (allocated(error)) return
+   npts = 0.5_wp * (product(2.0_wp * real(rep, wp) + 1.0_wp) - 1.0_wp)
+   if (.not. (npts <= real(huge(nrec), wp))) then
+      call fatal_error(error, "Number of lattice points exceeds the integer range")
+      return
+   end if
 
-end subroutine get_ewald_rec_trans
+   ! Keep one representative per (+G, -G) antipodal pair (first nonzero index > 0)
+   nrec = (product(2 * rep + 1) - 1) / 2
+   allocate(trans(3, nrec))
+   itr = 0
+   do ix = 0, rep(1)
+      do iy = 0, rep(2)
+         do iz = 0, rep(3)
+            if (ix == 0 .and. iy == 0 .and. iz == 0) cycle
+            do jy = 1, merge(-1, 1, ix > 0 .and. iy > 0), -2
+               do jz = 1, merge(-1, 1, (ix > 0 .or. iy > 0) .and. iz > 0), -2
+                  itr = itr + 1
+                  trans(:, itr) = rec_lat(:, 1) * real(ix, wp) &
+                     & + rec_lat(:, 2) * real(iy * jy, wp) &
+                     & + rec_lat(:, 3) * real(iz * jz, wp)
+               end do
+            end do
+         end do
+      end do
+   end do
+
+end subroutine build_rec_trans
 
 
 !> Prepare reduced direct and reciprocal lattice vectors for a periodic subspace

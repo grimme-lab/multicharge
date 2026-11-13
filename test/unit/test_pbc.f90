@@ -19,14 +19,15 @@ module test_pbc
    use mctc_env_testing, only: new_unittest, unittest_type, error_type, &
       & test_failed
    use mctc_io_convert, only: aatoau
-   use multicharge, only: get_charges, add_charge_hessian
-   use multicharge_ewald, only: get_alpha, get_ewald_dir_trans, get_ewald_rec_trans, &
-      & fast_f012_1d, fast_k012_1d, erfc_exp_2d
-   use multicharge_model_eeq, only: eeq_cache
    use mctc_io_structure, only: structure_type, new
    use mstore, only: get_structure
+   use multicharge, only: get_charges, add_charge_hessian
+   use multicharge_ewald, only: get_alpha, get_ewald_trans
+   use multicharge_ewald_cutoff, only: get_ewald_dir_trans, get_ewald_rec_trans
+   use multicharge_ewald_special, only: fast_f012_1d, fast_k012_1d, erfc_exp_2d
    use multicharge_model, only: mchrg_model_type
    use multicharge_model_cache, only: cache_container
+   use multicharge_model_eeq, only: eeq_cache
    use multicharge_model_eeqbc, only: eeqbc_model
    use multicharge_param, only: new_eeq2019_model, new_eeqbc2025_model
    implicit none
@@ -60,19 +61,19 @@ subroutine collect_pbc(testsuite)
       & new_unittest("eeq-energy-formamide", test_eeq_e_formamide), &
       & new_unittest("eeq-dbdr-co2", test_eeq_dbdr_co2), &
       & new_unittest("eeq-dbdL-co2", test_eeq_dbdL_co2), &
-      & new_unittest("eeq-dadr-ice", test_eeq_dadr_ice), &
-      & new_unittest("eeq-dadL-ice", test_eeq_dadL_ice), &
+      & new_unittest("eeq-dadr-znoh", test_eeq_dadr_znoh), &
+      & new_unittest("eeq-dadL-znoh", test_eeq_dadL_znoh), &
       & new_unittest("eeq-gradient-co2", test_eeq_g_co2), &
-      & new_unittest("eeq-sigma-ice", test_eeq_s_ice), &
+      & new_unittest("eeq-sigma-co2", test_eeq_s_co2), &
       & new_unittest("eeq-dqdr-urea", test_eeq_dqdr_urea), &
       & new_unittest("eeq-dqdL-oxacb", test_eeq_dqdL_oxacb), &
       & new_unittest("eeqbc-dbdr-co2", test_eeqbc_dbdr_co2), &
       & new_unittest("eeqbc-dbdL-co2", test_eeqbc_dbdL_co2), &
-      & new_unittest("eeqbc-dadr-ice", test_eeqbc_dadr_ice), &
+      & new_unittest("eeqbc-dadr-znoh", test_eeqbc_dadr_znoh), &
       & new_unittest("eeqbc-response-znoh", test_eeqbc_response_znoh), &
-      & new_unittest("eeqbc-dadL-ice", test_eeqbc_dadL_ice), &
+      & new_unittest("eeqbc-dadL-znoh", test_eeqbc_dadL_znoh), &
       & new_unittest("eeqbc-gradient-co2", test_eeqbc_g_co2), &
-      & new_unittest("eeqbc-sigma-ice", test_eeqbc_s_ice), &
+      & new_unittest("eeqbc-sigma-co2", test_eeqbc_s_co2), &
       & new_unittest("eeqbc-dqdr-urea", test_eeqbc_dqdr_urea), &
       & new_unittest("eeqbc-dqdL-oxacb", test_eeqbc_dqdL_oxacb), &
       & new_unittest("eeq-1d", test_eeq_1d), &
@@ -959,7 +960,7 @@ subroutine test_eeq_dbdL_co2(error)
 
 end subroutine test_eeq_dbdL_co2
 
-subroutine test_eeq_dadr_ice(error)
+subroutine test_eeq_dadr_znoh(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -967,14 +968,14 @@ subroutine test_eeq_dadr_ice(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call get_structure(mol, "ICE10", "vi")
+   call new(mol, znoh_num, znoh_xyz, lattice=znoh_lat, periodic=[.true., .true., .true.])
    call new_eeq2019_model(mol, model, error)
    if (allocated(error)) return
    call test_dadr(error, mol, model)
 
-end subroutine test_eeq_dadr_ice
+end subroutine test_eeq_dadr_znoh
 
-subroutine test_eeq_dadL_ice(error)
+subroutine test_eeq_dadL_znoh(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -982,12 +983,12 @@ subroutine test_eeq_dadL_ice(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call get_structure(mol, "ICE10", "vi")
+   call new(mol, znoh_num, znoh_xyz, lattice=znoh_lat, periodic=[.true., .true., .true.])
    call new_eeq2019_model(mol, model, error)
    if (allocated(error)) return
    call test_dadL(error, mol, model)
 
-end subroutine test_eeq_dadL_ice
+end subroutine test_eeq_dadL_znoh
 
 subroutine test_eeq_g_co2(error)
 
@@ -1004,7 +1005,7 @@ subroutine test_eeq_g_co2(error)
 
 end subroutine test_eeq_g_co2
 
-subroutine test_eeq_s_ice(error)
+subroutine test_eeq_s_co2(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -1012,12 +1013,12 @@ subroutine test_eeq_s_ice(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call get_structure(mol, "ICE10", "vi")
+   call get_structure(mol, "X23", "CO2")
    call new_eeq2019_model(mol, model, error)
    if (allocated(error)) return
    call test_numsigma(error, mol, model)
 
-end subroutine test_eeq_s_ice
+end subroutine test_eeq_s_co2
 
 subroutine test_eeq_dqdr_urea(error)
 
@@ -1079,7 +1080,7 @@ subroutine test_eeqbc_dbdL_co2(error)
 
 end subroutine test_eeqbc_dbdL_co2
 
-subroutine test_eeqbc_dadr_ice(error)
+subroutine test_eeqbc_dadr_znoh(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -1087,14 +1088,14 @@ subroutine test_eeqbc_dadr_ice(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call get_structure(mol, "ICE10", "vi")
+   call new(mol, znoh_num, znoh_xyz, lattice=znoh_lat, periodic=[.true., .true., .true.])
    call new_eeqbc2025_model(mol, model, error)
    if (allocated(error)) return
    call test_dadr(error, mol, model)
 
-end subroutine test_eeqbc_dadr_ice
+end subroutine test_eeqbc_dadr_znoh
 
-subroutine test_eeqbc_dadL_ice(error)
+subroutine test_eeqbc_dadL_znoh(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -1102,12 +1103,12 @@ subroutine test_eeqbc_dadL_ice(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call get_structure(mol, "ICE10", "vi")
+   call new(mol, znoh_num, znoh_xyz, lattice=znoh_lat, periodic=[.true., .true., .true.])
    call new_eeqbc2025_model(mol, model, error)
    if (allocated(error)) return
    call test_dadL(error, mol, model)
 
-end subroutine test_eeqbc_dadL_ice
+end subroutine test_eeqbc_dadL_znoh
 
 subroutine test_eeqbc_g_co2(error)
 
@@ -1124,7 +1125,7 @@ subroutine test_eeqbc_g_co2(error)
 
 end subroutine test_eeqbc_g_co2
 
-subroutine test_eeqbc_s_ice(error)
+subroutine test_eeqbc_s_co2(error)
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
@@ -1132,12 +1133,12 @@ subroutine test_eeqbc_s_ice(error)
    type(structure_type) :: mol
    class(mchrg_model_type), allocatable :: model
 
-   call get_structure(mol, "ICE10", "vi")
+   call get_structure(mol, "X23", "CO2")
    call new_eeqbc2025_model(mol, model, error)
    if (allocated(error)) return
    call test_numsigma(error, mol, model)
 
-end subroutine test_eeqbc_s_ice
+end subroutine test_eeqbc_s_co2
 
 subroutine test_eeqbc_dqdr_urea(error)
 
@@ -1531,7 +1532,7 @@ subroutine test_ewald_setup(error)
       & 0.0_wp, 0.0_wp, 20.0_wp], [3, 3])
 
    type(error_type), allocatable :: expected
-   real(wp), allocatable :: trans(:, :)
+   real(wp), allocatable :: dtrans(:, :), rtrans(:, :), trans(:, :)
    real(wp) :: lat_deg(3, 3), alpha_1, alpha_3
 
    call get_alpha(lat_ref, alpha_1, error, periodic=[.true.])
@@ -1549,6 +1550,14 @@ subroutine test_ewald_setup(error)
    call get_alpha(lat_deg, alpha_1, expected, periodic=[.true., .false., .false.])
    if (.not. allocated(expected)) then
       call test_failed(error, "get_alpha did not report error for degenerate lattice")
+      return
+   end if
+
+   deallocate(expected)
+   call get_ewald_trans([.true., .false., .false.], lat_deg, 0.25_wp, 0.2_wp, &
+      & dtrans, rtrans, expected)
+   if (.not. allocated(expected)) then
+      call test_failed(error, "get_ewald_trans did not report error for degenerate lattice")
       return
    end if
 
@@ -1664,12 +1673,8 @@ subroutine check_alpha_invariance(error, mol)
       select type (raw => cache%raw)
       type is (eeq_cache)
          raw%alpha = alphas(ia)
-         call get_ewald_dir_trans(mol%periodic, mol%lattice, raw%alpha, &
-            & gam_min, raw%dtrans, error)
-         if (allocated(error)) return
-
-         call get_ewald_rec_trans(mol%periodic, mol%lattice, raw%alpha, &
-            & raw%rtrans, error, raw%vol)
+         call get_ewald_trans(mol%periodic, mol%lattice, raw%alpha, gam_min, &
+            & raw%dtrans, raw%rtrans, error)
          if (allocated(error)) return
       end select
 

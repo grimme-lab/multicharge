@@ -36,9 +36,9 @@ module multicharge_ewald_pbc3d
 contains
 
 
-!> Reciprocal-space factors independent of the atom pair.
-!> Prepare once for each matrix/response evaluation, including strain when needed.
-pure subroutine get_rec_weights(vol, alpha, trans, weight, strain)
+!> Reciprocal-space factors independent of the atom pair for half-space vectors.
+!> Prepare once per evaluation, requesting only the tensors needed by the caller.
+pure subroutine get_rec_weights(vol, alpha, trans, weight, strain, hess)
 
    !> Unit cell volume
    real(wp), intent(in) :: vol
@@ -46,35 +46,45 @@ pure subroutine get_rec_weights(vol, alpha, trans, weight, strain)
    !> Ewald splitting parameter
    real(wp), intent(in) :: alpha
 
-   !> Reciprocal-space translation vectors
+   !> Half-space reciprocal lattice vectors
    real(wp), intent(in) :: trans(:, :)
 
-   !> Reciprocal-space weights
-   real(wp), allocatable, intent(out) :: weight(:)
+   !> Optional reciprocal-space scalar weights
+   real(wp), allocatable, intent(out), optional :: weight(:)
 
-   !> Optional reciprocal-space strain factors
+   !> Optional reciprocal-space strain tensors
    real(wp), allocatable, intent(out), optional :: strain(:, :, :)
 
-   integer :: itr
-   real(wp) :: g2, inv_g2, inv_alp2, fac, vec(3)
+   !> Optional reciprocal-space Hessian tensors
+   real(wp), allocatable, intent(out), optional :: hess(:, :, :)
 
-   fac = 4.0_wp * pi / vol
+   integer :: itr, nrec
+   real(wp) :: g2, inv_g2, inv_alp2, fac, w, vec(3), gg(3, 3)
+
+   nrec = size(trans, 2)
+   fac = 8.0_wp * pi / vol
    inv_alp2 = 1.0_wp / alpha**2
-   allocate(weight(size(trans, 2)), source=0.0_wp)
-   if (present(strain)) then
-      allocate(strain(3, 3, size(trans, 2)), source=0.0_wp)
-   end if
+   if (present(weight)) allocate(weight(nrec), source=0.0_wp)
+   if (present(strain)) allocate(strain(3, 3, nrec), source=0.0_wp)
+   if (present(hess)) allocate(hess(3, 3, nrec), source=0.0_wp)
 
-   do itr = 1, size(trans, 2)
+   do itr = 1, nrec
       vec = trans(:, itr)
       g2 = dot_product(vec, vec)
       if (g2 < eps) cycle
 
       inv_g2 = 1.0_wp / g2
-      weight(itr) = fac * exp(-0.25_wp * g2 * inv_alp2) * inv_g2
-      if (present(strain)) then
-         strain(:, :, itr) = weight(itr) * ((2.0_wp * inv_g2 + 0.5_wp * inv_alp2) &
-            & * outerprod(vec, vec) - unity)
+      w = fac * exp(-0.25_wp * g2 * inv_alp2) * inv_g2
+      if (present(weight)) weight(itr) = w
+      if (present(strain) .or. present(hess)) then
+         gg = outerprod(vec, vec)
+         if (present(strain)) then
+            strain(:, :, itr) = w * ((2.0_wp * inv_g2 + 0.5_wp * inv_alp2) &
+               & * gg - unity)
+         end if
+         if (present(hess)) then
+            hess(:, :, itr) = -w * gg
+         end if
       end if
    end do
 
@@ -87,7 +97,7 @@ pure subroutine get_amat_rec_3d(rij, trans, weight, amat)
    !> Interatomic displacement vector
    real(wp), intent(in) :: rij(3)
 
-   !> Reciprocal-space translation vectors
+   !> Half-space reciprocal lattice vectors
    real(wp), intent(in) :: trans(:, :)
 
    !> Reciprocal-space weights
@@ -112,7 +122,7 @@ pure subroutine get_damat_rec_3d(rij, trans, weight, strain, dg, ds)
    !> Interatomic displacement vector
    real(wp), intent(in) :: rij(3)
 
-   !> Reciprocal-space translation vectors
+   !> Half-space reciprocal lattice vectors
    real(wp), intent(in) :: trans(:, :)
 
    !> Reciprocal-space weights
@@ -142,28 +152,25 @@ end subroutine get_damat_rec_3d
 
 
 !> Reciprocal-space pair Hessian block for 3D Ewald
-pure subroutine get_hess_rec_3d(rij, trans, weight, rbox)
+pure subroutine get_hess_rec_3d(rij, trans, hess, rbox)
 
    !> Interatomic displacement vector
    real(wp), intent(in) :: rij(3)
 
-   !> Reciprocal-space translation vectors
+   !> Half-space reciprocal lattice vectors
    real(wp), intent(in) :: trans(:, :)
 
-   !> Reciprocal-space weights
-   real(wp), intent(in) :: weight(:)
+   !> Precomputed reciprocal-space Hessian tensors (-weight * G (x) G)
+   real(wp), intent(in) :: hess(:, :, :)
 
    !> Reciprocal-space Hessian block
    real(wp), intent(out) :: rbox(3, 3)
 
    integer :: itr
-   real(wp) :: vec(3)
 
    rbox = 0.0_wp
    do itr = 1, size(trans, 2)
-      vec = trans(:, itr)
-      rbox = rbox - weight(itr) * cos(dot_product(rij, vec)) &
-         & * outerprod(vec, vec)
+      rbox = rbox + cos(dot_product(rij, trans(:, itr))) * hess(:, :, itr)
    end do
 
 end subroutine get_hess_rec_3d
