@@ -17,14 +17,56 @@
 #define IK i4
 #endif
 
-!> Interface to BLAS library for matrix-vector and matrix-matrix operations
+!> Interface to BLAS library for vector, matrix-vector and matrix-matrix operations
 module multicharge_blas
    use mctc_env, only : sp, dp, ik => IK
    implicit none
    private
 
-   public :: symv, gemv, gemm
+   public :: dot, scal, axpy, symv, gemv, gemm
 
+
+   !> Performs the vector operation
+   !>
+   !>    y := alpha*x + y,
+   !>
+   !> where alpha is a scalar and x and y are vectors.
+   interface axpy
+      module procedure :: mchrg_saxpy
+      module procedure :: mchrg_caxpy
+      module procedure :: mchrg_daxpy
+      module procedure :: mchrg_zaxpy
+   end interface axpy
+
+   !> Performs the vector operation
+   !>
+   !>    x := alpha*x,
+   !>
+   !> where alpha is a scalar and x is a vector.
+   interface scal
+      module procedure :: mchrg_sscal
+      module procedure :: mchrg_cscal
+      module procedure :: mchrg_csscal
+      module procedure :: mchrg_dscal
+      module procedure :: mchrg_zscal
+      module procedure :: mchrg_zdscal
+   end interface scal
+
+   !> Forms the dot product of two vectors
+   !>
+   !>    x**T*y,
+   !>
+   !> where arrays of higher rank are treated as vectors.
+   interface dot
+      module procedure :: mchrg_sdot
+      module procedure :: mchrg_ddot
+      module procedure :: mchrg_sdot12
+      module procedure :: mchrg_sdot21
+      module procedure :: mchrg_sdot22
+      module procedure :: mchrg_ddot12
+      module procedure :: mchrg_ddot21
+      module procedure :: mchrg_ddot22
+   end interface dot
 
    !> Performs one of the matrix-vector operations
    !>
@@ -73,6 +115,126 @@ module multicharge_blas
       module procedure :: mchrg_dgemm332
    end interface gemm
 
+
+   !> Performs the vector operation
+   !>
+   !>    y := alpha*x + y,
+   !>
+   !> where alpha is a scalar and x and y are vectors.
+   interface blas_axpy
+      pure subroutine saxpy(n, alpha, x, incx, y, incy)
+         import :: sp, ik
+         real(sp), intent(in) :: x(*)
+         real(sp), intent(inout) :: y(*)
+         real(sp), intent(in) :: alpha
+         integer(ik), intent(in) :: incx
+         integer(ik), intent(in) :: incy
+         integer(ik), intent(in) :: n
+      end subroutine saxpy
+      pure subroutine daxpy(n, alpha, x, incx, y, incy)
+         import :: dp, ik
+         real(dp), intent(in) :: x(*)
+         real(dp), intent(inout) :: y(*)
+         real(dp), intent(in) :: alpha
+         integer(ik), intent(in) :: incx
+         integer(ik), intent(in) :: incy
+         integer(ik), intent(in) :: n
+      end subroutine daxpy
+      pure subroutine caxpy(n, alpha, x, incx, y, incy)
+         import :: sp, ik
+         complex(sp), intent(in) :: x(*)
+         complex(sp), intent(inout) :: y(*)
+         complex(sp), intent(in) :: alpha
+         integer(ik), intent(in) :: incx
+         integer(ik), intent(in) :: incy
+         integer(ik), intent(in) :: n
+      end subroutine caxpy
+      pure subroutine zaxpy(n, alpha, x, incx, y, incy)
+         import :: dp, ik
+         complex(dp), intent(in) :: x(*)
+         complex(dp), intent(inout) :: y(*)
+         complex(dp), intent(in) :: alpha
+         integer(ik), intent(in) :: incx
+         integer(ik), intent(in) :: incy
+         integer(ik), intent(in) :: n
+      end subroutine zaxpy
+   end interface blas_axpy
+
+   !> Performs the vector operation
+   !>
+   !>    x := alpha*x,
+   !>
+   !> where alpha is a scalar and x is a vector.
+   interface blas_scal
+      pure subroutine sscal(n, alpha, x, incx)
+         import :: sp, ik
+         real(sp), intent(inout) :: x(*)
+         real(sp), intent(in) :: alpha
+         integer(ik), intent(in) :: incx
+         integer(ik), intent(in) :: n
+      end subroutine sscal
+      pure subroutine dscal(n, alpha, x, incx)
+         import :: dp, ik
+         real(dp), intent(inout) :: x(*)
+         real(dp), intent(in) :: alpha
+         integer(ik), intent(in) :: incx
+         integer(ik), intent(in) :: n
+      end subroutine dscal
+      pure subroutine cscal(n, alpha, x, incx)
+         import :: sp, ik
+         complex(sp), intent(inout) :: x(*)
+         complex(sp), intent(in) :: alpha
+         integer(ik), intent(in) :: incx
+         integer(ik), intent(in) :: n
+      end subroutine cscal
+      pure subroutine zscal(n, alpha, x, incx)
+         import :: dp, ik
+         complex(dp), intent(inout) :: x(*)
+         complex(dp), intent(in) :: alpha
+         integer(ik), intent(in) :: incx
+         integer(ik), intent(in) :: n
+      end subroutine zscal
+      pure subroutine csscal(n, alpha, x, incx)
+         import :: sp, ik
+         complex(sp), intent(inout) :: x(*)
+         real(sp), intent(in) :: alpha
+         integer(ik), intent(in) :: incx
+         integer(ik), intent(in) :: n
+      end subroutine csscal
+      pure subroutine zdscal(n, alpha, x, incx)
+         import :: dp, ik
+         complex(dp), intent(inout) :: x(*)
+         real(dp), intent(in) :: alpha
+         integer(ik), intent(in) :: incx
+         integer(ik), intent(in) :: n
+      end subroutine zdscal
+   end interface blas_scal
+
+   !> Forms the dot product of two vectors
+   !>
+   !>    x**T*y,
+   !>
+   !> where x and y are vectors.
+   interface blas_dot
+      pure function sdot(n, x, incx, y, incy)
+         import :: sp, ik
+         real(sp) :: sdot
+         real(sp), intent(in) :: x(*)
+         real(sp), intent(in) :: y(*)
+         integer(ik), intent(in) :: incx
+         integer(ik), intent(in) :: incy
+         integer(ik), intent(in) :: n
+      end function sdot
+      pure function ddot(n, x, incx, y, incy)
+         import :: dp, ik
+         real(dp) :: ddot
+         real(dp), intent(in) :: x(*)
+         real(dp), intent(in) :: y(*)
+         integer(ik), intent(in) :: incx
+         integer(ik), intent(in) :: incy
+         integer(ik), intent(in) :: n
+      end function ddot
+   end interface blas_dot
 
    !> Performs one of the matrix-vector operations
    !>
@@ -195,6 +357,224 @@ module multicharge_blas
 
 
 contains
+
+
+pure subroutine mchrg_saxpy(xvec, yvec, alpha)
+   real(sp), intent(in) :: xvec(:)
+   real(sp), intent(inout) :: yvec(:)
+   real(sp), intent(in), optional :: alpha
+   real(sp) :: a
+   integer(ik) :: incx, incy, n
+   if (present(alpha)) then
+      a = alpha
+   else
+      a = 1.0_sp
+   end if
+   incx = 1
+   incy = 1
+   n = size(xvec)
+   call blas_axpy(n, a, xvec, incx, yvec, incy)
+end subroutine mchrg_saxpy
+
+
+pure subroutine mchrg_caxpy(xvec, yvec, alpha)
+   complex(sp), intent(in) :: xvec(:)
+   complex(sp), intent(inout) :: yvec(:)
+   complex(sp), intent(in), optional :: alpha
+   complex(sp) :: a
+   integer(ik) :: incx, incy, n
+   if (present(alpha)) then
+      a = alpha
+   else
+      a = 1.0_sp
+   end if
+   incx = 1
+   incy = 1
+   n = size(xvec)
+   call blas_axpy(n, a, xvec, incx, yvec, incy)
+end subroutine mchrg_caxpy
+
+
+pure subroutine mchrg_daxpy(xvec, yvec, alpha)
+   real(dp), intent(in) :: xvec(:)
+   real(dp), intent(inout) :: yvec(:)
+   real(dp), intent(in), optional :: alpha
+   real(dp) :: a
+   integer(ik) :: incx, incy, n
+   if (present(alpha)) then
+      a = alpha
+   else
+      a = 1.0_dp
+   end if
+   incx = 1
+   incy = 1
+   n = size(xvec)
+   call blas_axpy(n, a, xvec, incx, yvec, incy)
+end subroutine mchrg_daxpy
+
+
+pure subroutine mchrg_zaxpy(xvec, yvec, alpha)
+   complex(dp), intent(in) :: xvec(:)
+   complex(dp), intent(inout) :: yvec(:)
+   complex(dp), intent(in), optional :: alpha
+   complex(dp) :: a
+   integer(ik) :: incx, incy, n
+   if (present(alpha)) then
+      a = alpha
+   else
+      a = 1.0_dp
+   end if
+   incx = 1
+   incy = 1
+   n = size(xvec)
+   call blas_axpy(n, a, xvec, incx, yvec, incy)
+end subroutine mchrg_zaxpy
+
+
+pure subroutine mchrg_sscal(alpha, xvec)
+   real(sp), intent(in) :: alpha
+   real(sp), intent(inout) :: xvec(:)
+   integer(ik) :: incx, n
+   incx = 1
+   n = size(xvec)
+   call blas_scal(n, alpha, xvec, incx)
+end subroutine mchrg_sscal
+
+
+pure subroutine mchrg_cscal(alpha, xvec)
+   complex(sp), intent(in) :: alpha
+   complex(sp), intent(inout) :: xvec(:)
+   integer(ik) :: incx, n
+   incx = 1
+   n = size(xvec)
+   call blas_scal(n, alpha, xvec, incx)
+end subroutine mchrg_cscal
+
+
+pure subroutine mchrg_csscal(alpha, xvec)
+   real(sp), intent(in) :: alpha
+   complex(sp), intent(inout) :: xvec(:)
+   integer(ik) :: incx, n
+   incx = 1
+   n = size(xvec)
+   call blas_scal(n, alpha, xvec, incx)
+end subroutine mchrg_csscal
+
+
+pure subroutine mchrg_dscal(alpha, xvec)
+   real(dp), intent(in) :: alpha
+   real(dp), intent(inout) :: xvec(:)
+   integer(ik) :: incx, n
+   incx = 1
+   n = size(xvec)
+   call blas_scal(n, alpha, xvec, incx)
+end subroutine mchrg_dscal
+
+
+pure subroutine mchrg_zscal(alpha, xvec)
+   complex(dp), intent(in) :: alpha
+   complex(dp), intent(inout) :: xvec(:)
+   integer(ik) :: incx, n
+   incx = 1
+   n = size(xvec)
+   call blas_scal(n, alpha, xvec, incx)
+end subroutine mchrg_zscal
+
+
+pure subroutine mchrg_zdscal(alpha, xvec)
+   real(dp), intent(in) :: alpha
+   complex(dp), intent(inout) :: xvec(:)
+   integer(ik) :: incx, n
+   incx = 1
+   n = size(xvec)
+   call blas_scal(n, alpha, xvec, incx)
+end subroutine mchrg_zdscal
+
+
+function mchrg_sdot(xvec, yvec) result(dot_prod)
+   real(sp), intent(in) :: xvec(:)
+   real(sp), intent(in) :: yvec(:)
+   real(sp) :: dot_prod
+   integer(ik) :: incx, incy, n
+   incx = 1
+   incy = 1
+   n = size(xvec)
+   dot_prod = blas_dot(n, xvec, incx, yvec, incy)
+end function mchrg_sdot
+
+
+function mchrg_ddot(xvec, yvec) result(dot_prod)
+   real(dp), intent(in) :: xvec(:)
+   real(dp), intent(in) :: yvec(:)
+   real(dp) :: dot_prod
+   integer(ik) :: incx, incy, n
+   incx = 1
+   incy = 1
+   n = size(xvec)
+   dot_prod = blas_dot(n, xvec, incx, yvec, incy)
+end function mchrg_ddot
+
+
+function mchrg_sdot12(xvec, yvec) result(dot_prod)
+   real(sp), intent(in) :: xvec(:)
+   real(sp), intent(in), contiguous, target :: yvec(:, :)
+   real(sp) :: dot_prod
+   real(sp), pointer :: yptr(:)
+   yptr(1:size(yvec)) => yvec
+   dot_prod = dot(xvec, yptr)
+end function mchrg_sdot12
+
+
+function mchrg_sdot21(xvec, yvec) result(dot_prod)
+   real(sp), intent(in), contiguous, target :: xvec(:, :)
+   real(sp), intent(in) :: yvec(:)
+   real(sp) :: dot_prod
+   real(sp), pointer :: xptr(:)
+   xptr(1:size(xvec)) => xvec
+   dot_prod = dot(xptr, yvec)
+end function mchrg_sdot21
+
+
+function mchrg_sdot22(xvec, yvec) result(dot_prod)
+   real(sp), intent(in), contiguous, target :: xvec(:, :)
+   real(sp), intent(in), contiguous, target :: yvec(:, :)
+   real(sp) :: dot_prod
+   real(sp), pointer :: xptr(:), yptr(:)
+   xptr(1:size(xvec)) => xvec
+   yptr(1:size(yvec)) => yvec
+   dot_prod = dot(xptr, yptr)
+end function mchrg_sdot22
+
+
+function mchrg_ddot12(xvec, yvec) result(dot_prod)
+   real(dp), intent(in) :: xvec(:)
+   real(dp), intent(in), contiguous, target :: yvec(:, :)
+   real(dp) :: dot_prod
+   real(dp), pointer :: yptr(:)
+   yptr(1:size(yvec)) => yvec
+   dot_prod = dot(xvec, yptr)
+end function mchrg_ddot12
+
+
+function mchrg_ddot21(xvec, yvec) result(dot_prod)
+   real(dp), intent(in), contiguous, target :: xvec(:, :)
+   real(dp), intent(in) :: yvec(:)
+   real(dp) :: dot_prod
+   real(dp), pointer :: xptr(:)
+   xptr(1:size(xvec)) => xvec
+   dot_prod = dot(xptr, yvec)
+end function mchrg_ddot21
+
+
+function mchrg_ddot22(xvec, yvec) result(dot_prod)
+   real(dp), intent(in), contiguous, target :: xvec(:, :)
+   real(dp), intent(in), contiguous, target :: yvec(:, :)
+   real(dp) :: dot_prod
+   real(dp), pointer :: xptr(:), yptr(:)
+   xptr(1:size(xvec)) => xvec
+   yptr(1:size(yvec)) => yvec
+   dot_prod = dot(xptr, yptr)
+end function mchrg_ddot22
 
 
 subroutine mchrg_sgemv312(amat, xvec, yvec, alpha, beta, trans)

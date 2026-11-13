@@ -23,13 +23,31 @@ Hint for the format of the input file
 *-c, -charge, --charge* _value_::
 Provide the molecular charge
 
-*-g, -grad, --grad*::
-Evaluate molecular gradient and virial
+*-solver, --solver* _type_::
+Provide the partial charge solver: 'cg' or 'direct' (default)
+
+*-it, -maxiter, --maxiter* _int_::
+Provide the maximal number of CG iterations
+
+*-tol, -tolerance, --tolerance* _real_::
+Provide the convergence tolerance of the CG solver
+
+*-g, -eg, -grad, --grad, -egrad, --egrad*::
+Evaluate molecular energy gradient and virial
+
+*-qg, -qgrad, --qgrad*::
+Evaluate molecular charge gradient and virial
+
+*-v, -verbose, --verbose*::
+Show more output
+
+*-s, -silent, --silent*::
+Show less output
 
 *-j, -json, --json*::
 Provide output in JSON format to the file 'multicharge.json'
 
-*-v, -version, --version*::
+*-version, --version*::
 Print program version and exit
 
 *-h, -help, --help*::

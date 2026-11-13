@@ -19,6 +19,7 @@ set(
   "hessian"
   "model"
   "pbc"
+  "solver"
 )
 set(
   test-srcs

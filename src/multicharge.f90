@@ -16,7 +16,7 @@
 module multicharge
    use multicharge_charge, only : get_charges, get_eeq_charges, get_eeqbc_charges, add_charge_hessian
    use multicharge_model, only : mchrg_model_type
-   use multicharge_model_cache, only : cache_container
+   use multicharge_model_cache, only : mchrg_cache
    use multicharge_output, only : write_ascii_model, write_ascii_properties, &
       & write_ascii_results
    use multicharge_param, only : new_eeq2019_model, new_eeqbc2025_model, mchrg_model

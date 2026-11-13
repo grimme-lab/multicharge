@@ -22,6 +22,7 @@ program tester
    use test_hessian, only : collect_hessian
    use test_model, only : collect_model
    use test_pbc, only : collect_pbc
+   use test_solver, only : collect_solver
    implicit none
    integer :: stat, is
    character(len=:), allocatable :: suite_name, test_name
@@ -33,7 +34,8 @@ program tester
    testsuites = [ &
       & new_testsuite("hessian", collect_hessian), &
       & new_testsuite("model", collect_model), &
-      & new_testsuite("pbc", collect_pbc) &
+      & new_testsuite("pbc", collect_pbc), &
+      & new_testsuite("solver", collect_solver) &
       & ]
 
    call get_argument(1, suite_name)
