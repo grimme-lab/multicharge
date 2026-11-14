@@ -349,10 +349,6 @@ subroutine add_charge_hessian(self, mol, error, weights, hessian, cache)
    real(wp), pointer :: da(:, :), dq(:, :)
 
    nat = mol%nat
-   if (any(mol%periodic) .and. .not. all(mol%periodic)) then
-      call fatal_error(error, "Analytical charge Hessian requires molecular or 3D periodic boundary conditions")
-      return
-   end if
    if (size(weights) /= nat .or. any(shape(hessian) /= 3*nat)) then
       call fatal_error(error, "Invalid dimensions for charge Hessian contraction")
       return
