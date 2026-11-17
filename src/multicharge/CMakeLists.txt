@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+add_subdirectory("ewald")
 add_subdirectory("model")
 add_subdirectory("param")
 
