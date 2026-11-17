@@ -60,6 +60,7 @@ module multicharge_model_eeq
 
    real(wp), parameter :: sqrtpi = sqrt(pi)
    real(wp), parameter :: sqrt2pi = sqrt(2.0_wp/pi)
+   real(wp), parameter :: eps = sqrt(epsilon(0.0_wp))
 
 contains
 
@@ -122,11 +123,17 @@ subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlo
    end if
 
    if (any(mol%periodic)) then
+      if (.not. all(mol%periodic) .and. abs(mol%charge) > eps) then
+         call fatal_error(error, &
+            & "Charged 1D and 2D periodic systems are not supported by EEQ")
+         return
+      end if
+
       ! Create WSC
       call new_wignerseitz_cell(ptr%wsc, mol, error)
       if (allocated(error)) return
 
-      call get_alpha(mol%lattice, ptr%alpha, error)
+      call get_alpha(mol%lattice, ptr%alpha, error, mol%periodic)
       if (allocated(error)) return
    end if
 
@@ -269,7 +276,7 @@ subroutine get_coulomb_matrix(self, mol, cache, amat)
    call view(cache, ptr)
 
    if (any(mol%periodic)) then
-      call get_amat_3d(self, mol, ptr%wsc, ptr%alpha, amat)
+      call get_amat_pbc(self, mol, ptr%wsc, ptr%alpha, amat)
    else
       call get_amat_0d(self, mol, amat)
    end if
@@ -312,7 +319,7 @@ subroutine get_amat_0d(self, mol, amat)
    amat(mol%nat + 1, mol%nat + 1) = 0.0_wp
 end subroutine get_amat_0d
 
-subroutine get_amat_3d(self, mol, wsc, alpha, amat)
+subroutine get_amat_pbc(self, mol, wsc, alpha, amat)
    class(eeq_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
    type(wignerseitz_cell), intent(in) :: wsc
@@ -331,7 +338,7 @@ subroutine get_amat_3d(self, mol, wsc, alpha, amat)
    amat(mol%nat + 1, 1:mol%nat + 1) = 1.0_wp
    amat(1:mol%nat + 1, mol%nat + 1) = 1.0_wp
    amat(mol%nat + 1, mol%nat + 1) = 0.0_wp
-end subroutine get_amat_3d
+end subroutine get_amat_pbc
 
 subroutine get_coulomb_derivs(self, mol, cache, qvec, dadr, dadL, atrace)
    class(eeq_model), intent(in) :: self
