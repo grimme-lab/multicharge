@@ -19,7 +19,10 @@ list(
   APPEND srcs
   "${dir}/cutoff.f90"
   "${dir}/direct.f90"
+  "${dir}/pbc1d.f90"
+  "${dir}/pbc2d.f90"
   "${dir}/pbc3d.f90"
+  "${dir}/special.f90"
 )
 
 set(srcs "${srcs}" PARENT_SCOPE)

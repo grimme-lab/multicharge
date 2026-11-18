@@ -23,6 +23,10 @@ subroutine collect_hessian(testsuite)
       & new_unittest("eeqbc-cn-cap", test_eeqbc_cap), &
       & new_unittest("eeq-charged", test_eeq_charged), &
       & new_unittest("eeqbc-charged", test_eeqbc_charged), &
+      & new_unittest("eeq-1d", test_eeq_1d), &
+      & new_unittest("eeqbc-1d", test_eeqbc_1d), &
+      & new_unittest("eeq-2d", test_eeq_2d), &
+      & new_unittest("eeqbc-2d", test_eeqbc_2d), &
       & new_unittest("eeq-periodic", test_eeq_periodic), &
       & new_unittest("eeqbc-periodic", test_eeqbc_periodic), &
       & new_unittest("isolated-atom", test_atom), &
@@ -62,6 +66,42 @@ subroutine test_eeqbc_charged(error)
    call run_case(error, .true., 3)
 end subroutine test_eeqbc_charged
 
+subroutine test_eeq_1d(error)
+   type(error_type), allocatable, intent(out) :: error
+   integer :: icase
+   do icase = 10, 11
+      call run_case(error, .false., icase)
+      if (allocated(error)) return
+   end do
+end subroutine test_eeq_1d
+
+subroutine test_eeqbc_1d(error)
+   type(error_type), allocatable, intent(out) :: error
+   integer :: icase
+   do icase = 10, 12
+      call run_case(error, .true., icase)
+      if (allocated(error)) return
+   end do
+end subroutine test_eeqbc_1d
+
+subroutine test_eeq_2d(error)
+   type(error_type), allocatable, intent(out) :: error
+   integer :: icase
+   do icase = 13, 14
+      call run_case(error, .false., icase)
+      if (allocated(error)) return
+   end do
+end subroutine test_eeq_2d
+
+subroutine test_eeqbc_2d(error)
+   type(error_type), allocatable, intent(out) :: error
+   integer :: icase
+   do icase = 13, 15
+      call run_case(error, .true., icase)
+      if (allocated(error)) return
+   end do
+end subroutine test_eeqbc_2d
+
 subroutine test_eeq_periodic(error)
    type(error_type), allocatable, intent(out) :: error
    integer :: icase
@@ -98,6 +138,14 @@ subroutine run_case(error, bond_capacity, icase)
    real(wp), parameter :: xyz_tri(3, 3) = reshape([ &
       & 0.0_wp, 0.0_wp, 0.0_wp, 3.0_wp, 0.1_wp, 0.2_wp, &
       & 0.5_wp, 2.0_wp, 0.3_wp], [3, 3])
+   real(wp), parameter :: xyz_wire(3, 3) = reshape([ &
+      &  0.00_wp, 0.00_wp,  0.00_wp, &
+      &  0.16_wp, 2.12_wp, -0.12_wp, &
+      & -0.40_wp, 1.10_wp,  1.50_wp], [3, 3])
+   real(wp), parameter :: xyz_slab(3, 3) = reshape([ &
+      & 0.0_wp, -0.3_wp, 0.0_wp, &
+      & 2.5_wp,  0.4_wp, 0.2_wp, &
+      & 0.6_wp,  0.5_wp, 2.1_wp], [3, 3])
    real(wp), parameter :: xyz_half(3, 2) = reshape([ &
       & 0.0_wp, 0.0_wp, -0.2_wp, 3.0_wp, 0.2_wp, 0.3_wp], [3, 2])
    real(wp), parameter :: lattice(3, 3) = reshape([ &
@@ -106,6 +154,14 @@ subroutine run_case(error, bond_capacity, icase)
    real(wp), parameter :: lat_orth(3, 3) = reshape([ &
       & 6.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 7.0_wp, 0.0_wp, &
       & 0.0_wp, 0.0_wp, 8.0_wp], [3, 3])
+   real(wp), parameter :: lat_wire(3, 3) = reshape([ &
+      & 0.0_wp, 0.0_wp,  0.0_wp, &
+      & 0.4_wp, 5.3_wp, -0.3_wp, &
+      & 0.0_wp, 0.0_wp,  0.0_wp], [3, 3])
+   real(wp), parameter :: lat_slab(3, 3) = reshape([ &
+      & 5.2_wp,  0.1_wp, 0.3_wp, &
+      & 0.0_wp,  0.0_wp, 0.0_wp, &
+      & 0.5_wp, -0.2_wp, 6.1_wp], [3, 3])
    character(len=30) :: label
 
    select case(icase)
@@ -126,6 +182,20 @@ subroutine run_case(error, bond_capacity, icase)
    case(9)
       ! The half-cell displacement has two equivalent WS images.
       call new(mol, num_di, xyz_half, lattice=lat_orth, periodic=[.true., .true., .true.])
+   case(10)
+      call new(mol, num_tri, xyz_wire, lattice=lat_wire, periodic=[.false., .true., .false.])
+   case(11)
+      call new(mol, num_di, xyz_half, lattice=lat_orth, periodic=[.true., .false., .false.])
+   case(12)
+      call new(mol, num_tri, xyz_wire, charge=1.0_wp, &
+         & lattice=lat_wire, periodic=[.false., .true., .false.])
+   case(13)
+      call new(mol, num_tri, xyz_slab, lattice=lat_slab, periodic=[.true., .false., .true.])
+   case(14)
+      call new(mol, num_di, xyz_half, lattice=lat_orth, periodic=[.true., .true., .false.])
+   case(15)
+      call new(mol, num_tri, xyz_slab, charge=-1.0_wp, &
+         & lattice=lat_slab, periodic=[.true., .false., .true.])
    case default
       call test_failed(error, "Unknown charge Hessian test case")
       return
@@ -339,10 +409,9 @@ subroutine test_invalid(error)
    end if
    call get_charges(model, mol, error, q, cache=cache)
    if (allocated(error)) return
-   mol%periodic = [.true., .false., .false.]
-   call add_charge_hessian(model, mol, expected, [1.0_wp], hess, cache)
+   call add_charge_hessian(model, mol, expected, [1.0_wp, 2.0_wp], hess, cache)
    if (.not. allocated(expected)) then
-      call test_failed(error, "Partial periodicity is not supported by the 3D response")
+      call test_failed(error, "Mismatched weight dimensions must be rejected")
       return
    end if
    if (any(hess /= 0.125_wp)) call test_failed(error, "Rejected calls changed the Hessian")
