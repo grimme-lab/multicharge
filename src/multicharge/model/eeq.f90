@@ -337,6 +337,20 @@ subroutine get_amat_0d(self, mol, amat)
 end subroutine get_amat_0d
 
 
+!> Smallest Gaussian charge exponent of any pair, set by the widest charge
+pure function get_gam_min(self) result(gam)
+
+   !> Electronegativity equilibration model
+   class(eeq_model), intent(in) :: self
+
+   !> Smallest pair exponent 1/sqrt(rad_i**2 + rad_j**2)
+   real(wp) :: gam
+
+   gam = 1.0_wp / (sqrt(2.0_wp) * maxval(self%rad))
+
+end function get_gam_min
+
+
 !> Coulomb matrix of Gaussian charges for a 3D periodic structure (Ewald sum)
 subroutine get_amat_3d(self, mol, wsc, alpha, amat)
 
@@ -359,7 +373,8 @@ subroutine get_amat_3d(self, mol, wsc, alpha, amat)
    real(wp) :: rij(3), vec(3), gam, wsw, dtmp, rtmp, tmp
    real(wp), allocatable :: dtrans(:, :), rtrans(:, :), rec_weight(:)
 
-   call get_ewald_setup(mol, alpha, dtrans, rtrans, weight=rec_weight)
+   call get_ewald_setup(mol, wsc, alpha, get_gam_min(self), dtrans, rtrans, &
+      & weight=rec_weight)
 
    ! Every matrix element belongs to one pair; no thread-local matrix is needed.
    npair = mol%nat * (mol%nat + 1) / 2
@@ -535,8 +550,8 @@ subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
    real(wp), allocatable :: dtrans(:, :), rtrans(:, :)
    real(wp), allocatable :: rec_weight(:), rec_strain(:, :, :)
 
-   call get_ewald_setup(mol, alpha, dtrans, rtrans, weight=rec_weight, &
-      & strain=rec_strain)
+   call get_ewald_setup(mol, wsc, alpha, get_gam_min(self), dtrans, rtrans, &
+      & weight=rec_weight, strain=rec_strain)
 
    atrace(:, :) = 0.0_wp
    dadL(:, :, :) = 0.0_wp
@@ -747,7 +762,8 @@ subroutine add_coulomb_hessian_3d(self, mol, wsc, alpha, qvec, adj, hessian, dia
    real(wp) :: rij(3), vec(3), box(3, 3), dbox(3, 3), rbox(3, 3), gam, weight, wsw
    real(wp), allocatable :: dtrans(:, :), rtrans(:, :), rec_hess(:, :, :)
 
-   call get_ewald_setup(mol, alpha, dtrans, rtrans, hess=rec_hess)
+   call get_ewald_setup(mol, wsc, alpha, get_gam_min(self), dtrans, rtrans, &
+      & hess=rec_hess)
 
    ! Each pair owns its off-diagonal blocks. Only the diagonal blocks are
    ! reduced, avoiding a full (3N, 3N) Hessian copy for every OpenMP thread.

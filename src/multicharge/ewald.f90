@@ -27,15 +27,18 @@
 module multicharge_ewald
    use mctc_env, only : wp
    use mctc_io, only : structure_type
-   use mctc_io_math, only : matdet_3x3
-   use multicharge_ewald_cutoff, only : get_alpha, get_ewald_trans
+   use mctc_io_math, only : matdet_3x3, matinv_3x3
+   use mctc_wignerseitz, only : wignerseitz_cell
+   use multicharge_ewald_cutoff, only : get_alpha, get_dir_cutoff, get_rec_cutoff, &
+      & get_ewald_trans
    use multicharge_ewald_direct, only : get_amat_dir, get_damat_dir, get_hess_dir
    use multicharge_ewald_pbc3d, only : get_rec_weights, get_amat_rec_3d, &
       & get_damat_rec_3d, get_hess_rec_3d
    implicit none
    private
 
-   public :: get_alpha, get_ewald_trans, get_ewald_setup
+   public :: get_alpha, get_dir_cutoff, get_rec_cutoff, get_ewald_trans
+   public :: get_ewald_setup
    public :: get_amat_dir, get_damat_dir, get_hess_dir
    public :: get_rec_weights, get_amat_rec_3d, get_damat_rec_3d, get_hess_rec_3d
 
@@ -43,15 +46,21 @@ module multicharge_ewald
 contains
 
 
-!> Prepare lattice translations and reciprocal-space factors for one evaluation.
-!> Only the requested reciprocal-space tensors are allocated.
-pure subroutine get_ewald_setup(mol, alpha, dtrans, rtrans, weight, strain, hess)
+!> Prepare converged lattice translations and requested reciprocal-space factors
+subroutine get_ewald_setup(mol, wsc, alpha, gam, dtrans, rtrans, weight, &
+      & strain, hess)
 
    !> Molecular structure data
    type(structure_type), intent(in) :: mol
 
+   !> Wigner-Seitz cell images of all pairs
+   type(wignerseitz_cell), intent(in) :: wsc
+
    !> Ewald splitting parameter
    real(wp), intent(in) :: alpha
+
+   !> Smallest Gaussian charge exponent of all pairs
+   real(wp), intent(in) :: gam
 
    !> Direct-space lattice translations (3, ndir)
    real(wp), allocatable, intent(out) :: dtrans(:, :)
@@ -68,9 +77,29 @@ pure subroutine get_ewald_setup(mol, alpha, dtrans, rtrans, weight, strain, hess
    !> Optional reciprocal-space Hessian tensors
    real(wp), allocatable, intent(out), optional :: hess(:, :, :)
 
-   real(wp) :: vol
+   integer :: iat, jat, img
+   real(wp) :: vol, inv_lat(3, 3), vec(3), smax(3), rmax2
 
-   call get_ewald_trans(mol%lattice, dtrans, rtrans)
+   ! Extent of the pair vectors, which shift the real-space sum off the origin
+   inv_lat = matinv_3x3(mol%lattice)
+   smax(:) = 0.0_wp
+   rmax2 = 0.0_wp
+   !$omp parallel do default(none) schedule(runtime) &
+   !$omp shared(mol, wsc, inv_lat) private(iat, jat, img, vec) &
+   !$omp reduction(max:smax, rmax2)
+   do iat = 1, mol%nat
+      do jat = 1, mol%nat
+         do img = 1, wsc%nimg(jat, iat)
+            vec = mol%xyz(:, jat) - mol%xyz(:, iat) &
+               & + wsc%trans(:, wsc%tridx(img, jat, iat))
+            smax(:) = max(smax, abs(matmul(inv_lat, vec)))
+            rmax2 = max(rmax2, dot_product(vec, vec))
+         end do
+      end do
+   end do
+   !$omp end parallel do
+
+   call get_ewald_trans(mol%lattice, alpha, gam, smax, sqrt(rmax2), dtrans, rtrans)
    vol = abs(matdet_3x3(mol%lattice))
    call get_rec_weights(vol, alpha, rtrans, weight=weight, strain=strain, hess=hess)
 

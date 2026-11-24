@@ -14,9 +14,9 @@
 ! limitations under the License.
 
 !> @file multicharge/ewald/cutoff.f90
-!> Ewald splitting parameter and lattice translation generation
+!> Ewald splitting parameter, cutoff search and lattice translation generation
 
-!> Ewald splitting parameter search and direct/reciprocal lattice translations
+!> Ewald splitting parameter and tolerance-based direct/reciprocal translations
 module multicharge_ewald_cutoff
    use mctc_cutoff, only : get_lattice_points
    use mctc_env, only : error_type, fatal_error, wp
@@ -26,199 +26,227 @@ module multicharge_ewald_cutoff
    implicit none
    private
 
-   public :: get_alpha, get_ewald_trans
+   public :: get_alpha, get_dir_cutoff, get_rec_cutoff, get_ewald_trans
 
    real(wp), parameter :: twopi = 2.0_wp * pi
+   real(wp), parameter :: sqrtpi = sqrt(pi)
    real(wp), parameter :: eps = sqrt(epsilon(0.0_wp))
+
+   !> Scaling of the Ewald parameter, shifting work to the reciprocal space
+   real(wp), parameter :: alpha_scale = 1.25_wp
+
+   !> Tolerance for a single term of the real- or reciprocal-space sum
+   real(wp), parameter :: term_tol = epsilon(0.0_wp)
+
+   abstract interface
+      !> Max. value of a real or reciprocal space term for a given vector length
+      pure function get_term_gen(dist, alpha, vol) result(val)
+         import :: wp
+
+         !> Length of the real or reciprocal space vector
+         real(wp), intent(in) :: dist
+
+         !> Parameter of the Ewald summation
+         real(wp), intent(in) :: alpha
+
+         !> Volume of the real space unit cell
+         real(wp), intent(in) :: vol
+
+         !> Value of the term
+         real(wp) :: val
+
+      end function get_term_gen
+   end interface
 
 
 contains
 
 
-!> Determine the optimal Ewald splitting parameter alpha
+!> Ewald parameter balancing the cost of the real-space and reciprocal sums
 subroutine get_alpha(lattice, alpha, error)
 
-   !> Real-space lattice vectors as columns (3, 3)
+   !> Lattice vectors
    real(wp), intent(in) :: lattice(:, :)
 
-   !> Ewald splitting parameter
+   !> Parameter of the Ewald summation
    real(wp), intent(out) :: alpha
 
    !> Error handling
    type(error_type), allocatable, intent(out) :: error
 
-   real(wp) :: vol, rec_lat(3, 3)
+   real(wp) :: vol
 
    vol = abs(matdet_3x3(lattice))
    if (vol < eps) then
       call fatal_error(error, "Lattice vectors are singular or degenerate")
       return
    end if
-   rec_lat = twopi * transpose(matinv_3x3(lattice))
 
-   call search_alpha(lattice, rec_lat, vol, eps, alpha)
+   alpha = alpha_scale * sqrtpi / vol**(1.0_wp / 3.0_wp)
 
 end subroutine get_alpha
 
 
-!> Generate direct-space and half-space reciprocal Ewald lattice vectors
-pure subroutine get_ewald_trans(lattice, dtrans, rtrans)
+!> Real-space cutoff
+pure function get_dir_cutoff(alpha, conv) result(cutoff)
 
-   !> Real-space lattice vectors as columns (3, 3)
+   !> Parameter of the Ewald summation
+   real(wp), intent(in) :: alpha
+
+   !> Tolerance for a single real-space term
+   real(wp), intent(in) :: conv
+
+   !> Real-space cutoff
+   real(wp) :: cutoff
+
+   cutoff = search_cutoff(get_dir_term, alpha, 0.0_wp, conv)
+
+end function get_dir_cutoff
+
+
+!> Reciprocal-space cutoff
+pure function get_rec_cutoff(alpha, volume, conv) result(cutoff)
+
+   !> Parameter of the Ewald summation
+   real(wp), intent(in) :: alpha
+
+   !> Volume of the real space unit cell
+   real(wp), intent(in) :: volume
+
+   !> Tolerance for a single reciprocal-space term
+   real(wp), intent(in) :: conv
+
+   !> Reciprocal-space cutoff
+   real(wp) :: cutoff
+
+   cutoff = search_cutoff(get_rec_term_3d, alpha, volume, conv)
+
+end function get_rec_cutoff
+
+
+!> Direct and half-space reciprocal translations within the single-term cutoffs
+pure subroutine get_ewald_trans(lattice, alpha, gam, smax, rmax, dtrans, rtrans)
+
+   !> Lattice vectors
    real(wp), intent(in) :: lattice(:, :)
 
-   !> Direct-space lattice translations (3, ndir)
+   !> Parameter of the Ewald summation
+   real(wp), intent(in) :: alpha
+
+   !> Smallest Gaussian charge exponent of all pairs
+   real(wp), intent(in) :: gam
+
+   !> Largest fractional components of the pair vectors
+   real(wp), intent(in) :: smax(3)
+
+   !> Largest length of the pair vectors
+   real(wp), intent(in) :: rmax
+
+   !> Real-space lattice translations
    real(wp), allocatable, intent(out) :: dtrans(:, :)
 
-   !> Open half-space reciprocal lattice vectors (3, nrec)
+   !> Reciprocal lattice translations in a half space
    real(wp), allocatable, intent(out) :: rtrans(:, :)
 
-   integer, parameter :: rep(3) = [2, 2, 2]
-
-   integer :: nrec, itr, ix, iy, iz, jy, jz
-   real(wp) :: rec_lat(3, 3)
+   integer :: rep(3), nrec, itr, ix, iy, iz, jy, jz
+   real(wp) :: inv_lat(3, 3), rec_lat(3, 3), rcut, gcut, vec(3)
+   real(wp), allocatable :: tmp(:, :)
    type(error_type), allocatable :: error
 
-   call get_lattice_points(lattice, rep, .true., dtrans, error)
+   ! The real-space kernel decays with the smaller of alpha and gam
+   rcut = get_dir_cutoff(min(alpha, gam), term_tol)
+   gcut = get_rec_cutoff(alpha, abs(matdet_3x3(lattice)), term_tol)
 
-   rec_lat = twopi * transpose(matinv_3x3(lattice))
+   ! Rows of the inverse lattice have the length of one over the plane spacing
+   inv_lat = matinv_3x3(lattice)
+   rep(:) = floor(rcut * norm2(inv_lat, dim=2) + smax)
+   call get_lattice_points(lattice, rep, .true., tmp, error)
+   dtrans = tmp(:, pack([(itr, itr = 1, size(tmp, 2))], &
+      & norm2(tmp, dim=1) <= rcut + rmax))
+   deallocate(tmp)
 
-   ! Keep one representative per (+G, -G) antipodal pair (first nonzero index > 0)
-   nrec = (product(2 * rep + 1) - 1) / 2
-   allocate(rtrans(3, nrec))
-   itr = 0
+   ! Reciprocal vectors within the cutoff sphere, one of each +G/-G pair
+   rec_lat = twopi * transpose(inv_lat)
+   rep(:) = floor(gcut * norm2(lattice, dim=1) / twopi)
+   allocate(tmp(3, (product(2 * rep + 1) - 1) / 2))
+   nrec = 0
    do ix = 0, rep(1)
       do iy = 0, rep(2)
          do iz = 0, rep(3)
             if (ix == 0 .and. iy == 0 .and. iz == 0) cycle
             do jy = 1, merge(-1, 1, ix > 0 .and. iy > 0), -2
                do jz = 1, merge(-1, 1, (ix > 0 .or. iy > 0) .and. iz > 0), -2
-                  itr = itr + 1
-                  rtrans(:, itr) = rec_lat(:, 1) * real(ix, wp) &
+                  vec(:) = rec_lat(:, 1) * real(ix, wp) &
                      & + rec_lat(:, 2) * real(iy * jy, wp) &
                      & + rec_lat(:, 3) * real(iz * jz, wp)
+                  if (norm2(vec) > gcut) cycle
+                  nrec = nrec + 1
+                  tmp(:, nrec) = vec
                end do
             end do
          end do
       end do
    end do
+   rtrans = tmp(:, :nrec)
 
 end subroutine get_ewald_trans
 
 
-!> Find alpha balancing the decay rates of the direct and reciprocal Ewald sums
-subroutine search_alpha(lattice, rec_lat, volume, tolerance, alpha)
+!> Find the cutoff for an Ewald term
+pure function search_cutoff(get_term, alpha, volume, conv) result(cutoff)
 
-   !> Real-space lattice vectors
-   real(wp), intent(in) :: lattice(:, :)
+   !> Procedure to evaluate the Ewald term
+   procedure(get_term_gen) :: get_term
 
-   !> Reciprocal-space lattice vectors
-   real(wp), intent(in) :: rec_lat(:, :)
-
-   !> Volume of the unit cell
-   real(wp), intent(in) :: volume
-
-   !> Tolerance for difference in real and reciprocal decay
-   real(wp), intent(in) :: tolerance
-
-   !> Optimal Ewald splitting parameter
-   real(wp), intent(out) :: alpha
-
-   real(wp), parameter :: alpha0 = 1.0e-8_wp
-   integer, parameter :: niter = 30
-
-   real(wp) :: alpl, alpr, rlen, dlen, diff
-   integer :: ibs, stat
-
-   rlen = sqrt(minval(sum(rec_lat(:, :)**2, dim=1)))
-   dlen = sqrt(minval(sum(lattice(:, :)**2, dim=1)))
-
-   stat = 0
-   alpha = alpha0
-   diff = rec_dir_diff(alpha, rlen, dlen, volume)
-   do while (diff < -tolerance .and. alpha <= huge(1.0_wp))
-      alpha = 2.0_wp * alpha
-      diff = rec_dir_diff(alpha, rlen, dlen, volume)
-   end do
-   if (alpha > huge(1.0_wp)) then
-      stat = 1
-   else if (alpha <= alpha0) then
-      stat = 2
-   end if
-
-   if (stat == 0) then
-      alpl = 0.5_wp * alpha
-      do while (diff < tolerance .and. alpha <= huge(1.0_wp))
-         alpha = 2.0_wp * alpha
-         diff = rec_dir_diff(alpha, rlen, dlen, volume)
-      end do
-      if (alpha > huge(1.0_wp)) then
-         stat = 3
-      end if
-   end if
-
-   if (stat == 0) then
-      alpr = alpha
-      alpha = (alpl + alpr) * 0.5_wp
-      ibs = 0
-      diff = rec_dir_diff(alpha, rlen, dlen, volume)
-      do while (abs(diff) > tolerance .and. ibs <= niter)
-         if (diff < 0.0_wp) then
-            alpl = alpha
-         else
-            alpr = alpha
-         end if
-         alpha = (alpl + alpr) * 0.5_wp
-         diff = rec_dir_diff(alpha, rlen, dlen, volume)
-         ibs = ibs + 1
-      end do
-      if (ibs > niter) then
-         stat = 4
-      end if
-   end if
-
-   if (stat /= 0) then
-      alpha = 0.25_wp
-   end if
-
-end subroutine search_alpha
-
-
-!> Difference between reciprocal-space and real-space Ewald step decay
-pure function rec_dir_diff(alpha, rlen, dlen, volume) result(diff)
-
-   !> Ewald splitting parameter
+   !> Parameter of the Ewald summation
    real(wp), intent(in) :: alpha
 
-   !> Shortest reciprocal vector norm
-   real(wp), intent(in) :: rlen
-
-   !> Shortest real-space lattice vector norm
-   real(wp), intent(in) :: dlen
-
-   !> Unit cell volume
+   !> Volume of the real space unit cell
    real(wp), intent(in) :: volume
 
-   !> Decay-rate difference
-   real(wp) :: diff
+   !> Tolerance for a single term
+   real(wp), intent(in) :: conv
 
-   diff = (get_rec_term_3d(4.0_wp * rlen, alpha, volume) &
-      & - get_rec_term_3d(5.0_wp * rlen, alpha, volume)) &
-      & - (get_dir_term(2.0_wp * dlen, alpha) - get_dir_term(3.0_wp * dlen, alpha))
+   !> Cutoff for the vector length
+   real(wp) :: cutoff
 
-end function rec_dir_diff
+   integer, parameter :: niter = 30
+   real(wp) :: xl, xr, x
+   integer :: iter
+
+   xr = eps
+   do while (get_term(xr, alpha, volume) > conv .and. xr <= huge(1.0_wp))
+      xr = 2.0_wp * xr
+   end do
+   xl = 0.5_wp * xr
+
+   do iter = 1, niter
+      if (xr - xl <= eps * xr) exit
+      x = 0.5_wp * (xl + xr)
+      if (get_term(x, alpha, volume) > conv) then
+         xl = x
+      else
+         xr = x
+      end if
+   end do
+   cutoff = xr
+
+end function search_cutoff
 
 
-!> Maximum real-space Ewald potential term at distance rr
-pure function get_dir_term(rr, alpha) result(dval)
+!> Returns the max. value of a term in the real space
+pure function get_dir_term(rr, alpha, vol) result(dval)
 
-   !> Real-space vector norm
+   !> Length of the real space vector
    real(wp), intent(in) :: rr
 
-   !> Ewald splitting parameter
+   !> Parameter of the Ewald summation
    real(wp), intent(in) :: alpha
 
-   !> Real-space term
+   !> Volume of the real space unit cell (unused)
+   real(wp), intent(in) :: vol
+
+   !> Real space term
    real(wp) :: dval
 
    dval = erfc(alpha * rr) / rr
