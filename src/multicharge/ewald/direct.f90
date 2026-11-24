@@ -21,6 +21,7 @@ module multicharge_ewald_direct
    use mctc_env, only : wp
    use mctc_io_constants, only : pi
    use mctc_io_math, only : outerprod
+   use multicharge_model_hessian, only : coulomb_kernel, radial_hessian
    implicit none
    private
 
@@ -137,9 +138,8 @@ pure subroutine get_hess_dir(rij, gam, alp, trans, dbox)
    !> Direct-space Hessian block
    real(wp), intent(out) :: dbox(3, 3)
 
-   integer :: itr, ic
-   real(wp) :: vec(3), u(3), tbox(3, 3)
-   real(wp) :: r1, inv_r, ex_g, ex_a, val_g, val_a, dr_g, dr_a, dr, drr, d1
+   integer :: itr
+   real(wp) :: vec(3), r1, val, dr_g, drr_g, dr_a, drr_a
 
    dbox = 0.0_wp
 
@@ -148,23 +148,9 @@ pure subroutine get_hess_dir(rij, gam, alp, trans, dbox)
       r1 = norm2(vec)
       if (r1 < eps) cycle
 
-      inv_r = 1.0_wp / r1
-      ex_g = (2.0_wp / sqrtpi) * exp(-(gam * r1)**2)
-      ex_a = (2.0_wp / sqrtpi) * exp(-(alp * r1)**2)
-      val_g = erf(gam * r1) * inv_r
-      val_a = erf(alp * r1) * inv_r
-      dr_g = (gam * ex_g - val_g) * inv_r
-      dr_a = (alp * ex_a - val_a) * inv_r
-      dr = dr_g - dr_a
-      drr = -2.0_wp * (gam**3 * ex_g - alp**3 * ex_a + dr * inv_r)
-
-      d1 = dr * inv_r
-      u = vec * inv_r
-      tbox = (drr - d1) * outerprod(u, u)
-      do ic = 1, 3
-         tbox(ic, ic) = tbox(ic, ic) + d1
-      end do
-      dbox = dbox + tbox
+      call coulomb_kernel(r1, gam, val, dr_g, drr_g)
+      call coulomb_kernel(r1, alp, val, dr_a, drr_a)
+      dbox = dbox + radial_hessian(vec, dr_g - dr_a, drr_g - drr_a)
    end do
 
 end subroutine get_hess_dir

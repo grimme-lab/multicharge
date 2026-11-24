@@ -22,6 +22,7 @@ module multicharge_ewald_cutoff
    use mctc_env, only : error_type, fatal_error, wp
    use mctc_io_constants, only : pi
    use mctc_io_math, only : matdet_3x3, matinv_3x3
+   use multicharge_ewald_pbc3d, only : get_rec_term_3d
    implicit none
    private
 
@@ -201,8 +202,8 @@ pure function rec_dir_diff(alpha, rlen, dlen, volume) result(diff)
    !> Decay-rate difference
    real(wp) :: diff
 
-   diff = (get_rec_term(4.0_wp * rlen, alpha, volume) &
-      & - get_rec_term(5.0_wp * rlen, alpha, volume)) &
+   diff = (get_rec_term_3d(4.0_wp * rlen, alpha, volume) &
+      & - get_rec_term_3d(5.0_wp * rlen, alpha, volume)) &
       & - (get_dir_term(2.0_wp * dlen, alpha) - get_dir_term(3.0_wp * dlen, alpha))
 
 end function rec_dir_diff
@@ -223,26 +224,6 @@ pure function get_dir_term(rr, alpha) result(dval)
    dval = erfc(alpha * rr) / rr
 
 end function get_dir_term
-
-
-!> Maximum 3D reciprocal-space Ewald potential term at norm gg
-pure function get_rec_term(gg, alpha, vol) result(rval)
-
-   !> Reciprocal-space vector norm
-   real(wp), intent(in) :: gg
-
-   !> Ewald splitting parameter
-   real(wp), intent(in) :: alpha
-
-   !> Unit cell volume
-   real(wp), intent(in) :: vol
-
-   !> Reciprocal term
-   real(wp) :: rval
-
-   rval = 4.0_wp * pi * exp(-0.25_wp * gg * gg / (alpha * alpha)) / (vol * gg * gg)
-
-end function get_rec_term
 
 
 end module multicharge_ewald_cutoff

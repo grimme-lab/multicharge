@@ -25,6 +25,7 @@ module multicharge_ewald_pbc3d
    private
 
    public :: get_rec_weights, get_amat_rec_3d, get_damat_rec_3d, get_hess_rec_3d
+   public :: get_rec_term_3d
 
    real(wp), parameter :: eps = sqrt(epsilon(0.0_wp))
    real(wp), parameter :: unity(3, 3) = reshape([ &
@@ -174,6 +175,26 @@ pure subroutine get_hess_rec_3d(rij, trans, hess, rbox)
    end do
 
 end subroutine get_hess_rec_3d
+
+
+!> Maximum 3D reciprocal-space Ewald potential term at norm gg
+pure function get_rec_term_3d(gg, alpha, vol) result(rval)
+
+   !> Reciprocal-space vector norm
+   real(wp), intent(in) :: gg
+
+   !> Ewald splitting parameter
+   real(wp), intent(in) :: alpha
+
+   !> Unit cell volume
+   real(wp), intent(in) :: vol
+
+   !> Reciprocal term
+   real(wp) :: rval
+
+   rval = 4.0_wp * pi * exp(-0.25_wp * gg * gg / (alpha * alpha)) / (vol * gg * gg)
+
+end function get_rec_term_3d
 
 
 end module multicharge_ewald_pbc3d
