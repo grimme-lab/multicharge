@@ -19,59 +19,16 @@
 !> Small kernels shared by the charge-response implementations.
 module multicharge_model_hessian
    use mctc_env, only: wp
-   use mctc_io_constants, only: pi
    use mctc_io_math, only: outerprod
    use multicharge_blas, only: gemm
    implicit none
    private
 
-   public :: coulomb_kernel, radial_hessian, add_pair_hessian, add_pair_block, &
-      & add_chain_hessian, add_symmetric_product
+   public :: radial_hessian, add_pair_hessian, add_pair_block, add_chain_hessian, &
+      & add_symmetric_product
 
 
 contains
-
-
-!> Gaussian Coulomb kernel and partial derivatives in distance and exponent
-pure subroutine coulomb_kernel(r, gam, val, dr, drr, dg, drg, dgg)
-
-   !> Interatomic distance
-   real(wp), intent(in) :: r
-
-   !> Effective Gaussian charge width parameter
-   real(wp), intent(in) :: gam
-
-   !> Kernel value
-   real(wp), intent(out) :: val
-
-   !> First derivative w.r.t. distance
-   real(wp), intent(out) :: dr
-
-   !> Second derivative w.r.t. distance
-   real(wp), intent(out) :: drr
-
-   !> First derivative w.r.t. width parameter
-   real(wp), intent(out), optional :: dg
-
-   !> Mixed second derivative w.r.t. distance and width parameter
-   real(wp), intent(out), optional :: drg
-
-   !> Second derivative w.r.t. width parameter
-   real(wp), intent(out), optional :: dgg
-
-   real(wp) :: inv_r, erfval, ex
-
-   inv_r = 1.0_wp / r
-   erfval = erf(gam * r)
-   ex = (2.0_wp / sqrt(pi)) * exp(-(gam * r)**2)
-   val = erfval * inv_r
-   dr = (gam * ex - val) * inv_r
-   drr = -2.0_wp * (gam**3 * ex + dr * inv_r)
-   if (present(dg)) dg = ex
-   if (present(drg)) drg = -2.0_wp * gam**2 * r * ex
-   if (present(dgg)) dgg = -2.0_wp * gam * r**2 * ex
-
-end subroutine coulomb_kernel
 
 
 !> Cartesian curvature of a radial kernel

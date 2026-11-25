@@ -19,25 +19,19 @@
 !> @file multicharge/ewald.f90
 !> Provides the periodic Ewald summation interface
 
-!> Ewald summation for periodic Gaussian charges.
-!>
-!> Provides the splitting parameter, lattice translations, and per-vector
-!> direct and reciprocal-space kernels. Charge models assemble their own
-!> interaction matrices from these building blocks.
+!> Ewald splitting parameter, lattice translations and reciprocal-space kernels
 module multicharge_ewald
    use mctc_env, only : error_type, wp
    use mctc_io, only : structure_type
    use mctc_io_math, only : matinv_3x3
    use mctc_wignerseitz, only : wignerseitz_cell
    use multicharge_ewald_cutoff, only : get_alpha, get_ewald_trans
-   use multicharge_ewald_direct, only : get_amat_dir, get_damat_dir, get_hess_dir
    use multicharge_ewald_pbc3d, only : get_rec_weights, get_amat_rec_3d, &
       & get_damat_rec_3d, get_hess_rec_3d
    implicit none
    private
 
    public :: get_alpha, get_ewald_setup
-   public :: get_amat_dir, get_damat_dir, get_hess_dir
    public :: get_rec_weights, get_amat_rec_3d, get_damat_rec_3d, get_hess_rec_3d
 
 

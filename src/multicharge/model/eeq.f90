@@ -26,16 +26,14 @@ module multicharge_model_eeq
    use mctc_env, only : error_type, fatal_error, wp
    use mctc_io, only : structure_type
    use mctc_io_constants, only : pi
-   use mctc_io_math, only : matdet_3x3
+   use mctc_io_math, only : matdet_3x3, outerprod
    use mctc_ncoord, only : new_ncoord, cn_count
    use mctc_wignerseitz, only : wignerseitz_cell, new_wignerseitz_cell
    use multicharge_blas, only : gemm
-   use multicharge_ewald, only : get_alpha, get_ewald_setup, get_amat_dir, &
-      & get_damat_dir, get_hess_dir, get_rec_weights, get_amat_rec_3d, &
-      & get_damat_rec_3d, get_hess_rec_3d
+   use multicharge_ewald, only : get_alpha, get_ewald_setup, get_rec_weights, &
+      & get_amat_rec_3d, get_damat_rec_3d, get_hess_rec_3d
    use multicharge_model_cache, only : cache_container, model_cache
-   use multicharge_model_hessian, only : coulomb_kernel, add_pair_hessian, &
-      & add_pair_block
+   use multicharge_model_hessian, only : radial_hessian, add_pair_hessian, add_pair_block
    use multicharge_model_type, only : mchrg_model_type
    implicit none
    private
@@ -85,6 +83,9 @@ module multicharge_model_eeq
 
    real(wp), parameter :: sqrtpi = sqrt(pi)
    real(wp), parameter :: sqrt2pi = sqrt(2.0_wp / pi)
+
+   !> Threshold for skipping the self-image in direct-space lattice sums
+   real(wp), parameter :: eps = sqrt(epsilon(0.0_wp))
 
    !> Regularization of the square root CN dependence of the electronegativity
    real(wp), parameter :: reg = 1.0e-14_wp
@@ -430,6 +431,41 @@ subroutine get_amat_3d(self, mol, wsc, alpha, dtrans, rtrans, amat)
 end subroutine get_amat_3d
 
 
+!> Direct-space Ewald contribution to the Coulomb matrix
+pure subroutine get_amat_dir(rij, gam, alp, trans, amat)
+
+   !> Interatomic displacement vector
+   real(wp), intent(in) :: rij(3)
+
+   !> Effective Gaussian charge width parameter
+   real(wp), intent(in) :: gam
+
+   !> Ewald splitting parameter
+   real(wp), intent(in) :: alp
+
+   !> Direct-space lattice translation vectors
+   real(wp), intent(in) :: trans(:, :)
+
+   !> Direct-space Coulomb matrix element contribution
+   real(wp), intent(out) :: amat
+
+   integer :: itr
+   real(wp) :: vec(3), r1, tmp
+
+   amat = 0.0_wp
+
+   do itr = 1, size(trans, 2)
+      vec(:) = rij + trans(:, itr)
+      r1 = norm2(vec)
+      if (r1 < eps) cycle
+
+      tmp = (erf(gam * r1) - erf(alp * r1)) / r1
+      amat = amat + tmp
+   end do
+
+end subroutine get_amat_dir
+
+
 !> Evaluate the derivatives of the Coulomb matrix contracted with a charge vector
 subroutine get_coulomb_derivs(self, mol, cache, qvec, dadr, dadL, atrace)
 
@@ -631,6 +667,57 @@ subroutine get_damat_3d(self, mol, wsc, alpha, dtrans, rtrans, qvec, dadr, dadL,
 end subroutine get_damat_3d
 
 
+!> Direct-space Ewald derivatives of the Coulomb matrix
+pure subroutine get_damat_dir(rij, gam, alp, trans, dg, ds)
+
+   !> Interatomic displacement vector
+   real(wp), intent(in) :: rij(3)
+
+   !> Effective Gaussian charge width parameter
+   real(wp), intent(in) :: gam
+
+   !> Ewald splitting parameter
+   real(wp), intent(in) :: alp
+
+   !> Direct-space lattice translation vectors
+   real(wp), intent(in) :: trans(:, :)
+
+   !> Position derivative contribution
+   real(wp), intent(out) :: dg(3)
+
+   !> Strain derivative contribution
+   real(wp), intent(out) :: ds(3, 3)
+
+   integer :: itr
+   real(wp) :: vec(3), r1, r2, inv_r, inv_r2, gtmp, atmp, dtmp
+   real(wp) :: gam2, alp2, fac_g, fac_a
+
+   dg(:) = 0.0_wp
+   ds(:, :) = 0.0_wp
+
+   gam2 = gam * gam
+   alp2 = alp * alp
+   fac_g = (2.0_wp / sqrtpi) * gam
+   fac_a = (2.0_wp / sqrtpi) * alp
+
+   do itr = 1, size(trans, 2)
+      vec(:) = rij + trans(:, itr)
+      r1 = norm2(vec)
+      if (r1 < eps) cycle
+
+      r2 = r1 * r1
+      inv_r = 1.0_wp / r1
+      inv_r2 = inv_r * inv_r
+      gtmp = fac_g * exp(-r2 * gam2) - erf(r1 * gam) * inv_r
+      atmp = erf(r1 * alp) * inv_r - fac_a * exp(-r2 * alp2)
+      dtmp = (gtmp + atmp) * inv_r2
+      dg(:) = dg + dtmp * vec
+      ds(:, :) = ds + dtmp * outerprod(vec, vec)
+   end do
+
+end subroutine get_damat_dir
+
+
 !> u^T(x_ab - A_ab q), with u and q held fixed
 subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
 
@@ -826,6 +913,72 @@ subroutine add_coulomb_hessian_3d(self, mol, wsc, alpha, dtrans, rtrans, qvec, a
    !$omp end parallel do
 
 end subroutine add_coulomb_hessian_3d
+
+
+!> Direct-space Ewald pair Hessian block
+pure subroutine get_hess_dir(rij, gam, alp, trans, dbox)
+
+   !> Interatomic displacement vector
+   real(wp), intent(in) :: rij(3)
+
+   !> Effective Gaussian charge width parameter
+   real(wp), intent(in) :: gam
+
+   !> Ewald splitting parameter
+   real(wp), intent(in) :: alp
+
+   !> Direct-space lattice translation vectors
+   real(wp), intent(in) :: trans(:, :)
+
+   !> Direct-space Hessian block
+   real(wp), intent(out) :: dbox(3, 3)
+
+   integer :: itr
+   real(wp) :: vec(3), r1, val, dr_g, drr_g, dr_a, drr_a
+
+   dbox = 0.0_wp
+
+   do itr = 1, size(trans, 2)
+      vec = rij + trans(:, itr)
+      r1 = norm2(vec)
+      if (r1 < eps) cycle
+
+      call coulomb_kernel(r1, gam, val, dr_g, drr_g)
+      call coulomb_kernel(r1, alp, val, dr_a, drr_a)
+      dbox = dbox + radial_hessian(vec, dr_g - dr_a, drr_g - drr_a)
+   end do
+
+end subroutine get_hess_dir
+
+
+!> Gaussian Coulomb kernel and its radial derivatives
+pure subroutine coulomb_kernel(r, gam, val, dr, drr)
+
+   !> Interatomic distance
+   real(wp), intent(in) :: r
+
+   !> Effective Gaussian charge width parameter
+   real(wp), intent(in) :: gam
+
+   !> Kernel value
+   real(wp), intent(out) :: val
+
+   !> First derivative w.r.t. distance
+   real(wp), intent(out) :: dr
+
+   !> Second derivative w.r.t. distance
+   real(wp), intent(out) :: drr
+
+   real(wp) :: inv_r, erfval, ex
+
+   inv_r = 1.0_wp / r
+   erfval = erf(gam * r)
+   ex = (2.0_wp / sqrtpi) * exp(-(gam * r)**2)
+   val = erfval * inv_r
+   dr = (gam * ex - val) * inv_r
+   drr = -2.0_wp * (gam**3 * ex + dr * inv_r)
+
+end subroutine coulomb_kernel
 
 
 !> Inspect cache and reallocate it in case of type mismatch

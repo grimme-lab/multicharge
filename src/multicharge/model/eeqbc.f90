@@ -31,7 +31,7 @@ module multicharge_model_eeqbc
    use mctc_wignerseitz, only: wignerseitz_cell, new_wignerseitz_cell
    use multicharge_blas, only: gemv, gemm
    use multicharge_model_cache, only: cache_container, model_cache
-   use multicharge_model_hessian, only: coulomb_kernel, add_pair_hessian, add_chain_hessian
+   use multicharge_model_hessian, only: add_pair_hessian, add_chain_hessian
    use multicharge_model_type, only: mchrg_model_type, get_dir_trans
    implicit none
    private
@@ -987,7 +987,7 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
          do img = 1, wsc%nimg(jat, iat)
             vec = rij + wsc%trans(:, wsc%tridx(img, jat, iat))
 
-            call get_damat_dir(vec, dtrans, capi, capj, rvdw, self%kbc, gam, dG, dS, dgam)
+            call get_dgam_dir(vec, dtrans, capi, capj, rvdw, self%kbc, gam, dG, dS, dgam)
             dG = dG * wsw
             dS = dS * wsw
             dgam = dgam * wsw
@@ -1037,7 +1037,7 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
       wsw = 1.0_wp / real(wsc%nimg(iat, iat), wp)
       do img = 1, wsc%nimg(iat, iat)
          vec = wsc%trans(:, wsc%tridx(img, iat, iat))
-         call get_damat_dir(vec, dtrans, capi, capi, rvdw, self%kbc, gam, dG, dS, dgam)
+         call get_dgam_dir(vec, dtrans, capi, capi, rvdw, self%kbc, gam, dG, dS, dgam)
          dgam = dgam * wsw
 
          ! Explicit derivative
@@ -1079,7 +1079,7 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
 
 end subroutine get_damat_3d
 
-subroutine get_damat_dir(rij, trans, capi, capj, rvdw, kbc, gam, dG, dS, dgam)
+subroutine get_dgam_dir(rij, trans, capi, capj, rvdw, kbc, gam, dG, dS, dgam)
    real(wp), intent(in) :: rij(3)
    real(wp), intent(in) :: trans(:, :)
    real(wp), intent(in) :: gam
@@ -1109,7 +1109,7 @@ subroutine get_damat_dir(rij, trans, capi, capj, rvdw, kbc, gam, dG, dS, dgam)
       dgam = dgam + cmat * 2.0_wp * exp(-gam2 * r2) / sqrtpi
    end do
 
-end subroutine get_damat_dir
+end subroutine get_dgam_dir
 
 subroutine get_damat_dc_dir(rij, trans, capi, capj, rvdw, kbc, gam, dG, dS)
    real(wp), intent(in) :: rij(3)
@@ -1499,5 +1499,46 @@ subroutine view(cache, ptr)
       ptr => target
    end select
 end subroutine view
+
+!> Gaussian Coulomb kernel and partial derivatives in distance and exponent
+pure subroutine coulomb_kernel(r, gam, val, dr, drr, dg, drg, dgg)
+
+   !> Interatomic distance
+   real(wp), intent(in) :: r
+
+   !> Effective Gaussian charge width parameter
+   real(wp), intent(in) :: gam
+
+   !> Kernel value
+   real(wp), intent(out) :: val
+
+   !> First derivative w.r.t. distance
+   real(wp), intent(out) :: dr
+
+   !> Second derivative w.r.t. distance
+   real(wp), intent(out) :: drr
+
+   !> First derivative w.r.t. width parameter
+   real(wp), intent(out), optional :: dg
+
+   !> Mixed second derivative w.r.t. distance and width parameter
+   real(wp), intent(out), optional :: drg
+
+   !> Second derivative w.r.t. width parameter
+   real(wp), intent(out), optional :: dgg
+
+   real(wp) :: inv_r, erfval, ex
+
+   inv_r = 1.0_wp / r
+   erfval = erf(gam * r)
+   ex = (2.0_wp / sqrt(pi)) * exp(-(gam * r)**2)
+   val = erfval * inv_r
+   dr = (gam * ex - val) * inv_r
+   drr = -2.0_wp * (gam**3 * ex + dr * inv_r)
+   if (present(dg)) dg = ex
+   if (present(drg)) drg = -2.0_wp * gam**2 * r * ex
+   if (present(dgg)) dgg = -2.0_wp * gam * r**2 * ex
+
+end subroutine coulomb_kernel
 
 end module multicharge_model_eeqbc
