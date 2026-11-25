@@ -26,12 +26,13 @@ module multicharge_model_eeq
    use mctc_env, only : error_type, fatal_error, wp
    use mctc_io, only : structure_type
    use mctc_io_constants, only : pi
+   use mctc_io_math, only : matdet_3x3
    use mctc_ncoord, only : new_ncoord, cn_count
    use mctc_wignerseitz, only : wignerseitz_cell, new_wignerseitz_cell
    use multicharge_blas, only : gemm
    use multicharge_ewald, only : get_alpha, get_ewald_setup, get_amat_dir, &
-      & get_damat_dir, get_hess_dir, get_amat_rec_3d, get_damat_rec_3d, &
-      & get_hess_rec_3d
+      & get_damat_dir, get_hess_dir, get_rec_weights, get_amat_rec_3d, &
+      & get_damat_rec_3d, get_hess_rec_3d
    use multicharge_model_cache, only : cache_container, model_cache
    use multicharge_model_hessian, only : coulomb_kernel, add_pair_hessian, &
       & add_pair_block
@@ -47,6 +48,12 @@ module multicharge_model_eeq
 
       !> Ewald splitting parameter
       real(wp) :: alpha = 0.0_wp
+
+      !> Direct-space lattice translations of the Ewald sum (3, ndir)
+      real(wp), allocatable :: dtrans(:, :)
+
+      !> Half-space reciprocal lattice vectors of the Ewald sum (3, nrec)
+      real(wp), allocatable :: rtrans(:, :)
 
    end type eeq_cache
 
@@ -184,6 +191,10 @@ subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlo
 
       call get_alpha(mol%lattice, ptr%alpha, error)
       if (allocated(error)) return
+
+      call get_ewald_setup(mol, ptr%wsc, ptr%alpha, get_gam_min(self), ptr%dtrans, &
+         & ptr%rtrans, error)
+      if (allocated(error)) return
    end if
 
 end subroutine update
@@ -283,7 +294,7 @@ subroutine get_coulomb_matrix(self, mol, cache, amat)
    call view(cache, ptr)
 
    if (any(mol%periodic)) then
-      call get_amat_3d(self, mol, ptr%wsc, ptr%alpha, amat)
+      call get_amat_3d(self, mol, ptr%wsc, ptr%alpha, ptr%dtrans, ptr%rtrans, amat)
    else
       call get_amat_0d(self, mol, amat)
    end if
@@ -352,7 +363,7 @@ end function get_gam_min
 
 
 !> Coulomb matrix of Gaussian charges for a 3D periodic structure (Ewald sum)
-subroutine get_amat_3d(self, mol, wsc, alpha, amat)
+subroutine get_amat_3d(self, mol, wsc, alpha, dtrans, rtrans, amat)
 
    !> Electronegativity equilibration model
    class(eeq_model), intent(in) :: self
@@ -366,15 +377,20 @@ subroutine get_amat_3d(self, mol, wsc, alpha, amat)
    !> Ewald splitting parameter
    real(wp), intent(in) :: alpha
 
+   !> Direct-space lattice translations (3, ndir)
+   real(wp), intent(in) :: dtrans(:, :)
+
+   !> Half-space reciprocal lattice vectors (3, nrec)
+   real(wp), intent(in) :: rtrans(:, :)
+
    !> Coulomb matrix, bordered by the charge constraint
    real(wp), intent(out) :: amat(:, :)
 
    integer :: iat, jat, izp, jzp, img, ipair, npair
    real(wp) :: rij(3), vec(3), gam, wsw, dtmp, rtmp, tmp
-   real(wp), allocatable :: dtrans(:, :), rtrans(:, :), rec_weight(:)
+   real(wp), allocatable :: rec_weight(:)
 
-   call get_ewald_setup(mol, wsc, alpha, get_gam_min(self), dtrans, rtrans, &
-      & weight=rec_weight)
+   call get_rec_weights(abs(matdet_3x3(mol%lattice)), alpha, rtrans, weight=rec_weight)
 
    ! Every matrix element belongs to one pair; no thread-local matrix is needed.
    npair = mol%nat * (mol%nat + 1) / 2
@@ -443,7 +459,8 @@ subroutine get_coulomb_derivs(self, mol, cache, qvec, dadr, dadL, atrace)
    call view(cache, ptr)
 
    if (any(mol%periodic)) then
-      call get_damat_3d(self, mol, ptr%wsc, ptr%alpha, qvec, dadr, dadL, atrace)
+      call get_damat_3d(self, mol, ptr%wsc, ptr%alpha, ptr%dtrans, ptr%rtrans, &
+         & qvec, dadr, dadL, atrace)
    else
       call get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
    end if
@@ -518,7 +535,8 @@ end subroutine get_damat_0d
 
 
 !> Coulomb matrix derivatives for a 3D periodic structure (Ewald sum)
-subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
+subroutine get_damat_3d(self, mol, wsc, alpha, dtrans, rtrans, qvec, dadr, dadL, &
+      & atrace)
 
    !> Electronegativity equilibration model
    class(eeq_model), intent(in) :: self
@@ -531,6 +549,12 @@ subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
 
    !> Ewald splitting parameter
    real(wp), intent(in) :: alpha
+
+   !> Direct-space lattice translations (3, ndir)
+   real(wp), intent(in) :: dtrans(:, :)
+
+   !> Half-space reciprocal lattice vectors (3, nrec)
+   real(wp), intent(in) :: rtrans(:, :)
 
    !> Partial charge vector
    real(wp), intent(in) :: qvec(:)
@@ -547,10 +571,9 @@ subroutine get_damat_3d(self, mol, wsc, alpha, qvec, dadr, dadL, atrace)
    integer :: iat, jat, izp, jzp, img, ipair, npair
    real(wp) :: gam, wsw, rij(3), vec(3)
    real(wp) :: dg(3), ds(3, 3), dgd(3), dsd(3, 3), dgr(3), dsr(3, 3)
-   real(wp), allocatable :: dtrans(:, :), rtrans(:, :)
    real(wp), allocatable :: rec_weight(:), rec_strain(:, :, :)
 
-   call get_ewald_setup(mol, wsc, alpha, get_gam_min(self), dtrans, rtrans, &
+   call get_rec_weights(abs(matdet_3x3(mol%lattice)), alpha, rtrans, &
       & weight=rec_weight, strain=rec_strain)
 
    atrace(:, :) = 0.0_wp
@@ -662,8 +685,8 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
    ! Coulomb contribution, diagonal blocks are accumulated separately
    allocate(diagonal(3, 3, nat), source=0.0_wp)
    if (any(mol%periodic)) then
-      call add_coulomb_hessian_3d(self, mol, ptr%wsc, ptr%alpha, cache%qvec, adj, &
-         & hessian, diagonal)
+      call add_coulomb_hessian_3d(self, mol, ptr%wsc, ptr%alpha, ptr%dtrans, &
+         & ptr%rtrans, cache%qvec, adj, hessian, diagonal)
    else
       call add_coulomb_hessian_0d(self, mol, cache%qvec, adj, hessian, diagonal)
    end if
@@ -732,7 +755,8 @@ end subroutine add_coulomb_hessian_0d
 
 
 !> Coulomb Hessian blocks for a 3D periodic structure (Ewald sum)
-subroutine add_coulomb_hessian_3d(self, mol, wsc, alpha, qvec, adj, hessian, diagonal)
+subroutine add_coulomb_hessian_3d(self, mol, wsc, alpha, dtrans, rtrans, qvec, adj, &
+      & hessian, diagonal)
 
    !> Electronegativity equilibration model
    class(eeq_model), intent(in) :: self
@@ -745,6 +769,12 @@ subroutine add_coulomb_hessian_3d(self, mol, wsc, alpha, qvec, adj, hessian, dia
 
    !> Ewald splitting parameter
    real(wp), intent(in) :: alpha
+
+   !> Direct-space lattice translations (3, ndir)
+   real(wp), intent(in) :: dtrans(:, :)
+
+   !> Half-space reciprocal lattice vectors (3, nrec)
+   real(wp), intent(in) :: rtrans(:, :)
 
    !> Partial charge vector
    real(wp), intent(in) :: qvec(:)
@@ -760,10 +790,9 @@ subroutine add_coulomb_hessian_3d(self, mol, wsc, alpha, qvec, adj, hessian, dia
 
    integer :: iat, jat, izp, jzp, img, ipair, npair
    real(wp) :: rij(3), vec(3), box(3, 3), dbox(3, 3), rbox(3, 3), gam, weight, wsw
-   real(wp), allocatable :: dtrans(:, :), rtrans(:, :), rec_hess(:, :, :)
+   real(wp), allocatable :: rec_hess(:, :, :)
 
-   call get_ewald_setup(mol, wsc, alpha, get_gam_min(self), dtrans, rtrans, &
-      & hess=rec_hess)
+   call get_rec_weights(abs(matdet_3x3(mol%lattice)), alpha, rtrans, hess=rec_hess)
 
    ! Each pair owns its off-diagonal blocks. Only the diagonal blocks are
    ! reduced, avoiding a full (3N, 3N) Hessian copy for every OpenMP thread.

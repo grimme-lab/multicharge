@@ -125,7 +125,8 @@ end function get_rec_cutoff
 
 
 !> Direct and half-space reciprocal translations within the single-term cutoffs
-pure subroutine get_ewald_trans(lattice, alpha, gam, smax, rmax, dtrans, rtrans)
+pure subroutine get_ewald_trans(lattice, alpha, gam, smax, rmax, dtrans, rtrans, &
+      & error)
 
    !> Lattice vectors
    real(wp), intent(in) :: lattice(:, :)
@@ -148,10 +149,12 @@ pure subroutine get_ewald_trans(lattice, alpha, gam, smax, rmax, dtrans, rtrans)
    !> Reciprocal lattice translations in a half space
    real(wp), allocatable, intent(out) :: rtrans(:, :)
 
+   !> Error handling
+   type(error_type), allocatable, intent(out) :: error
+
    integer :: rep(3), nrec, itr, ix, iy, iz, jy, jz
-   real(wp) :: inv_lat(3, 3), rec_lat(3, 3), rcut, gcut, vec(3)
+   real(wp) :: inv_lat(3, 3), rec_lat(3, 3), rcut, gcut, vec(3), extent(3)
    real(wp), allocatable :: tmp(:, :)
-   type(error_type), allocatable :: error
 
    ! The real-space kernel decays with the smaller of alpha and gam
    rcut = get_dir_cutoff(min(alpha, gam), term_tol)
@@ -159,15 +162,28 @@ pure subroutine get_ewald_trans(lattice, alpha, gam, smax, rmax, dtrans, rtrans)
 
    ! Rows of the inverse lattice have the length of one over the plane spacing
    inv_lat = matinv_3x3(lattice)
-   rep(:) = floor(rcut * norm2(inv_lat, dim=2) + smax)
+   extent(:) = rcut * norm2(inv_lat, dim=2) + smax
+   if (too_many_points(extent)) then
+      call fatal_error(error, "Too many real-space translations for the Ewald sum, "//&
+         & "lattice is likely degenerate")
+      return
+   end if
+   rep(:) = floor(extent)
    call get_lattice_points(lattice, rep, .true., tmp, error)
+   if (allocated(error)) return
    dtrans = tmp(:, pack([(itr, itr = 1, size(tmp, 2))], &
       & norm2(tmp, dim=1) <= rcut + rmax))
    deallocate(tmp)
 
    ! Reciprocal vectors within the cutoff sphere, one of each +G/-G pair
    rec_lat = twopi * transpose(inv_lat)
-   rep(:) = floor(gcut * norm2(lattice, dim=1) / twopi)
+   extent(:) = gcut * norm2(lattice, dim=1) / twopi
+   if (too_many_points(extent)) then
+      call fatal_error(error, "Too many reciprocal-space vectors for the Ewald sum, "//&
+         & "lattice is likely degenerate")
+      return
+   end if
+   rep(:) = floor(extent)
    allocate(tmp(3, (product(2 * rep + 1) - 1) / 2))
    nrec = 0
    do ix = 0, rep(1)
@@ -190,6 +206,21 @@ pure subroutine get_ewald_trans(lattice, alpha, gam, smax, rmax, dtrans, rtrans)
    rtrans = tmp(:, :nrec)
 
 end subroutine get_ewald_trans
+
+
+!> Check whether a lattice box of the given extents exceeds the integer range
+pure function too_many_points(extent) result(too_many)
+
+   !> Number of repetitions along each lattice direction
+   real(wp), intent(in) :: extent(3)
+
+   !> Box with (2*extent + 1) points per direction cannot be indexed
+   logical :: too_many
+
+   ! Truncate in real arithmetic, floor would overflow for the extents rejected here
+   too_many = product(2.0_wp * aint(extent) + 1.0_wp) > real(huge(1), wp)
+
+end function too_many_points
 
 
 !> Find the cutoff for an Ewald term
