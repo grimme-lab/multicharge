@@ -125,8 +125,7 @@ end function get_rec_cutoff
 
 
 !> Direct and half-space reciprocal translations within the single-term cutoffs
-pure subroutine get_ewald_trans(lattice, alpha, gam, smax, rmax, dtrans, rtrans, &
-      & error)
+pure subroutine get_ewald_trans(lattice, alpha, gam, rmax, dtrans, rtrans, error)
 
    !> Lattice vectors
    real(wp), intent(in) :: lattice(:, :)
@@ -136,9 +135,6 @@ pure subroutine get_ewald_trans(lattice, alpha, gam, smax, rmax, dtrans, rtrans,
 
    !> Smallest Gaussian charge exponent of all pairs
    real(wp), intent(in) :: gam
-
-   !> Largest fractional components of the pair vectors
-   real(wp), intent(in) :: smax(3)
 
    !> Largest length of the pair vectors
    real(wp), intent(in) :: rmax
@@ -153,30 +149,22 @@ pure subroutine get_ewald_trans(lattice, alpha, gam, smax, rmax, dtrans, rtrans,
    type(error_type), allocatable, intent(out) :: error
 
    integer :: rep(3), nrec, itr, ix, iy, iz, jy, jz
-   real(wp) :: inv_lat(3, 3), rec_lat(3, 3), rcut, gcut, vec(3), extent(3)
+   real(wp) :: rec_lat(3, 3), rcut, gcut, vec(3), extent(3)
    real(wp), allocatable :: tmp(:, :)
 
    ! The real-space kernel decays with the smaller of alpha and gam
    rcut = get_dir_cutoff(min(alpha, gam), term_tol)
    gcut = get_rec_cutoff(alpha, abs(matdet_3x3(lattice)), term_tol)
 
-   ! Rows of the inverse lattice have the length of one over the plane spacing
-   inv_lat = matinv_3x3(lattice)
-   extent(:) = rcut * norm2(inv_lat, dim=2) + smax
-   if (too_many_points(extent)) then
-      call fatal_error(error, "Too many real-space translations for the Ewald sum, "//&
-         & "lattice is likely degenerate")
-      return
-   end if
-   rep(:) = floor(extent)
-   call get_lattice_points(lattice, rep, .true., tmp, error)
+   ! Pair vectors shift the real-space sum off the origin by at most rmax
+   call get_lattice_points([.true., .true., .true.], lattice, rcut + rmax, tmp, error)
    if (allocated(error)) return
    dtrans = tmp(:, pack([(itr, itr = 1, size(tmp, 2))], &
       & norm2(tmp, dim=1) <= rcut + rmax))
    deallocate(tmp)
 
    ! Reciprocal vectors within the cutoff sphere, one of each +G/-G pair
-   rec_lat = twopi * transpose(inv_lat)
+   rec_lat = twopi * transpose(matinv_3x3(lattice))
    extent(:) = gcut * norm2(lattice, dim=1) / twopi
    if (too_many_points(extent)) then
       call fatal_error(error, "Too many reciprocal-space vectors for the Ewald sum, "//&

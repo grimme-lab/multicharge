@@ -31,7 +31,7 @@ module multicharge_model_eeqbc
    use mctc_wignerseitz, only: wignerseitz_cell, new_wignerseitz_cell
    use multicharge_blas, only: gemv, gemm
    use multicharge_model_cache, only: cache_container, model_cache
-   use multicharge_model_hessian, only: add_pair_hessian, add_chain_hessian
+   use multicharge_model_hessian, only: coulomb_kernel, add_pair_hessian, add_chain_hessian
    use multicharge_model_type, only: mchrg_model_type, get_dir_trans
    implicit none
    private
@@ -1499,46 +1499,5 @@ subroutine view(cache, ptr)
       ptr => target
    end select
 end subroutine view
-
-!> Gaussian Coulomb kernel and partial derivatives in distance and exponent
-pure subroutine coulomb_kernel(r, gam, val, dr, drr, dg, drg, dgg)
-
-   !> Interatomic distance
-   real(wp), intent(in) :: r
-
-   !> Effective Gaussian charge width parameter
-   real(wp), intent(in) :: gam
-
-   !> Kernel value
-   real(wp), intent(out) :: val
-
-   !> First derivative w.r.t. distance
-   real(wp), intent(out) :: dr
-
-   !> Second derivative w.r.t. distance
-   real(wp), intent(out) :: drr
-
-   !> First derivative w.r.t. width parameter
-   real(wp), intent(out), optional :: dg
-
-   !> Mixed second derivative w.r.t. distance and width parameter
-   real(wp), intent(out), optional :: drg
-
-   !> Second derivative w.r.t. width parameter
-   real(wp), intent(out), optional :: dgg
-
-   real(wp) :: inv_r, erfval, ex
-
-   inv_r = 1.0_wp / r
-   erfval = erf(gam * r)
-   ex = (2.0_wp / sqrt(pi)) * exp(-(gam * r)**2)
-   val = erfval * inv_r
-   dr = (gam * ex - val) * inv_r
-   drr = -2.0_wp * (gam**3 * ex + dr * inv_r)
-   if (present(dg)) dg = ex
-   if (present(drg)) drg = -2.0_wp * gam**2 * r * ex
-   if (present(dgg)) dgg = -2.0_wp * gam * r**2 * ex
-
-end subroutine coulomb_kernel
 
 end module multicharge_model_eeqbc

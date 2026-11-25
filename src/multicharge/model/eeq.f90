@@ -22,19 +22,20 @@
 !> and S. Grimme, *J. Chem. Phys.*, **2019**, 150, 154122.
 !> DOI: [10.1063/1.5090222](https://dx.doi.org/10.1063/1.5090222)
 module multicharge_model_eeq
-   use mctc_cutoff, only : get_lattice_points
-   use mctc_env, only : error_type, fatal_error, wp
-   use mctc_io, only : structure_type
-   use mctc_io_constants, only : pi
-   use mctc_io_math, only : matdet_3x3, outerprod
-   use mctc_ncoord, only : new_ncoord, cn_count
-   use mctc_wignerseitz, only : wignerseitz_cell, new_wignerseitz_cell
-   use multicharge_blas, only : gemm
-   use multicharge_ewald, only : get_alpha, get_ewald_setup, get_rec_weights, &
+   use mctc_cutoff, only: get_lattice_points
+   use mctc_env, only: error_type, fatal_error, wp
+   use mctc_io, only: structure_type
+   use mctc_io_constants, only: pi
+   use mctc_io_math, only: matdet_3x3, outerprod
+   use mctc_ncoord, only: new_ncoord, cn_count
+   use mctc_wignerseitz, only: wignerseitz_cell, new_wignerseitz_cell
+   use multicharge_blas, only: gemm
+   use multicharge_ewald, only: get_alpha, get_ewald_setup, get_rec_weights, &
       & get_amat_rec_3d, get_damat_rec_3d, get_hess_rec_3d
-   use multicharge_model_cache, only : cache_container, model_cache
-   use multicharge_model_hessian, only : radial_hessian, add_pair_hessian, add_pair_block
-   use multicharge_model_type, only : mchrg_model_type
+   use multicharge_model_cache, only: cache_container, model_cache
+   use multicharge_model_hessian, only: coulomb_kernel, radial_hessian, &
+      & add_pair_hessian, add_pair_block
+   use multicharge_model_type, only: mchrg_model_type
    implicit none
    private
 
@@ -82,7 +83,7 @@ module multicharge_model_eeq
 
 
    real(wp), parameter :: sqrtpi = sqrt(pi)
-   real(wp), parameter :: sqrt2pi = sqrt(2.0_wp / pi)
+   real(wp), parameter :: sqrt2pi = sqrt(2.0_wp/pi)
 
    !> Threshold for skipping the self-image in direct-space lattice sums
    real(wp), parameter :: eps = sqrt(epsilon(0.0_wp))
@@ -266,8 +267,7 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
    !$omp private(iat, izp, tmp)
    do iat = 1, mol%nat
       izp = mol%id(iat)
-      tmp = self%kcnchi(izp) * (0.5_wp * ptr%cn(iat) + reg) &
-         & / (ptr%cn(iat) + reg)**1.5_wp
+      tmp = self%kcnchi(izp) * (0.5_wp*ptr%cn(iat) + reg) / (ptr%cn(iat) + reg)**1.5_wp
       dxdr(:, :, iat) = tmp * ptr%dcndr(:, :, iat)
       dxdL(:, :, iat) = tmp * ptr%dcndL(:, :, iat)
    end do
@@ -319,14 +319,14 @@ subroutine get_amat_0d(self, mol, amat)
    real(wp) :: vec(3), r2, gam, tmp
 
    ! Every matrix element belongs to one pair; no thread-local matrix is needed.
-   npair = mol%nat * (mol%nat + 1) / 2
+   npair = mol%nat*(mol%nat+1)/2
    !$omp parallel do default(none) schedule(runtime) &
    !$omp shared(amat, mol, self, npair) &
    !$omp private(iat, jat, izp, jzp, gam, vec, r2, tmp)
    do ipair = 1, npair
-      iat = int(0.5_wp * (sqrt(8.0_wp * real(ipair, wp) + 1.0_wp) - 1.0_wp))
-      if (iat * (iat + 1) / 2 < ipair) iat = iat + 1
-      jat = ipair - iat * (iat - 1) / 2
+      iat = int(0.5_wp*(sqrt(8.0_wp*real(ipair, wp)+1.0_wp)-1.0_wp))
+      if (iat*(iat+1)/2 < ipair) iat = iat+1
+      jat = ipair-iat*(iat-1)/2
       izp = mol%id(iat)
       if (iat == jat) then
          tmp = self%eta(izp) + sqrt2pi / self%rad(izp)
@@ -530,7 +530,7 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
 
    atrace(:, :) = 0.0_wp
    dadL(:, :, :) = 0.0_wp
-   npair = mol%nat * (mol%nat + 1) / 2
+   npair = mol%nat*(mol%nat+1)/2
    ! Pair derivatives have unique owners. Only atom-wise traces and strain
    ! derivatives need reduction, with O(N) storage per thread.
    !$omp parallel default(none) shared(dadr, mol, self, qvec, npair) &
@@ -543,9 +543,9 @@ subroutine get_damat_0d(self, mol, qvec, dadr, dadL, atrace)
    !$omp end do
    !$omp do schedule(runtime)
    do ipair = 1, npair
-      iat = int(0.5_wp * (sqrt(8.0_wp * real(ipair, wp) + 1.0_wp) - 1.0_wp))
-      if (iat * (iat + 1) / 2 < ipair) iat = iat + 1
-      jat = ipair - iat * (iat - 1) / 2
+      iat = int(0.5_wp*(sqrt(8.0_wp*real(ipair, wp)+1.0_wp)-1.0_wp))
+      if (iat*(iat+1)/2 < ipair) iat = iat+1
+      jat = ipair-iat*(iat-1)/2
       if (iat == jat) cycle
       izp = mol%id(iat)
       jzp = mol%id(jat)
@@ -949,36 +949,6 @@ pure subroutine get_hess_dir(rij, gam, alp, trans, dbox)
    end do
 
 end subroutine get_hess_dir
-
-
-!> Gaussian Coulomb kernel and its radial derivatives
-pure subroutine coulomb_kernel(r, gam, val, dr, drr)
-
-   !> Interatomic distance
-   real(wp), intent(in) :: r
-
-   !> Effective Gaussian charge width parameter
-   real(wp), intent(in) :: gam
-
-   !> Kernel value
-   real(wp), intent(out) :: val
-
-   !> First derivative w.r.t. distance
-   real(wp), intent(out) :: dr
-
-   !> Second derivative w.r.t. distance
-   real(wp), intent(out) :: drr
-
-   real(wp) :: inv_r, erfval, ex
-
-   inv_r = 1.0_wp / r
-   erfval = erf(gam * r)
-   ex = (2.0_wp / sqrtpi) * exp(-(gam * r)**2)
-   val = erfval * inv_r
-   dr = (gam * ex - val) * inv_r
-   drr = -2.0_wp * (gam**3 * ex + dr * inv_r)
-
-end subroutine coulomb_kernel
 
 
 !> Inspect cache and reallocate it in case of type mismatch
