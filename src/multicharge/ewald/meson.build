@@ -15,5 +15,8 @@
 
 srcs += files(
   'cutoff.f90',
+  'pbc1d.f90',
+  'pbc2d.f90',
   'pbc3d.f90',
+  'special.f90',
 )

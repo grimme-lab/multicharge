@@ -27,7 +27,6 @@ module multicharge_ewald_pbc3d
    public :: get_rec_weights, get_amat_rec_3d, get_damat_rec_3d, get_hess_rec_3d
    public :: get_rec_term_3d
 
-   real(wp), parameter :: eps = sqrt(epsilon(0.0_wp))
    real(wp), parameter :: unity(3, 3) = reshape([ &
       & 1.0_wp, 0.0_wp, 0.0_wp, &
       & 0.0_wp, 1.0_wp, 0.0_wp, &
@@ -38,6 +37,8 @@ contains
 
 
 !> Reciprocal-space factors independent of the atom pair for half-space vectors.
+!> In full G /= 0 space each vector has weight (4*pi / vol) * exp(-G^2/(4*alpha^2)) / G^2;
+!> here fac = 8*pi / vol doubles each entry for its +G/-G antipodal pair.
 !> Prepare once per evaluation, requesting only the tensors needed by the caller.
 pure subroutine get_rec_weights(vol, alpha, trans, weight, strain, hess)
 
@@ -73,7 +74,7 @@ pure subroutine get_rec_weights(vol, alpha, trans, weight, strain, hess)
    do itr = 1, nrec
       vec = trans(:, itr)
       g2 = dot_product(vec, vec)
-      if (g2 < eps) cycle
+      if (g2 <= tiny(1.0_wp)) cycle
 
       inv_g2 = 1.0_wp / g2
       w = fac * exp(-0.25_wp * g2 * inv_alp2) * inv_g2

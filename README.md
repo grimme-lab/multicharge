@@ -135,6 +135,13 @@ multicharge.git = "https://github.com/grimme-lab/multicharge"
 
 For an overview over all command line arguments use the ``--help`` argument or checkout the [``multicharge(1)``](man/multicharge.1.adoc) manpage.
 
+### Periodic Boundary Conditions
+
+``multicharge`` supports nonperiodic (`0D`) and periodic boundary conditions in `1D` (wires), `2D` (slabs), and `3D` (bulk crystals) across all eight periodicity masks (`mol%periodic` = `FFF`, `TFF`, `FTF`, `FFT`, `TTF`, `TFT`, `FTT`, `TTT`), including nonconsecutive periodic axes:
+
+- **EEQ (2019)**: Evaluates exact reduced-dimensional Ewald summation in 1D and 2D (following Nestler, Pippig, and Potts, *J. Comput. Phys.* **2015**, 285, 280-315) and standard 3D Ewald in 3D. Active periodic geometry, closed-form Ewald splitting $\alpha = s_d \sqrt{\pi} / \mu^{1/d}$ ($s_1 = 0.50$, $s_2 = 1.00$, $s_3 = 1.25$, with cell length/area/volume $\mu$), and machine-epsilon potential-cutoff spheres (direct space and half-space $\pm\mathbf{G}$ reciprocal pairs) are constructed strictly within the active periodic subspace so that nonperiodic lattice columns have no physical effect. Because unscreened 1D and 2D Ewald potentials diverge for charged cells, 1D and 2D EEQ require a neutral unit cell (`abs(mol%charge) <= sqrt(epsilon(0.0_wp))`) and return an explicit error otherwise.
+- **EEQ<sub>BC</sub> (2025)**: Uses exponentially screened direct-lattice summation within the active periodic subspace in 1D, 2D, and 3D, supporting both neutral and charged unit cells (`mol%charge /= 0`).
+
 ## Citation
 
 For the electronegativity equilibration model (EEQ): 
