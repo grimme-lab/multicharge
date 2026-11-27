@@ -32,7 +32,7 @@ module multicharge_model_eeqbc
    use multicharge_blas, only: gemv, gemm
    use multicharge_model_cache, only: cache_container, model_cache
    use multicharge_model_hessian, only: coulomb_kernel, add_pair_hessian, add_chain_hessian
-   use multicharge_model_type, only: mchrg_model_type, get_dir_trans
+   use multicharge_model_type, only: mchrg_model_type
    implicit none
    private
 
@@ -54,6 +54,8 @@ module multicharge_model_eeqbc
       real(wp), allocatable :: dcdL(:, :, :)
       !> Store tmp array from xvec calculation for reuse
       real(wp), allocatable :: xtmp(:)
+      !> Direct lattice translations within the coordination number cutoff
+      real(wp), allocatable :: dtrans(:, :)
    end type eeqbc_cache
 
    type, extends(mchrg_model_type) :: eeqbc_model
@@ -228,13 +230,17 @@ subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlo
       allocate(ptr%cmat(mol%nat + 1, mol%nat + 1))
    end if
 
+   call get_lattice_points(mol%periodic, mol%lattice, self%ncoord%cutoff, &
+      & ptr%dtrans, error)
+   if (allocated(error)) return
+
    if (any(mol%periodic)) then
       ! Create WSC
       call new_wignerseitz_cell(ptr%wsc, mol, error)
       if (allocated(error)) return
 
       ! Get full cmat sum over all WSC images (for get_xvec and xvec_derivs)
-      call get_cmat_3d(self, mol, ptr%wsc, ptr%cmat)
+      call get_cmat_3d(self, mol, ptr%wsc, ptr%dtrans, ptr%cmat)
       if (grad) then
          ! Leave dcdr uninitialized for first-touch locality
          if (.not. allocated(ptr%dcdr)) then
@@ -243,7 +249,7 @@ subroutine update(self, mol, error, cache, cn, qloc, dcndr, dcndL, dqlocdr, dqlo
          if (.not. allocated(ptr%dcdL)) then
             allocate(ptr%dcdL(3, 3, mol%nat + 1))
          end if
-         call get_dcmat_3d(self, mol, ptr%wsc, ptr%dcdr, ptr%dcdL)
+         call get_dcmat_3d(self, mol, ptr%wsc, ptr%dtrans, ptr%dcdr, ptr%dcdL)
       end if
    else
       call get_cmat_0d(self, mol, ptr%cmat)
@@ -273,7 +279,6 @@ subroutine get_xvec(self, mol, cache, xvec)
 
    integer :: iat, izp, img
    real(wp) :: ctmp, csum, vec(3), rvdw, capi, wsw
-   real(wp), allocatable :: dtrans(:, :)
 
    call view(cache, ptr)
 
@@ -291,9 +296,8 @@ subroutine get_xvec(self, mol, cache, xvec)
    call gemv(ptr%cmat, ptr%xtmp, xvec)
 
    if (any(mol%periodic)) then
-      call get_dir_trans(mol, dtrans, self%ncoord%cutoff)
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp& shared(mol, self, ptr, xvec, dtrans) &
+      !$omp& shared(mol, self, ptr, xvec) &
       !$omp& private(iat, izp, img, wsw, capi, vec, rvdw, ctmp, csum)
       do iat = 1, mol%nat
          izp = mol%id(iat)
@@ -305,7 +309,7 @@ subroutine get_xvec(self, mol, cache, xvec)
          do img = 1, ptr%wsc%nimg(iat, iat)
             vec = ptr%wsc%trans(:, ptr%wsc%tridx(img, iat, iat))
 
-            call get_cpair_dir(self%kbc, vec, dtrans, rvdw, capi, capi, ctmp)
+            call get_cpair_dir(self%kbc, vec, ptr%dtrans, rvdw, capi, capi, ctmp)
             csum = csum + ctmp
          end do
          xvec(iat) = xvec(iat) - wsw * csum * ptr%xtmp(iat)
@@ -327,7 +331,6 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
    real(wp) :: capi, capj, wsw, rij(3), vec(3), ctmp, csum, rvdw, xij
    real(wp) :: dG(3), dS(3, 3), dS_sum(3, 3)
    real(wp), allocatable :: dtmpdr(:, :, :), dtmpdL(:, :, :)
-   real(wp), allocatable :: dtrans(:, :)
    real(wp), allocatable :: dxdiag(:, :), dxdL_red(:, :, :)
 
    call view(cache, ptr)
@@ -365,11 +368,9 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
    allocate(dxdiag(3, mol%nat), dxdL_red(3, 3, mol%nat), source=0.0_wp)
 
    if (any(mol%periodic)) then
-      call get_dir_trans(mol, dtrans, self%ncoord%cutoff)
-
       ! Capacitance terms for i = j, T != 0
       !$omp parallel do default(none) schedule(runtime) &
-      !$omp& shared(mol, self, ptr, dtrans, dtmpdr, dtmpdL, dxdr, dxdL) &
+      !$omp& shared(mol, self, ptr, dtmpdr, dtmpdL, dxdr, dxdL) &
       !$omp& private(iat, izp, img, capi, rvdw, wsw, vec, ctmp, csum)
       do iat = 1, mol%nat
          izp = mol%id(iat)
@@ -379,7 +380,7 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
          csum = 0.0_wp
          do img = 1, ptr%wsc%nimg(iat, iat)
             vec = ptr%wsc%trans(:, ptr%wsc%tridx(img, iat, iat))
-            call get_cpair_dir(self%kbc, vec, dtrans, rvdw, capi, capi, ctmp)
+            call get_cpair_dir(self%kbc, vec, ptr%dtrans, rvdw, capi, capi, ctmp)
             csum = csum + ctmp
          end do
          csum = csum * wsw
@@ -391,7 +392,7 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
 
       ! Off-diagonal pairs (jat < iat) have unique owners; reduce only O(N) terms
       !$omp parallel do default(none) schedule(guided) &
-      !$omp& shared(mol, self, ptr, dtrans, dxdr) &
+      !$omp& shared(mol, self, ptr, dxdr) &
       !$omp& private(iat, izp, jat, jzp, img, capi, capj, rvdw, wsw, rij, vec, &
       !$omp& dG, dS, dS_sum, xij) &
       !$omp& reduction(+:dxdiag, dxdL_red)
@@ -417,7 +418,7 @@ subroutine get_xvec_derivs(self, mol, cache, dxdr, dxdL)
             dS_sum(:, :) = 0.0_wp
             do img = 1, ptr%wsc%nimg(jat, iat)
                vec = rij + ptr%wsc%trans(:, ptr%wsc%tridx(img, jat, iat))
-               call get_dcpair_dir(self%kbc, vec, dtrans, rvdw, capi, capj, &
+               call get_dcpair_dir(self%kbc, vec, ptr%dtrans, rvdw, capi, capj, &
                   & dG, dS)
                dS_sum = dS_sum + dS
             end do
@@ -489,7 +490,7 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
    real(wp) :: val, dr, drr, dg, drg, dgg, cap, dcap, ddcap, k, t
    real(wp) :: udiff, piq, pjq, cross, term, ti, tj, li, lj, ri, rj, cij
    real(wp), allocatable :: width(:), dw(:), v(:), hard(:), dh(:), ddh(:)
-   real(wp), allocatable :: dEdcn(:), dEdqloc(:), second(:, :), trans(:, :), dtrans(:, :)
+   real(wp), allocatable :: dEdcn(:), dEdqloc(:), second(:, :)
    real(wp), allocatable :: mixed(:, :, :), mixed_loc(:, :, :)
 
    call view(cache, ptr)
@@ -499,11 +500,6 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
    end if
    nat = mol%nat
    periodic = any(mol%periodic)
-   if (periodic) then
-      call get_dir_trans(mol, dtrans, self%ncoord%cutoff)
-   else
-      allocate(dtrans(3, 1), source=0.0_wp)
-   end if
    allocate(width(nat), dw(nat), v(nat), hard(nat), dh(nat), ddh(nat))
    allocate(dEdcn(nat), dEdqloc(nat), second(nat, nat))
    allocate(mixed(3, nat, nat), mixed_loc(3, nat, nat))
@@ -548,8 +544,8 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
          do img = 1, nimg
             rij = mol%xyz(:, iat)-mol%xyz(:, jat)
             if (periodic) rij = rij-ptr%wsc%trans(:, ptr%wsc%tridx(img, jat, iat))
-            do itr = 1, size(dtrans, 2)
-               vec = rij+dtrans(:, itr)
+            do itr = 1, size(ptr%dtrans, 2)
+               vec = rij+ptr%dtrans(:, itr)
                r = norm2(vec)
                if (r < eps) cycle
                call coulomb_kernel(r, gam, val, dr, drr, dg, drg, dgg)
@@ -592,10 +588,8 @@ subroutine add_model_hessian(self, mol, error, cache, adj, hessian)
       end do
    end do
 
-   call get_lattice_points(mol%periodic, mol%lattice, self%ncoord%cutoff, trans, error)
-   if (allocated(error)) return
-   call self%ncoord%add_coordination_number_hessian(mol, trans, dEdcn, hessian)
-   call self%ncoord_en%add_coordination_number_hessian(mol, trans, dEdqloc, hessian)
+   call self%ncoord%add_coordination_number_hessian(mol, ptr%dtrans, dEdcn, hessian)
+   call self%ncoord_en%add_coordination_number_hessian(mol, ptr%dtrans, dEdqloc, hessian)
    call add_chain_hessian(ptr%dcndr, mixed, hessian, second)
    call add_chain_hessian(ptr%dqlocdr, mixed_loc, hessian)
 end subroutine add_model_hessian
@@ -610,7 +604,7 @@ subroutine get_coulomb_matrix(self, mol, cache, amat)
    call view(cache, ptr)
 
    if (any(mol%periodic)) then
-      call get_amat_3d(self, mol, ptr%wsc, ptr%cn, ptr%qloc, ptr%cmat, amat)
+      call get_amat_3d(self, mol, ptr%wsc, ptr%dtrans, ptr%cn, ptr%qloc, ptr%cmat, amat)
    else
       call get_amat_0d(self, mol, ptr%cn, ptr%qloc, ptr%cmat, amat)
    end if
@@ -661,18 +655,16 @@ subroutine get_amat_0d(self, mol, cn, qloc, cmat, amat)
 
 end subroutine get_amat_0d
 
-subroutine get_amat_3d(self, mol, wsc, cn, qloc, cmat, amat)
+subroutine get_amat_3d(self, mol, wsc, dtrans, cn, qloc, cmat, amat)
    class(eeqbc_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
    type(wignerseitz_cell), intent(in) :: wsc
+   real(wp), intent(in) :: dtrans(:, :)
    real(wp), intent(in) :: cn(:), qloc(:), cmat(:, :)
    real(wp), intent(out) :: amat(:, :)
 
    integer :: iat, jat, izp, jzp, img
    real(wp) :: rij(3), vec(3), gam, dtmp, tmp, capi, capj, radi, radj, norm_cn, rvdw, wsw
-   real(wp), allocatable :: dtrans(:, :)
-
-   call get_dir_trans(mol, dtrans, self%ncoord%cutoff)
 
    ! Each iat iteration owns the off-diagonal pairs (jat < iat) and diagonal (iat, iat)
    !$omp parallel do default(none) schedule(guided) &
@@ -768,7 +760,7 @@ subroutine get_coulomb_derivs(self, mol, cache, qvec, dadr, dadL, atrace)
    call view(cache, ptr)
 
    if (any(mol%periodic)) then
-      call get_damat_3d(self, mol, ptr%wsc, ptr%cn, &
+      call get_damat_3d(self, mol, ptr%wsc, ptr%dtrans, ptr%cn, &
       & ptr%qloc, qvec, ptr%dcndr, ptr%dcndL, ptr%dqlocdr, &
       & ptr%dqlocdL, ptr%cmat, ptr%dcdr, ptr%dcdL, dadr, dadL, atrace)
 
@@ -911,11 +903,12 @@ subroutine get_damat_0d(self, mol, cn, qloc, qvec, dcndr, dcndL, &
 
 end subroutine get_damat_0d
 
-subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
+subroutine get_damat_3d(self, mol, wsc, dtrans, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
    & dqlocdL, cmat, dcdr, dcdL, dadr, dadL, atrace)
    class(eeqbc_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
    type(wignerseitz_cell), intent(in) :: wsc
+   real(wp), intent(in) :: dtrans(:, :)
    real(wp), intent(in) :: cn(:)
    real(wp), intent(in) :: qloc(:)
    real(wp), intent(in) :: qvec(:)
@@ -934,13 +927,11 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
    real(wp) :: rij(3), vec(3), r2, gam, arg, dtmp, norm_cn, rvdw, wsw, dgam
    real(wp) :: radi, radj, dradi, dradj, dG(3), dS(3, 3)
    real(wp) :: dgamdL(3, 3), capi, capj
-   real(wp), allocatable :: dgamdr(:, :), dtrans(:, :)
+   real(wp), allocatable :: dgamdr(:, :)
 
    ! Thread-private arrays for reduction
    real(wp), allocatable :: atrace_local(:, :)
    real(wp), allocatable :: dadr_local(:, :, :), dadL_local(:, :, :)
-
-   call get_dir_trans(mol, dtrans, self%ncoord%cutoff)
 
    allocate(dgamdr(3, mol%nat))
 
@@ -987,7 +978,7 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
          do img = 1, wsc%nimg(jat, iat)
             vec = rij + wsc%trans(:, wsc%tridx(img, jat, iat))
 
-            call get_dgam_dir(vec, dtrans, capi, capj, rvdw, self%kbc, gam, dG, dS, dgam)
+            call get_damat_dir(vec, dtrans, capi, capj, rvdw, self%kbc, gam, dG, dS, dgam)
             dG = dG * wsw
             dS = dS * wsw
             dgam = dgam * wsw
@@ -1037,7 +1028,7 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
       wsw = 1.0_wp / real(wsc%nimg(iat, iat), wp)
       do img = 1, wsc%nimg(iat, iat)
          vec = wsc%trans(:, wsc%tridx(img, iat, iat))
-         call get_dgam_dir(vec, dtrans, capi, capi, rvdw, self%kbc, gam, dG, dS, dgam)
+         call get_damat_dir(vec, dtrans, capi, capi, rvdw, self%kbc, gam, dG, dS, dgam)
          dgam = dgam * wsw
 
          ! Explicit derivative
@@ -1079,7 +1070,7 @@ subroutine get_damat_3d(self, mol, wsc, cn, qloc, qvec, dcndr, dcndL, dqlocdr, &
 
 end subroutine get_damat_3d
 
-subroutine get_dgam_dir(rij, trans, capi, capj, rvdw, kbc, gam, dG, dS, dgam)
+subroutine get_damat_dir(rij, trans, capi, capj, rvdw, kbc, gam, dG, dS, dgam)
    real(wp), intent(in) :: rij(3)
    real(wp), intent(in) :: trans(:, :)
    real(wp), intent(in) :: gam
@@ -1109,7 +1100,7 @@ subroutine get_dgam_dir(rij, trans, capi, capj, rvdw, kbc, gam, dG, dS, dgam)
       dgam = dgam + cmat * 2.0_wp * exp(-gam2 * r2) / sqrtpi
    end do
 
-end subroutine get_dgam_dir
+end subroutine get_damat_dir
 
 subroutine get_damat_dc_dir(rij, trans, capi, capj, rvdw, kbc, gam, dG, dS)
    real(wp), intent(in) :: rij(3)
@@ -1187,17 +1178,16 @@ subroutine get_cmat_0d(self, mol, cmat)
 
 end subroutine get_cmat_0d
 
-subroutine get_cmat_3d(self, mol, wsc, cmat)
+subroutine get_cmat_3d(self, mol, wsc, dtrans, cmat)
    class(eeqbc_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
    type(wignerseitz_cell), intent(in) :: wsc
+   real(wp), intent(in) :: dtrans(:, :)
    real(wp), intent(out) :: cmat(:, :)
 
    integer :: iat, jat, izp, jzp, img
    real(wp) :: rij(3), vec(3), rvdw, tmp, csum, capi, capj, wsw
-   real(wp), allocatable :: dtrans(:, :), cdiag(:)
-
-   call get_dir_trans(mol, dtrans, self%ncoord%cutoff)
+   real(wp), allocatable :: cdiag(:)
 
    allocate(cdiag(mol%nat), source=0.0_wp)
 
@@ -1366,19 +1356,18 @@ subroutine get_dcmat_0d(self, mol, dcdr, dcdL)
 
 end subroutine get_dcmat_0d
 
-subroutine get_dcmat_3d(self, mol, wsc, dcdr, dcdL)
+subroutine get_dcmat_3d(self, mol, wsc, dtrans, dcdr, dcdL)
    class(eeqbc_model), intent(in) :: self
    type(structure_type), intent(in) :: mol
    type(wignerseitz_cell), intent(in) :: wsc
+   real(wp), intent(in) :: dtrans(:, :)
    real(wp), intent(out) :: dcdr(:, :, :)
    real(wp), intent(out) :: dcdL(:, :, :)
 
    integer :: iat, jat, izp, jzp, img
    real(wp) :: rij(3), vec(3), rvdw, dG(3), dS(3, 3), dG_sum(3), dS_sum(3, 3)
    real(wp) :: capi, capj, wsw
-   real(wp), allocatable :: dtrans(:, :), dcdiag(:, :)
-
-   call get_dir_trans(mol, dtrans, self%ncoord%cutoff)
+   real(wp), allocatable :: dcdiag(:, :)
 
    allocate(dcdiag(3, mol%nat), source=0.0_wp)
    dcdr(:, :, mol%nat + 1) = 0.0_wp

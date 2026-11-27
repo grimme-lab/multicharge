@@ -18,7 +18,7 @@
 
 !> Ewald splitting parameter and tolerance-based direct/reciprocal translations
 module multicharge_ewald_cutoff
-   use mctc_cutoff, only : get_lattice_points
+   use mctc_cutoff, only : get_lattice_points, reduce_basis
    use mctc_env, only : error_type, fatal_error, wp
    use mctc_io_constants, only : pi
    use mctc_io_math, only : matdet_3x3, matinv_3x3
@@ -149,23 +149,31 @@ pure subroutine get_ewald_trans(lattice, alpha, gam, rmax, dtrans, rtrans, error
    type(error_type), allocatable, intent(out) :: error
 
    integer :: rep(3), nrec, itr, ix, iy, iz, jy, jz
-   real(wp) :: rec_lat(3, 3), rcut, gcut, vec(3), extent(3)
+   real(wp) :: lat(3, 3), rec_lat(3, 3), rcut, gcut, vec(3), extent(3)
    real(wp), allocatable :: tmp(:, :)
 
    ! The real-space kernel decays with the smaller of alpha and gam
    rcut = get_dir_cutoff(min(alpha, gam), term_tol)
-   gcut = get_rec_cutoff(alpha, abs(matdet_3x3(lattice)), term_tol)
+
+   ! Each half-space vector carries its +G/-G pair, twice a single term
+   gcut = get_rec_cutoff(alpha, abs(matdet_3x3(lattice)), 0.5_wp * term_tol)
+
+   ! A shorter, more orthogonal basis of the same lattice brings the enumerated
+   ! boxes in both spaces closer to the cutoff spheres, the selected vectors
+   ! are the same for any basis
+   lat(:, :) = lattice(:3, :3)
+   call reduce_basis(lat)
 
    ! Pair vectors shift the real-space sum off the origin by at most rmax
-   call get_lattice_points([.true., .true., .true.], lattice, rcut + rmax, tmp, error)
+   call get_lattice_points([.true., .true., .true.], lat, rcut + rmax, tmp, error)
    if (allocated(error)) return
    dtrans = tmp(:, pack([(itr, itr = 1, size(tmp, 2))], &
       & norm2(tmp, dim=1) <= rcut + rmax))
    deallocate(tmp)
 
    ! Reciprocal vectors within the cutoff sphere, one of each +G/-G pair
-   rec_lat = twopi * transpose(matinv_3x3(lattice))
-   extent(:) = gcut * norm2(lattice, dim=1) / twopi
+   rec_lat = twopi * transpose(matinv_3x3(lat))
+   extent(:) = gcut * norm2(lat, dim=1) / twopi
    if (too_many_points(extent)) then
       call fatal_error(error, "Too many reciprocal-space vectors for the Ewald sum, "//&
          & "lattice is likely degenerate")

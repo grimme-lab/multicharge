@@ -23,7 +23,6 @@
 !> General charge model
 module multicharge_model_type
 
-   use mctc_cutoff, only: get_lattice_points
    use mctc_env, only: error_type, fatal_error, wp, ik => IK
    use mctc_io, only: structure_type
    use mctc_ncoord, only: ncoord_type
@@ -33,7 +32,7 @@ module multicharge_model_type
    implicit none
    private
 
-   public :: mchrg_model_type, get_dir_trans
+   public :: mchrg_model_type
 
    !> Abstract multicharge model type
    type, abstract :: mchrg_model_type
@@ -127,21 +126,6 @@ module multicharge_model_type
    end interface
 
 contains
-
-!> Generate direct lattice translation vectors within a cutoff
-subroutine get_dir_trans(mol, trans, cutoff)
-   !> Molecular structure data
-   type(structure_type), intent(in) :: mol
-
-   !> Translation vectors
-   real(wp), allocatable, intent(out) :: trans(:, :)
-
-   !> Lattice-vector cutoff
-   real(wp), intent(in) :: cutoff
-
-   call get_lattice_points(mol%periodic, mol%lattice, cutoff, trans)
-
-end subroutine get_dir_trans
 
 subroutine solve(self, mol, error, cn, qloc, dcndr, dcndL, dqlocdr, dqlocdL, &
    & energy, gradient, sigma, qvec, dqdr, dqdL, response)
