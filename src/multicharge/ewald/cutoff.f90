@@ -32,7 +32,8 @@ module multicharge_ewald_cutoff
    real(wp), parameter :: sqrtpi = sqrt(pi)
    real(wp), parameter :: eps = sqrt(epsilon(0.0_wp))
 
-   !> Scaling of the Ewald parameter, shifting work to the reciprocal space
+   !> Scaling of the Ewald parameter, shifting work to the reciprocal space.
+   ! It twice the reciprocal space and halves the real space to speed up calculations.
    real(wp), parameter :: alpha_scale = 1.25_wp
 
    !> Tolerance for a single term of the real- or reciprocal-space sum
@@ -155,12 +156,9 @@ pure subroutine get_ewald_trans(lattice, alpha, gam, rmax, dtrans, rtrans, error
    ! The real-space kernel decays with the smaller of alpha and gam
    rcut = get_dir_cutoff(min(alpha, gam), term_tol)
 
-   ! Each half-space vector carries its +G/-G pair, twice a single term
+   ! Each half-space vector carries its +G/-G pair
    gcut = get_rec_cutoff(alpha, abs(matdet_3x3(lattice)), 0.5_wp * term_tol)
 
-   ! A shorter, more orthogonal basis of the same lattice brings the enumerated
-   ! boxes in both spaces closer to the cutoff spheres, the selected vectors
-   ! are the same for any basis
    lat(:, :) = lattice(:3, :3)
    call reduce_basis(lat)
 

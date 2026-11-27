@@ -63,6 +63,7 @@ pure subroutine get_rec_weights(vol, alpha, trans, weight, strain, hess)
    real(wp) :: g2, inv_g2, inv_alp2, fac, w, vec(3), gg(3, 3)
 
    nrec = size(trans, 2)
+   ! Factor for the halved reciprocal-space term
    fac = 8.0_wp * pi / vol
    inv_alp2 = 1.0_wp / alpha**2
    if (present(weight)) allocate(weight(nrec), source=0.0_wp)
@@ -192,6 +193,7 @@ pure function get_rec_term_3d(gg, alpha, vol) result(rval)
    !> Reciprocal term
    real(wp) :: rval
 
+   ! Maximum value of the full reciprocal-space Ewald term for a given vector norm
    rval = 4.0_wp * pi * exp(-0.25_wp * gg * gg / (alpha * alpha)) / (vol * gg * gg)
 
 end function get_rec_term_3d
