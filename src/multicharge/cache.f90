@@ -39,8 +39,6 @@ module multicharge_model_cache
       real(wp), allocatable :: dcndr(:, :, :)
       !> Coordination number gradient w.r.t the lattice vectors
       real(wp), allocatable :: dcndL(:, :, :)
-      !> Ewald separation parameter
-      real(wp) :: alpha
       !> Wigner-Seitz cell
       type(wignerseitz_cell) :: wsc
    end type model_cache

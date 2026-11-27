@@ -18,7 +18,6 @@ set(dir "${CMAKE_CURRENT_SOURCE_DIR}")
 list(
   APPEND srcs
   "${dir}/cutoff.f90"
-  "${dir}/direct.f90"
   "${dir}/pbc3d.f90"
 )
 
